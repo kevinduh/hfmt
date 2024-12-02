@@ -1,0 +1,4 @@
+egs/models
+*.sh.o*
+wandb/
+*~

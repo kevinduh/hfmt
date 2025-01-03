@@ -4,7 +4,7 @@
 #qsub -S /bin/bash -V -cwd -j y -q gpu.q@@v100 -l gpu=1,h_rt=24:00:00,num_proc=8,mem_free=25G scripts/train_seq2seq_marian.sh
 
 ENV_NAME=hfmt
-rootdir=/home/hltcoe/kduh/src/mt/hfmt
+rootdir=/exp/nrobinson/xling_summarizn/hfmt
 
 source $rootdir/install/path.sh
 conda activate $ENV_NAME

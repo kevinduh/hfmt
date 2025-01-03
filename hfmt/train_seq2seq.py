@@ -7,13 +7,13 @@ import csv
 import argparse
 import logging
 import sys
-import wandb
+#import wandb
 from datetime import datetime
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoConfig, DataCollatorForSeq2Seq, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
-os.environ["WANDB_PROJECT"]="hfmt"
+#os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
 
 def main():
@@ -152,7 +152,7 @@ def main():
         predict_with_generate=True,
         fp16=False,
         push_to_hub=False,
-        report_to="wandb",
+        report_to="none",#"wandb",
         run_name=args.outdir.replace(os.sep,'_').replace('models_',''),
         logging_steps=args.logging_steps,
         eval_steps=args.eval_steps,

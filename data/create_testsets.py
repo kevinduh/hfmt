@@ -12,7 +12,7 @@ langs = [
 	"swahili",
 	"chinese_simplified",
 	"pidgin",
-	"tamil"
+	"tamil",
 ]
 
 outdir = "CrossSum-test"

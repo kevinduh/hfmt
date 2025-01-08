@@ -1,6 +1,8 @@
 import time
-import os, pdb
+import os, pdb, re, json
 import torch
+from torch import OutOfMemoryError
+from tqdm import tqdm
 import argparse
 import logging
 import sys
@@ -11,6 +13,21 @@ from transformers import AutoModelForSeq2SeqLM, AutoModelForCausalLM
 
 #os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
+
+def split_sentences(paragraph, language):
+# Regular expression patterns for different languages
+    if language == 'arabic':
+        sentence_endings = r'(?<=[.؟!])\s+'
+    elif language in ['mandarin', 'chinese']:
+        sentence_endings = r'(?<=[。？！])\s+'
+    elif language == 'tamil':
+        sentence_endings = r'(?<=[.؟?ஃ!])\s+'
+    else:
+        sentence_endings = r'(?<=[.?!])\s+(?=[A-Za-z])' # changed to allow lower-case FIXME
+    # Split the paragraph into sentences using the pattern
+    sentences = re.split(sentence_endings, paragraph)
+    
+    return sentences
 
 def main():
 
@@ -23,15 +40,21 @@ def main():
                         help="If specified, use Pretrain; Else, Train From Scratch")
     parser.add_argument("-s", "--summarization", action='store_true',
                         help="If specified, use AutoModelForCausalLM")
-    parser.add_argument("-o", "--outdir", required=True, help="Output directory")
+    parser.add_argument("-o", "--outfile", required=True, help="Output file")
     parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
-    
+    parser.add_argument("-l", "--language", type=str, default="english", help="Source text language")
+
     args = parser.parse_args()
 
     if args.eval.endswith(".json") or args.eval.endswith(".jsonl"):
         args.filetype = "json"
     else:
         args.filetype = "text"
+    if args.outfile.endswith(".json") or args.outfile.endswith(".jsonl"):
+        args.out_filetype = "json"
+    else:
+        args.out_filetype = "text"
+    args.outdir = os.path.split(args.outfile)[0]
 
     logging.basicConfig(filename=os.path.join(args.outdir, "hfmt.log"), level=logging.INFO, \
         format='%(asctime)s - %(levelname)s - %(message)s', filemode="w")
@@ -66,8 +89,12 @@ def main():
     logging.info(f"======== Model Configuration ========")
     config = AutoConfig.from_pretrained(args.checkpoint)
     if args.pretrain == True:
-        logging.info("Fine-tuning a pretrained model")
-        model = AutoMod.from_pretrained(args.checkpoint, torch_dtype=torch_dtype).to(device)
+        logging.info("Using a pretrained model")
+        model = AutoMod.from_pretrained(
+			args.checkpoint, 
+			torch_dtype=torch_dtype,
+			pad_token_id=tokenizer.eos_token_id
+		).to(device)
     else:
         logging.info("Training from scratch with pretrained model's config only")
         model = AutoMod.from_config(config).to(device)
@@ -86,55 +113,59 @@ def main():
     model.eval()
 	#eval_data = eval_data.select(range(3))
     start_time = time.time()
-    if True:#with open(os.path.join(args.outdir,"eval.pred.trg"), "w") as O:
-        for i in range(len(eval_data)):
-            orig_inputs = instruction_prefix + " " + eval_data[i]["summary"]
-            orig_inputs = orig_inputs.strip()
-            generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
-            if args.summarization:
-                generate_kwargs["max_new_tokens"] = 256
-                generate_kwargs["do_sample"] = True
-                generate_kwargs["temperature"] = 0.6
-                generate_kwargs["top_p"] = 0.9 
-                generate_kwargs["eos_token_id"] = [
-					tokenizer.eos_token_id,
-					tokenizer.convert_tokens_to_ids("<|eot_id|>")
-				]
-                test_inputs = tokenizer(orig_inputs, return_tensors="pt").to(device)
+    outputs = []
+    for i in tqdm(range(len(eval_data))):
+        orig_inputs = instruction_prefix + eval_data[i]["text"]
+        orig_inputs = orig_inputs.strip()
+        generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
+        if args.summarization:
+            generate_kwargs["max_new_tokens"] = 256
+            generate_kwargs["do_sample"] = True
+            generate_kwargs["temperature"] = 0.6
+            generate_kwargs["top_p"] = 0.9 
+            generate_kwargs["eos_token_id"] = [
+				tokenizer.eos_token_id,
+				tokenizer.convert_tokens_to_ids("<|eot_id|>")
+			]
+            test_inputs = tokenizer(orig_inputs, return_tensors="pt").to(device)
+            try:
                 test_outputs_raw = model.generate(**test_inputs, **generate_kwargs)
-                test_outputs = test_outputs_raw[0]
                 test_outputs = test_outputs_raw[0][test_inputs['input_ids'].shape[1]:]
                 test_outputs_detok_raw = tokenizer.decode(test_outputs)
                 test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
                 output_text = test_outputs_detok
-                outputs.append({"text": output_text.strip()})
-            else:
-                input_sents = split_sentences(orig_inputs)
+            except OutOfMemoryError:
                 output_text = ""
-                for input_sent in input_sents:
-                    test_inputs = tokenizer(input_sent, return_tensors="pt").to(device)
-                    test_outputs_raw = model.generate(**test_inputs, **generate_kwargs)
-                    test_outputs = test_outputs_raw[0]
-                    test_outputs_detok_raw = tokenizer.decode(test_outputs)
-                    test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-                    output_text += test_outputs_detok.strip() + ' '
-                outputs.append({"summary": output_text.strip()})
-            if i <= 3:
-                logging.info(f"{i}: {eval_data[i]}")
-                logging.info(f"original_inputs: {orig_inputs}")
-                logging.info(f"inputs: {test_inputs}")
-                logging.info(f"outputs: {test_outputs}")
-                logging.info(f"detokenized outputs: {test_outputs_detok_raw}")
+            outputs.append({"summary": output_text.strip()})
+        else:
+            input_sents = split_sentences(orig_inputs, args.language)
+            output_text = ""
+            for input_sent in input_sents:
+                test_inputs = tokenizer(input_sent, return_tensors="pt").to(device)
+                test_outputs_raw = model.generate(**test_inputs, **generate_kwargs)
+                test_outputs = test_outputs_raw[0]
+                test_outputs_detok_raw = tokenizer.decode(test_outputs)
+                test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
+                output_text += test_outputs_detok.strip() + ' '
+            outputs.append({"text": output_text.strip()})
+        if i <= 3:
+            logging.info(f"{i}: {eval_data[i]}")
+            logging.info(f"original_inputs: {orig_inputs}")
+            logging.info(f"inputs: {test_inputs}")
+            logging.info(f"outputs: {test_outputs}")
+            logging.info(f"detokenized outputs: {test_outputs_detok_raw}")
     end_time = time.time()
     if args.out_filetype == "json":
         with open(args.outfile, "w") as O:
-            json.dump(outputs, O)
+            json.dump(outputs, O, indent=4, ensure_ascii=False)
     elif args.out_filetype == "text":
         lines_to_write = [output.values()[0] + '\n' for output in outputs]
         with open(args.outfile, "w") as O:
             O.writelines(lines_to_write)
 
     logging.info(f"Testing - Elapsed time for {i} sentences: {end_time-start_time:.1f}s")
+    del model
+    return
 
 if __name__ == "__main__":
     main()

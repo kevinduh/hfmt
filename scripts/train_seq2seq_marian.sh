@@ -24,7 +24,7 @@ instruction=""
 # batch_size: 16, 32, 64
 # seed 42, 37
 pretrain=0
-outdir=egs/models/marian.scratch.1
+outdir=$rootdir/egs/models/marian.scratch.1
 cmdarg="--max_steps 100000 --logging_steps 10 --eval_steps 1000 --warmup_steps 0 \
         --lr_scheduler_type reduce_lr_on_plateau --learning_rate 2e-5 --weight_decay 0.01 \
         --label_smoothing_factor 0.0 --seed 37 --batch_size 16"

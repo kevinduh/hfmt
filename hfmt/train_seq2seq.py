@@ -25,7 +25,6 @@ def main():
     parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
     parser.add_argument("-t", "--train", required=True, help="Train bitext")
     parser.add_argument("-d", "--dev", required=True, help="Dev bitext")
-    parser.add_argument("-e", "--eval", help="Eval source text")
     parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
     parser.add_argument("-p", "--pretrain", action='store_true', 
                         help="If specified, use Pretrain; Else, Train From Scratch")
@@ -188,30 +187,6 @@ def main():
     trainer.train()
     end_time = time.time()
     logging.info(f"Training - Elapsed time: {end_time-start_time:.1f}s")
-
-    ###################################
-    ## Inference on Eval set
-    logging.info(f"======== Testing ========")
-    eval_data = load_dataset("text", data_files=args.eval, streaming=False, split="train")
-    #eval_data = eval_data.select(range(3))
-    start_time = time.time()
-    with open(os.path.join(args.outdir,"eval.pred.trg"), "w") as O:
-        for i in range(len(eval_data)):
-            orig_inputs = instruction_prefix + " " + eval_data[i]["text"]
-            test_inputs = tokenizer(orig_inputs, return_tensors="pt").to(device)
-            test_outputs = model.generate(**test_inputs, max_new_tokens=128, do_sample=False)
-            test_outputs_detok = tokenizer.decode(test_outputs[0])
-            test_outputs_detok2 = tokenizer.decode(test_outputs[0], skip_special_tokens=True)
-            
-            O.write(test_outputs_detok2 + "\n")
-            if i <= 3:
-                logging.info(f"{i}: {eval_data[i]}")
-                logging.info(f"original_inputs: {orig_inputs}")
-                logging.info(f"inputs: {test_inputs}")
-                logging.info(f"outputs: {test_outputs}")
-                logging.info(f"detokenized outputs: {test_outputs_detok}")
-    end_time = time.time()
-    logging.info(f"Testing - Elapsed time for {i} sentences: {end_time-start_time:.1f}s")
 
 if __name__ == "__main__":
     main()

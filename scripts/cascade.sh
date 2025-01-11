@@ -16,31 +16,39 @@ mkdir -p $outdir
 ###########################
 # Machine Translate #######
 ###########################
-evalset=$rootdir/egs/data/CrossSum-test/spanish-english.toy.jsonl
-instruction=""
-pretrain=1
-outfile=$outdir/mt_outs.jsonl
-checkpoint="$rootdir/egs/models/marian.scratch.1/checkpoint-100000"
-language="spanish"
-cmdarg=""
-if [[ $pretrain -eq 1 ]]; then
-    cmdarg="-p"
+evalset_1=$rootdir/egs/data/CrossSum-test/spanish-english.toy.jsonl
+instruction_1=""
+pretrain_1=1
+outfile_1=$outdir/mt_outs.jsonl
+checkpoint_1="$rootdir/egs/models/marian.scratch.1/checkpoint-100000"
+language_1="spanish"
+cmdarg_1=""
+if [[ $pretrain_1 -eq 1 ]]; then
+    cmdarg_1="-p"
 fi
-python $rootdir/hfmt/cascade_seq2seq.py -e $evalset -c $checkpoint -o $outfile -i "$instruction" -l $language $cmdarg
-echo "Check $outfile"
+python $rootdir/hfmt/cascade_seq2seq.py -e $evalset_1 -c $checkpoint_1 -o $outfile_1 -i "$instruction_1" -l $language_1 $cmdarg_1
+echo "Check $outfile_1"
 
 ###########################
 # Summarize ###############
 ###########################
-evalset=egs/models/cascade_outs/mt_outs.jsonl
-instruction="Summarize the following passage. Do not provide any explanations or text apart from the summary.\nPassage: "
-pretrain=1
-outfile=$outdir/final_outs.jsonl
-checkpoint="meta-llama/Meta-Llama-3-8B-Instruct"
-cmdarg="-s"
-if [[ $pretrain -eq 1 ]]; then
-    cmdarg="$cmdarg -p"
+evalset_2=egs/models/cascade_outs/mt_outs.jsonl
+instruction_2="Summarize the following passage. Do not provide any explanations or text apart from the summary.\nPassage: "
+pretrain_2=1
+outfile_2=$outdir/final_outs.jsonl
+checkpoint_2="meta-llama/Meta-Llama-3-8B-Instruct"
+cmdarg_2="-s"
+if [[ $pretrain_2 -eq 1 ]]; then
+    cmdarg_2="$cmdarg_2 -p"
 fi
-python $rootdir/hfmt/cascade_seq2seq.py -e $evalset -c $checkpoint -o $outfile -i "$instruction" $cmdarg
-echo "Check $outfile"
+python $rootdir/hfmt/cascade_seq2seq.py -e $evalset_2 -c $checkpoint_2 -o $outfile_2 -i "$instruction_2" $cmdarg_2
+echo "Check $outfile_2"
 
+###########################
+# Score ###################
+###########################
+outfile_3=$outdir/scores.jsonl
+
+python $rootdir/hfmt/scoring.py -r $evalset_1 -h $outfile_2 -o $outfile_3
+
+echo "Finished cascade and testing"

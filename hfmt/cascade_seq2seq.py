@@ -134,7 +134,7 @@ def main():
                 test_outputs_detok_raw = tokenizer.decode(test_outputs)
                 test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
                 output_text = test_outputs_detok
-            except OutOfMemoryError:
+            except OutOfMemoryError: # HACK FIXME
                 output_text = ""
             outputs.append({"summary": output_text.strip()})
         else:
@@ -165,6 +165,7 @@ def main():
 
     logging.info(f"Testing - Elapsed time for {i} sentences: {end_time-start_time:.1f}s")
     del model
+
     return
 
 if __name__ == "__main__":

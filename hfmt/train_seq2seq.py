@@ -1,5 +1,5 @@
 import time
-import os
+import os, pdb
 import torch
 import evaluate
 import numpy as np
@@ -9,7 +9,7 @@ import logging
 import sys
 #import wandb
 from datetime import datetime
-from datasets import load_dataset
+from datasets import load_dataset, IterableDatasetDict
 from transformers import AutoTokenizer, AutoConfig, DataCollatorForSeq2Seq, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
@@ -24,12 +24,13 @@ def main():
     ## Set arguments
     parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
     parser.add_argument("-t", "--train", required=True, help="Train bitext")
-    parser.add_argument("-d", "--dev", required=True, help="Dev bitext")
+    parser.add_argument("-d", "--dev", default="", help="Dev bitext")
     parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
     parser.add_argument("-p", "--pretrain", action='store_true', 
                         help="If specified, use Pretrain; Else, Train From Scratch")
     parser.add_argument("-o", "--outdir", required=True, help="Output directory")
     parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
+    parser.add_argument("-n", "--data_amount", type=int, default=1000000)
     parser.add_argument("--max_steps", type=int, default=10000, help="Max number of train steps")
     parser.add_argument("--learning_rate", type=float, default=2e-5)
     parser.add_argument("--batch_size", type=int, default=16)
@@ -74,11 +75,31 @@ def main():
         return model_inputs
 
 
-    def get_data(train_path, dev_path, tokenizer):
-        custom_splits = {"train": train_path, "dev": dev_path}
-        data = load_dataset("csv", delimiter = "\t", column_names=['src','trg'], 
-                            data_files = custom_splits, streaming=True,
-                            quoting=csv.QUOTE_NONE)
+    def get_data(train_path, dev_path="", total_n=1000000, train_ratio=0.9):
+        if dev_path:
+            custom_splits = {"train": train_path, "dev": dev_path}
+            data = load_dataset(
+                "csv", 
+                delimiter = "\t", 
+                column_names=['src','trg'], 
+                data_files = custom_splits, 
+                streaming=True,
+                quoting=csv.QUOTE_NONE
+			)
+        else:
+            dataset = load_dataset(
+				"csv",
+				delimiter="\t",
+				column_names=['src', 'trg'],
+				data_files={'full': train_path},
+		        streaming=True,
+		        quoting=csv.QUOTE_NONE
+		    )['full'].take(total_n)
+            dev_n = min(1000, int((1 - train_ratio) * total_n))
+            data = IterableDatasetDict({
+		    	'dev': dataset.take(dev_n),
+		        'train': dataset.skip(dev_n).take(total_n - dev_n)
+			})
         data = data.map(preprocess_fn, batched=True)
         return data
 
@@ -118,7 +139,7 @@ def main():
     ## Load data
     logging.info(f"======== Loading data ========")
     start_time = time.time()
-    D = get_data(args.train, args.dev, tokenizer)
+    D = get_data(args.train, args.dev, total_n=args.data_amount)
     logging.info(D)
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=args.checkpoint)
     end_time = time.time()

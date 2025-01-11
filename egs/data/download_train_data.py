@@ -1,6 +1,7 @@
 from datasets import load_dataset, config
-import sys, os
+import sys, os, random
 
+random.seed(42)
 config.HF_DATASETS_TIMEOUT = 300
 
 # languages are: ["es", "ar", "ja", "ru", "sw", "zh", "pcm", "ta"]

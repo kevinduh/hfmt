@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+#$ -l mem_free=16G,h_rt=48:00:00,num_proc=4
+#$ -j y
+#$ -o qlog/
+#$ -cwd
+
+source ~/.bashrc
+
+conda deactivate
+conda activate hfmt
+
+nvidia-smi
+hostname
+env
+
+echo "HOSTNAME: $(hostname)"
+echo
+echo CUDA in ENV:
+env | grep CUDA
+echo
+echo SGE in ENV:
+env | grep SGE
+
+# call series of commands here
+
+python3 download_train_data.py
+

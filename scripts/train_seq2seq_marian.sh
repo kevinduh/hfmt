@@ -35,6 +35,6 @@ if [[ $pretrain -eq 1 ]]; then
     cmdarg="$cmdarg -p"
 fi
 
-python $rootdir/hfmt/train_seq2seq.py -t $trainset -d $devset -e $evalset -c $checkpoint -o $outdir $cmdarg -i "$instruction"
+python $rootdir/hfmt/train_seq2seq.py -t $trainset -d $devset -c $checkpoint -o $outdir $cmdarg -i "$instruction"
 
 

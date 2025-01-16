@@ -167,7 +167,7 @@ def main():
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         weight_decay=args.weight_decay,
-        save_total_limit=3,
+        save_total_limit=1,
         max_steps=args.max_steps,
         predict_with_generate=True,
         fp16=False,

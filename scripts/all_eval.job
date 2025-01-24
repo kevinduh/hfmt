@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+#$ -l gpu=1,h_rt=80:00:00,num_proc=8,mem_free=25G
+#$ -q gpu.q@@v100
+#$ -j y
+#$ -o qlog/eval/
+#$ -V -cwd
+
+ENV_NAME=hfmt
+rootdir=/exp/nrobinson/xling_summarizn/hfmt
+
+source $rootdir/install/path.sh
+conda activate $ENV_NAME
+
+nvidia-smi
+hostname
+env
+
+echo "HOSTNAME: $(hostname)"
+echo
+echo CUDA in ENV:
+env | grep CUDA
+echo
+echo SGE in ENV:
+env | grep SGE
+
+CUDA_LAUNCH_BLOCKING=1
+
+# Command to run
+
+python $rootdir/hfmt/eval_all.py
+

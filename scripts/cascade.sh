@@ -32,7 +32,7 @@ echo "Check $outfile_1"
 ###########################
 # Summarize ###############
 ###########################
-evalset_2=egs/models/cascade_outs/mt_outs.jsonl
+evalset_2=$outfile_1
 instruction_2="Summarize the following passage. Do not provide any explanations or text apart from the summary.\nPassage: "
 pretrain_2=1
 outfile_2=$outdir/final_outs.jsonl
@@ -49,6 +49,6 @@ echo "Check $outfile_2"
 ###########################
 outfile_3=$outdir/scores.jsonl
 
-python $rootdir/hfmt/scoring.py -r $evalset_1 -h $outfile_2 -o $outfile_3
+python $rootdir/hfmt/scoring.py -r $evalset_1 -t $outfile_2 -o $outfile_3
 
 echo "Finished cascade and testing"

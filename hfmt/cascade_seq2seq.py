@@ -29,42 +29,56 @@ def split_sentences(paragraph, language):
     
     return sentences
 
-def main():
+def split_up_tokens(toks, dim=512):
+    # Function to avoid token strings longer than 512
+    length = toks['input_ids'].shape[1]
+    for idx in range(((length - 1) // dim) + 1):
+        new_toks = toks.copy()
+        for key in toks:
+            new_toks[key] = toks[key][:, idx * dim: (idx + 1) * dim]
+        yield new_toks
+
+def main(
+		eval_set, 
+		checkpoint, 
+		pretrain, 
+		summarization, 
+		outfile, 
+		instruction="", 
+		language="english",
+		verbose=False
+	):
 
     ###################################
-    ## Set arguments
-    parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
-    parser.add_argument("-e", "--eval", help="Eval source text")
-    parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
-    parser.add_argument("-p", "--pretrain", action='store_true', 
-                        help="If specified, use Pretrain; Else, Train From Scratch")
-    parser.add_argument("-s", "--summarization", action='store_true',
-                        help="If specified, use AutoModelForCausalLM")
-    parser.add_argument("-o", "--outfile", required=True, help="Output file")
-    parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
-    parser.add_argument("-l", "--language", type=str, default="english", help="Source text language")
 
-    args = parser.parse_args()
-
-    if args.eval.endswith(".json") or args.eval.endswith(".jsonl"):
-        args.filetype = "json"
+    if eval_set.endswith(".json") or eval_set.endswith(".jsonl"):
+        filetype = "json"
     else:
-        args.filetype = "text"
-    if args.outfile.endswith(".json") or args.outfile.endswith(".jsonl"):
-        args.out_filetype = "json"
+        filetype = "text"
+    if outfile.endswith(".json") or outfile.endswith(".jsonl"):
+        out_filetype = "json"
     else:
-        args.out_filetype = "text"
-    args.outdir = os.path.split(args.outfile)[0]
+        out_filetype = "text"
+    outdir = os.path.split(outfile)[0]
 
-    logging.basicConfig(filename=os.path.join(args.outdir, "hfmt.log"), level=logging.INFO, \
-        format='%(asctime)s - %(levelname)s - %(message)s', filemode="w")
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    logging.info(args)
+    if verbose:
+        logging.basicConfig(filename=os.path.join(outdir, "hfmt.log"), level=logging.INFO, \
+        	format='%(asctime)s - %(levelname)s - %(message)s', filemode="w")
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+        logging.info(
+			eval_set, 
+			checkpoint, 
+			pretrain, 
+			summarization, 
+			outfile, 
+			instruction, 
+			language
+		)
 
-    # wandb.init(name=args.outdir, project='hfmt', dir=os.path.join(args.outdir,'wandb'),
+    # wandb.init(name=outdir, project='hfmt', dir=os.path.join(outdir,'wandb'),
     #            config=args)
 
-    if args.summarization:
+    if summarization:
         AutoMod = AutoModelForCausalLM
         torch_dtype = torch.bfloat16
     else:
@@ -74,59 +88,66 @@ def main():
     ###################################
     ## User settings 
     global instruction_prefix
-    instruction_prefix = args.instruction
-    logging.info(f"instruction: '{instruction_prefix}'")
+    instruction_prefix = instruction
+    if verbose:
+        logging.info(f"instruction: '{instruction_prefix}'")
 
     global experiment_id
-    experiment_id = args.outdir.replace(os.sep,'_').replace('models_','')
-    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
+    experiment_id = outdir.replace(os.sep,'_').replace('models_','')
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    logging.info(f"Using device: {device}")
+    if verbose:
+        logging.info(f"Using device: {device}")
 
     ###################################
     ## Model Configuration
-    logging.info(f"======== Model Configuration ========")
-    config = AutoConfig.from_pretrained(args.checkpoint)
-    if args.pretrain == True:
-        logging.info("Using a pretrained model")
+    if verbose:
+        logging.info(f"======== Model Configuration ========")
+    config = AutoConfig.from_pretrained(checkpoint)
+    if pretrain:
+        if verbose:
+            logging.info("Using a pretrained model")
         model = AutoMod.from_pretrained(
-			args.checkpoint, 
+			checkpoint, 
 			torch_dtype=torch_dtype,
 			pad_token_id=tokenizer.eos_token_id
 		).to(device)
     else:
-        logging.info("Training from scratch with pretrained model's config only")
+        if verbose:
+            logging.info("Training from scratch with pretrained model's config only")
         model = AutoMod.from_config(config).to(device)
 	
-    generation_config = GenerationConfig.from_pretrained(args.checkpoint)
+    generation_config = GenerationConfig.from_pretrained(checkpoint)
 
     num_param = sum(p.numel() for p in model.parameters())
-    logging.info(f"Number of parameters: {num_param}")
+    if verbose:
+        logging.info(f"Number of parameters: {num_param}")
     # for i in model.named_parameters():
     #     logging.info(f"{i[0]} -> {i[1].device}")
 
     ###################################
     ## Inference on Eval set
-    logging.info(f"======== Testing ========")
-    eval_data = load_dataset(args.filetype, data_files=args.eval, streaming=False, split="train")
+    if verbose:
+        logging.info(f"======== Testing ========")
+    eval_data = load_dataset(filetype, data_files=eval_set, streaming=False, split="train")
     model.eval()
-	#eval_data = eval_data.select(range(3))
+    #eval_data = eval_data.select(range(3))
     start_time = time.time()
     outputs = []
     for i in tqdm(range(len(eval_data))):
         orig_inputs = instruction_prefix + eval_data[i]["text"]
         orig_inputs = orig_inputs.strip()
         generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
-        if args.summarization:
+        generate_kwargs["eos_token_id"] = [
+			tokenizer.eos_token_id,
+			tokenizer.convert_tokens_to_ids("<|eot_id|>")
+		]
+        if summarization:
             generate_kwargs["max_new_tokens"] = 256
             generate_kwargs["do_sample"] = True
             generate_kwargs["temperature"] = 0.6
             generate_kwargs["top_p"] = 0.9 
-            generate_kwargs["eos_token_id"] = [
-				tokenizer.eos_token_id,
-				tokenizer.convert_tokens_to_ids("<|eot_id|>")
-			]
             test_inputs = tokenizer(orig_inputs, return_tensors="pt").to(device)
             try:
                 test_outputs_raw = model.generate(**test_inputs, **generate_kwargs)
@@ -138,35 +159,61 @@ def main():
                 output_text = ""
             outputs.append({"summary": output_text.strip()})
         else:
-            input_sents = split_sentences(orig_inputs, args.language)
+            input_sents = split_sentences(orig_inputs, language)
             output_text = ""
             for input_sent in input_sents:
-                test_inputs = tokenizer(input_sent, return_tensors="pt").to(device)
-                test_outputs_raw = model.generate(**test_inputs, **generate_kwargs)
-                test_outputs = test_outputs_raw[0]
-                test_outputs_detok_raw = tokenizer.decode(test_outputs)
-                test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-                output_text += test_outputs_detok.strip() + ' '
+                input_tokens = tokenizer(input_sent, return_tensors="pt").to(device)
+                for tokens_slice in split_up_tokens(input_tokens):
+                    test_outputs_raw = model.generate(**tokens_slice, **generate_kwargs)
+                    test_outputs = test_outputs_raw[0]
+                    test_outputs_detok_raw = tokenizer.decode(test_outputs)
+                    test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
+                    output_text += test_outputs_detok.strip() + ' '
             outputs.append({"text": output_text.strip()})
-        if i <= 3:
+        if i <= 3 and verbose:
             logging.info(f"{i}: {eval_data[i]}")
             logging.info(f"original_inputs: {orig_inputs}")
             logging.info(f"inputs: {test_inputs}")
             logging.info(f"outputs: {test_outputs}")
             logging.info(f"detokenized outputs: {test_outputs_detok_raw}")
     end_time = time.time()
-    if args.out_filetype == "json":
-        with open(args.outfile, "w") as O:
+    if out_filetype == "json":
+        with open(outfile, "w") as O:
             json.dump(outputs, O, indent=4, ensure_ascii=False)
-    elif args.out_filetype == "text":
+    elif out_filetype == "text":
         lines_to_write = [output.values()[0] + '\n' for output in outputs]
-        with open(args.outfile, "w") as O:
+        with open(outfile, "w") as O:
             O.writelines(lines_to_write)
 
-    logging.info(f"Testing - Elapsed time for {i} sentences: {end_time-start_time:.1f}s")
+    if verbose:
+        logging.info(f"Testing - Elapsed time for {i} sentences: {end_time-start_time:.1f}s")
     del model
 
     return
 
 if __name__ == "__main__":
-    main()
+    
+    ## Set arguments
+    parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
+    parser.add_argument("-e", "--eval", help="Eval source text")
+    parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
+    parser.add_argument("-p", "--pretrain", action='store_true',
+                        help="If specified, use Pretrain; Else, Train From Scratch")
+    parser.add_argument("-s", "--summarization", action='store_true',
+                        help="If specified, use AutoModelForCausalLM")
+    parser.add_argument("-o", "--outfile", required=True, help="Output file")
+    parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
+    parser.add_argument("-l", "--language", type=str, default="english", help="Source text language")
+
+    args = parser.parse_args()
+
+    main(
+		eval_set=args.eval, 
+		checkpoint=args.checkpoint, 
+		pretrain=args.pretrain, 
+		summarization=args.summarization, 
+		outfile=args.outfile, 
+		instruction=args.instruction, 
+		language=args.language,
+		verbose=True
+	)

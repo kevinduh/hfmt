@@ -4,7 +4,7 @@ from tqdm import tqdm
 import cascade_seq2seq as cascade
 import scoring
 
-RUNNING_E2E=False # switch this later
+RUNNING_E2E=True # switch this later
 
 SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. Do not provide any explanations or text apart from the summary.\nPassage: "
 E2E_INSTRUCTION="Summarize the following passage in one sentence in English. Do not provide any explanations or text apart from the summary.\nPassage: "
@@ -73,7 +73,7 @@ def run_eval(
 		)
 
 	# Scoring
-	mt_file_for_bleu = mt_outfile if os.path.exists(mt_outfile) else ""
+	mt_file_for_bleu = mt_outfile if os.path.exists(str(mt_outfile)) else ""
 	score = scoring.main(
 		ref_file=crosssum_testset, 
 		hyp_file=final_outfile, 
@@ -121,8 +121,8 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 			# score_only
 			score_only = False
 
-			if os.path.exists(scores_json):
-				print(scores_json, "already exists")
+			if os.path.exists(final_outfile):
+				print(final_outfile, "already exists")
 				score_only = True
 				#with open(scores_json, 'r') as f:
 				#	score = json.load(f)["rouge"]
@@ -162,8 +162,8 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 			# score_only
 			score_only = False
 
-			if os.path.exists(scores_json):
-				print(scores_json, "already exists")
+			if os.path.exists(final_outfile):
+				print(final_outfile, "already exists")
 				score_only = True
 				#with open(scores_json, 'r') as f:
 				#	score = json.load(f)["rouge"]
@@ -191,7 +191,7 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 		os.makedirs(out_json_dir)
 	out_json_path = os.path.join(out_json_dir, "full_results.json")
 	with open(out_json_path, 'w') as f:
-		json.dump(all_results, f)
+		json.dump(all_results, f, indent=4)
 	print("Written", out_json_path)
 
 	return all_results

@@ -47,7 +47,7 @@ def main(ref_file, hyp_file, out_file, mt_out_file=""):
 
 def get_score(ref_file, hyp_file, metric="rouge", submetric="rougeL"):
 
-	key = "text" if metric == "bleu" else "summarize"
+	key = "text" if metric == "bleu" else "summary"
 
 	refs = get_texts(ref_file, key)
 	hyps = get_texts(hyp_file, key)

@@ -1,6 +1,8 @@
 import os, pdb, json, argparse
 import evaluate
 
+import qe
+
 #os.environ["WANDB_PROJECT"]="hfmt"
 
 def get_texts(jsonl_file, key='summary'):
@@ -36,6 +38,15 @@ def main(ref_file, hyp_file, out_file, mt_out_file=""):
 			submetric="bleu"
 		)
 		score_dict["bleu"] = bleu_score
+	
+	if "comet_qe" not in score_dict and mt_out_file:
+		comet_qe = get_score(
+            ref_file,
+            mt_out_file,
+            metric="comet",
+            submetric="qe"
+        )
+		score_dict["comet_qe"] = comet_qe
 
 	# Write to out file
 	if out_file:
@@ -47,17 +58,20 @@ def main(ref_file, hyp_file, out_file, mt_out_file=""):
 
 def get_score(ref_file, hyp_file, metric="rouge", submetric="rougeL"):
 
-	key = "text" if metric == "bleu" else "summary"
+	key = "summary" if metric == "rouge" else "text"
 
 	refs = get_texts(ref_file, key)
 	hyps = get_texts(hyp_file, key)
+
+	if submetric == "qe":
+		return qe.get_qe_score(refs=refs, hyps=hyps)
 
 	assert type(refs) == list and type(hyps) == list 
 	assert type(refs[0]) == str and type(hyps[0]) == str
 	#if metric == "bleu":
 	#	refs = [refs]
 
-	# Compute ROUGE
+	# Compute ROUGE or BLEU
 
 	scorer = evaluate.load(metric)
 	results = scorer.compute(predictions=hyps, references=refs)

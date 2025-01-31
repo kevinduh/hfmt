@@ -14,7 +14,7 @@ def make_bars(score_data):
         scores_combined = {
             key: [
                 score_data[lang][cat].get(key, 0) for cat in cats
-            ] for key in ("rouge", "bleu")
+            ] for key in ("rouge", "comet_qe")
         }
 
         x = np.arange(len(cats))  # the label locations

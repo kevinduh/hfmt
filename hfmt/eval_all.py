@@ -11,13 +11,13 @@ E2E_INSTRUCTION="Summarize the following passage in one sentence in English. Do 
 PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 LANGS2AMOUNTS = {
-	"es": [1000, 10000, 100000],
-	"sw": [1000, 10000, 100000],
-	"ar": [1000, 10000, 100000],
-	"zh": [1000, 10000, 100000],
-	"ja": [1000, 10000, 100000],
-	"ru": [1000, 10000, 100000],
-	"ta": [1000, 10000, 100000],
+	"es": [1000, 10000, 100000, 1000000],
+	"sw": [1000, 10000, 100000, 1000000],
+	"ar": [1000, 10000, 100000, 1000000],
+	"zh": [1000, 10000, 100000, 1000000],
+	"ja": [1000, 10000, 100000, 1000000],
+	"ru": [1000, 10000, 100000, 1000000],
+	"ta": [1000, 10000, 100000, 1000000],
 	"pcm": [1000, 10000],
 }
 ISO2NAME = {

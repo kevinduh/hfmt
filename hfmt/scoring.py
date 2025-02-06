@@ -5,12 +5,29 @@ import qe
 
 #os.environ["WANDB_PROJECT"]="hfmt"
 
-def get_texts(jsonl_file, key='summary'):
-	with open(jsonl_file, 'r') as f:
+METRIC2KEY = {
+	"rouge": "summary", 
+	"comet": "text",	
+	"bleu": None
+}
+
+def get_texts(data_file, key='summary'):
+	if key is None: # In this case assume txt file, not jsonl
+		with open(data_file, 'r') as f:
+			lines = f.readlines() 
+		return [line.strip() for line in lines]
+	with open(data_file, 'r') as f:
 		data = json.load(f)
 	return [datum[key] for datum in data]
 
-def main(ref_file, hyp_file, out_file, mt_out_file=""):
+def main(
+		ref_file, 
+		hyp_file, 
+		flores_ref_file="", 
+		flores_hyp_file="", 
+		out_file="", 
+		mt_out_file=""
+	):
 
 	###################################
 
@@ -30,10 +47,11 @@ def main(ref_file, hyp_file, out_file, mt_out_file=""):
 		score_dict["rouge"] = rouge_score
 		print(f"Calculated rouge for {hyp_file}: {rouge_score}")
 
-	if "bleu" not in score_dict and mt_out_file:
+	if "bleu" not in score_dict and mt_out_file and flores_ref_file\
+			and flores_hyp_file:
 		bleu_score = get_score(
-			ref_file, 
-			mt_out_file,
+			flores_ref_file, 
+			flores_hyp_file,
 			metric="bleu",
 			submetric="bleu"
 		)
@@ -56,12 +74,20 @@ def main(ref_file, hyp_file, out_file, mt_out_file=""):
 	
 	return score_dict
 
-def get_score(ref_file, hyp_file, metric="rouge", submetric="rougeL"):
+def get_score(ref_, hyp_, metric="rouge", submetric="rougeL"):
 
-	key = "summary" if metric == "rouge" else "text"
+	key = METRIC2KEY[metric]
 
-	refs = get_texts(ref_file, key)
-	hyps = get_texts(hyp_file, key)
+	if type(ref_) == list:
+		assert type(hyp_) == list, "Both must be lists or both str's"
+		refs = ref_
+		hyps = hyp_
+	elif type(ref_) == str:
+		assert type(hyp_) == str, "Both must be lists or both str's"
+		refs = get_texts(ref_, key)
+		hyps = get_texts(hyp_, key)
+	else:
+		raise TypeError("ref_ and hyp_ must be lists or str's")
 
 	if submetric == "qe":
 		return qe.get_qe_score(refs=refs, hyps=hyps)

@@ -30,6 +30,15 @@ ISO2NAME = {
 	"sw": "swahili",
 	"pcm": "pidgin"
 }
+LANG2FLORES_CODE = {
+	"spanish": "spa_Latn",
+	"arabic": "arb_Arab", 
+	"chinese_simplified": "zho_Hans",
+	"russian": "rus_Cyrl",
+	"japanese": "jpn_Jpan",
+	"tamil": "tam_Taml",
+	"swahili": "swh_Latn", 
+}
 
 def run_eval(
 		crosssum_testset="egs/data/CrossSum-test/spanish-english.toy.jsonl",
@@ -41,7 +50,8 @@ def run_eval(
 		summarize_instruction=SUMMARIZE_INSTRUCTION,
 		scores_json="$outdir/scores.jsonl",
 		e2e=False,
-		score_only=False
+		score_only=False,
+		flores_eval=True
 	) -> float:
 
 	if not score_only:
@@ -49,6 +59,7 @@ def run_eval(
 			assert not model_checkpoint 
 			assert not mt_outfile
 			assert not src_language
+			assert not flores_eval
 			summarize_infile = crosssum_testset
 		else:
 			# MT step
@@ -80,6 +91,18 @@ def run_eval(
 		out_file=scores_json,
 		mt_out_file=mt_file_for_bleu
 	)
+
+	# Do FLORES eval
+	if flores_eval and src_language != "pidgin": # TODO add kreyol-mt FIXME
+		flores_code = LANG2FLORES_CODE[src_language]
+		refs, hyps = cascade.flores_eval(model_checkpoint, flores_code)
+		flores_bleu = scoring.get_score(
+			refs, 
+			hyps, 
+			metric="bleu", 
+			submetric="bleu"
+		)
+		score['bleu'] = flores_bleu
 
 	return score
 
@@ -141,7 +164,7 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 				final_outfile=final_outfile,
 				summarize_instruction=SUMMARIZE_INSTRUCTION,
 				scores_json=scores_json,
-				score_only = score_only
+				score_only=score_only
 			)
 			
 			# collect score 
@@ -180,7 +203,8 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 				summarize_instruction=E2E_INSTRUCTION,
 				scores_json=scores_json,
 				e2e=True,
-				score_only=score_only
+				score_only=score_only,
+				flores_eval=False
 			)
 
 			all_results[lang]['e2e'] = score

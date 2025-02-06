@@ -38,6 +38,51 @@ def split_up_tokens(toks, dim=512):
             new_toks[key] = toks[key][:, idx * dim: (idx + 1) * dim]
         yield new_toks
 
+def flores_eval(checkpoint, flores_code):
+    # (1) Set up model
+    AutoMod = AutoModelForSeq2SeqLM
+    torch_dtype = torch.float32
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint) 
+    model = AutoMod.from_pretrained(
+        checkpoint,
+        torch_dtype=torch_dtype,
+        pad_token_id=tokenizer.eos_token_id
+    ).to(device)
+    generation_config = GenerationConfig.from_pretrained(checkpoint)
+    # (2) Set up data
+    eval_data = load_dataset(
+		"facebook/flores", 
+		flores_code, 
+		split="devtest",
+		trust_remote_code=True
+	)
+    input_sents = [eval_datum["sentence"].strip() for eval_datum in eval_data]
+    output_sents = [] 
+    # (3) Inference
+    for orig_sent in tqdm(input_sents): 
+        generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
+        generate_kwargs["eos_token_id"] = [
+            tokenizer.eos_token_id,
+            tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+        input_tokens = tokenizer(orig_sent, return_tensors="pt").to(device)
+        test_outputs_raw = model.generate(**input_tokens, **generate_kwargs)
+        test_outputs = test_outputs_raw[0]
+        test_outputs_detok_raw = tokenizer.decode(test_outputs)
+        test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
+        output_text = test_outputs_detok.strip()
+        output_sents.append(output_text)
+    # (4) Get references
+    ref_data = load_dataset(
+		"facebook/flores", 
+		"eng_Latn", 
+		split="devtest",
+		trust_remote_code=True
+	)
+    ref_sents = [ref_datum["sentence"].strip() for ref_datum in ref_data]
+    return ref_sents, output_sents
+
 def main(
 		eval_set, 
 		checkpoint, 
@@ -135,7 +180,7 @@ def main(
     #eval_data = eval_data.select(range(3))
     start_time = time.time()
     outputs = []
-    for i in tqdm(range(len(eval_data))):
+    for i in tqdm(range(len(eval_data))): # komya
         orig_inputs = instruction_prefix + eval_data[i]["text"]
         orig_inputs = orig_inputs.strip()
         generate_kwargs = {"max_new_tokens": 128, "do_sample": False}

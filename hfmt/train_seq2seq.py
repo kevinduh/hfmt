@@ -67,9 +67,14 @@ def main():
 
     ###################################
     ## Helper functions
+    def my_str(s):
+        if not s:
+            return ""
+        return str(s)
+
     def preprocess_fn(samples):
-        inputs = [instruction_prefix + " " + s for s in samples["src"]]
-        targets = [s for s in samples["trg"]]
+        inputs = [instruction_prefix + " " + my_str(s) for s in samples["src"]]
+        targets = [my_str(s) for s in samples["trg"]]
         model_inputs = tokenizer(inputs, text_target=targets,
                                 max_length=100,truncation=True,padding='max_length')
         return model_inputs

@@ -5,20 +5,31 @@ import cascade_seq2seq as cascade
 import scoring
 
 RUNNING_E2E=True # switch this later
+RUNNING_HELSINKI=True
 
 SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. Do not provide any explanations or text apart from the summary.\nPassage: "
 E2E_INSTRUCTION="Summarize the following passage in one sentence in English. Do not provide any explanations or text apart from the summary.\nPassage: "
 PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 LANGS2AMOUNTS = {
-	"es": [1000, 10000, 100000, 1000000],
+	"es": [1000, 10000, 100000, 1000000], # has Helsinki
 	"sw": [1000, 10000, 100000, 1000000],
-	"ar": [1000, 10000, 100000, 1000000],
-	"zh": [1000, 10000, 100000, 1000000],
-	"ja": [1000, 10000, 100000, 1000000],
-	"ru": [1000, 10000, 100000, 1000000],
+	"ar": [1000, 10000, 100000, 1000000], # has Helsinki
+	"zh": [1000, 10000, 100000, 1000000], # has Helsinki
+	"ja": [1000, 10000, 100000, 1000000], # has Helsinki
+	"ru": [1000, 10000, 100000, 1000000], # has Helsinki
 	"ta": [1000, 10000, 100000, 1000000],
 	"pcm": [1000, 10000],
+}
+LANGS2HELSINKI_IDS = {
+	"es": "Helsinki-NLP/opus-mt-es-en",
+	"sw": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+	"ar": "Helsinki-NLP/opus-mt-ar-en",
+	"zh": "Helsinki-NLP/opus-mt-zh-en",
+	"ja": "Helsinki-NLP/opus-mt-ja-en",
+	"ru": "Helsinki-NLP/opus-mt-ru-en",
+	"ta": "Helsinki-NLP/opus-mt-dra-en",
+	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
 }
 ISO2NAME = {
 	"es": "spanish",
@@ -51,7 +62,8 @@ def run_eval(
 		scores_json="$outdir/scores.jsonl",
 		e2e=False,
 		score_only=False,
-		flores_eval=True
+		flores_eval=True,
+		flores_outfile=None
 	) -> float:
 
 	if not score_only:
@@ -93,9 +105,13 @@ def run_eval(
 	)
 
 	# Do FLORES eval
-	if flores_eval and src_language != "pidgin": # TODO add kreyol-mt FIXME
+	if flores_eval and not score_only and src_language != "pidgin": # TODO add kreyol-mt FIXME
 		flores_code = LANG2FLORES_CODE[src_language]
-		refs, hyps = cascade.flores_eval(model_checkpoint, flores_code)
+		refs, hyps = cascade.run_flores_eval(
+			model_checkpoint, 
+			flores_code, 
+			flores_outfile
+		)
 		flores_bleu = scoring.get_score(
 			refs, 
 			hyps, 
@@ -103,6 +119,9 @@ def run_eval(
 			submetric="bleu"
 		)
 		score['bleu'] = flores_bleu
+
+		with open(scores_json, 'w') as f:
+			json.dump(score, f)
 
 	return score
 
@@ -140,6 +159,7 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 			mt_outfile = os.path.join(out_dir, "mt_outs.jsonl")
 			final_outfile = os.path.join(out_dir, "final_outs.jsonl")
 			scores_json = os.path.join(out_dir, "scores.jsonl")
+			flores_outfile = os.path.join(out_dir, "flores_hyps.jsonl")
 
 			# score_only
 			score_only = False
@@ -164,11 +184,48 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 				final_outfile=final_outfile,
 				summarize_instruction=SUMMARIZE_INSTRUCTION,
 				scores_json=scores_json,
-				score_only=score_only
+				score_only=score_only,
+				flores_outfile=flores_outfile
 			)
 			
 			# collect score 
 			all_results[lang][train_amount] = score
+
+		if RUNNING_HELSINKI:
+			
+			# define final_outfile, scores_json
+			chkpt_dir = f"egs/models/{lang}-en_pretrain-helsinki.1"
+			full_chkpt_dir = os.path.join(rootdir, chkpt_dir)
+			out_dir = os.path.join(full_chkpt_dir, "outs")
+			if not os.path.exists(out_dir):
+				os.makedirs(out_dir)
+			mt_outfile = os.path.join(out_dir, "mt_outs.jsonl")
+			final_outfile = os.path.join(out_dir, "final_outs.jsonl")
+			scores_json = os.path.join(out_dir, "scores.jsonl")
+			flores_outfile = os.path.join(out_dir, "flores_hyps.jsonl")
+
+			# score_only
+			score_only = False
+
+			if os.path.exists(final_outfile):
+				print(final_outfile, "already exists")
+				score_only = True
+
+			score = run_eval(
+				crosssum_testset=crosssum_testset,
+                model_checkpoint=LANGS2HELSINKI_IDS[lang],
+                mt_outfile=mt_outfile,
+                src_language=language,
+                hf_summarize_model=HF_SUMMARIZE_MODEL,
+                final_outfile=final_outfile,
+                summarize_instruction=SUMMARIZE_INSTRUCTION,
+                scores_json=scores_json,
+                score_only=score_only, 
+				flores_outfile=flores_outfile
+            )
+
+			# collect score
+			all_results[lang]["helsinki"] = score
 
 		if RUNNING_E2E:
 			# Now run end to end

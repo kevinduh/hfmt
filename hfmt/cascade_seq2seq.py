@@ -38,7 +38,7 @@ def split_up_tokens(toks, dim=512):
             new_toks[key] = toks[key][:, idx * dim: (idx + 1) * dim]
         yield new_toks
 
-def flores_eval(checkpoint, flores_code):
+def run_flores_eval(checkpoint, flores_code, outs_file):
     # (1) Set up model
     AutoMod = AutoModelForSeq2SeqLM
     torch_dtype = torch.float32
@@ -50,29 +50,37 @@ def flores_eval(checkpoint, flores_code):
         pad_token_id=tokenizer.eos_token_id
     ).to(device)
     generation_config = GenerationConfig.from_pretrained(checkpoint)
-    # (2) Set up data
-    eval_data = load_dataset(
-		"facebook/flores", 
-		flores_code, 
-		split="devtest",
-		trust_remote_code=True
-	)
-    input_sents = [eval_datum["sentence"].strip() for eval_datum in eval_data]
-    output_sents = [] 
-    # (3) Inference
-    for orig_sent in tqdm(input_sents): 
-        generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
-        generate_kwargs["eos_token_id"] = [
-            tokenizer.eos_token_id,
-            tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
-        input_tokens = tokenizer(orig_sent, return_tensors="pt").to(device)
-        test_outputs_raw = model.generate(**input_tokens, **generate_kwargs)
-        test_outputs = test_outputs_raw[0]
-        test_outputs_detok_raw = tokenizer.decode(test_outputs)
-        test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-        output_text = test_outputs_detok.strip()
-        output_sents.append(output_text)
+    if not os.path.exists(outs_file):
+        # (2) Set up data
+        eval_data = load_dataset(
+			"facebook/flores", 
+			flores_code, 
+			split="devtest",
+			trust_remote_code=True
+		)
+        input_sents = [eval_datum["sentence"].strip() for eval_datum in eval_data]
+        output_sents = [] 
+        # (3) Inference
+        for orig_sent in tqdm(input_sents): 
+            generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
+            generate_kwargs["eos_token_id"] = [
+                tokenizer.eos_token_id,
+                tokenizer.convert_tokens_to_ids("<|eot_id|>")
+            ]
+            input_tokens = tokenizer(orig_sent, return_tensors="pt").to(device)
+            test_outputs_raw = model.generate(**input_tokens, **generate_kwargs)
+            test_outputs = test_outputs_raw[0]
+            test_outputs_detok_raw = tokenizer.decode(test_outputs)
+            test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
+            output_text = test_outputs_detok.strip()
+            output_sents.append(output_text)
+        # (3.5) Write outputs for later 
+        with open(outs_file, 'w') as f:
+            json.dump(output_sents, f)
+    else:
+        # (2-3) Just read the inference sentences 
+        with open(outs_file, 'r') as f:
+            output_sents = json.load(f)
     # (4) Get references
     ref_data = load_dataset(
 		"facebook/flores", 

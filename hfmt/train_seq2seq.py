@@ -16,6 +16,39 @@ from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2Se
 #os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
 
+def my_str(s):
+    if not s:
+        return ""
+    return str(s)
+
+def get_data(train_path, dev_path="", total_n=1000000, train_ratio=0.9):
+    if dev_path:
+        custom_splits = {"train": train_path, "dev": dev_path}
+        data = load_dataset(
+            "csv", 
+            delimiter = "\t", 
+            column_names=['src','trg'], 
+            data_files = custom_splits, 
+            streaming=True,
+            quoting=csv.QUOTE_NONE
+        )
+    else:
+        dataset = load_dataset(
+            "csv",
+            delimiter="\t",
+            column_names=['src', 'trg'],
+            data_files={'full': train_path},
+            streaming=True,
+            quoting=csv.QUOTE_NONE
+        )['full'].take(total_n)
+        dev_n = min(1000, int((1 - train_ratio) * total_n))
+        data = IterableDatasetDict({
+            'dev': dataset.take(dev_n),
+            'train': dataset.skip(dev_n).take(total_n - dev_n)
+        })
+    data = data.map(preprocess_fn, batched=True)
+    return data
+
 def main():
 
 
@@ -67,10 +100,6 @@ def main():
 
     ###################################
     ## Helper functions
-    def my_str(s):
-        if not s:
-            return ""
-        return str(s)
 
     def preprocess_fn(samples):
         inputs = [instruction_prefix + " " + my_str(s) for s in samples["src"]]
@@ -78,35 +107,6 @@ def main():
         model_inputs = tokenizer(inputs, text_target=targets,
                                 max_length=100,truncation=True,padding='max_length')
         return model_inputs
-
-
-    def get_data(train_path, dev_path="", total_n=1000000, train_ratio=0.9):
-        if dev_path:
-            custom_splits = {"train": train_path, "dev": dev_path}
-            data = load_dataset(
-                "csv", 
-                delimiter = "\t", 
-                column_names=['src','trg'], 
-                data_files = custom_splits, 
-                streaming=True,
-                quoting=csv.QUOTE_NONE
-			)
-        else:
-            dataset = load_dataset(
-				"csv",
-				delimiter="\t",
-				column_names=['src', 'trg'],
-				data_files={'full': train_path},
-		        streaming=True,
-		        quoting=csv.QUOTE_NONE
-		    )['full'].take(total_n)
-            dev_n = min(1000, int((1 - train_ratio) * total_n))
-            data = IterableDatasetDict({
-		    	'dev': dataset.take(dev_n),
-		        'train': dataset.skip(dev_n).take(total_n - dev_n)
-			})
-        data = data.map(preprocess_fn, batched=True)
-        return data
 
 
     def postprocess_text(preds, labels):

@@ -18,7 +18,7 @@ conda activate $ENV_NAME
 data_amount=100000
 src_lang=es
 trainset=$rootdir/egs/data/CCMatrix-train/$src_lang-en.train.bitext
-checkpoint="Helsinki-NLP/opus-mt-de-en"
+checkpoint="Helsinki-NLP/opus-mt-es-en"
 instruction=""
 
 ###########################

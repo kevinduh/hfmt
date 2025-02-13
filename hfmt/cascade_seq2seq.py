@@ -38,6 +38,35 @@ def split_up_tokens(toks, dim=512):
             new_toks[key] = toks[key][:, idx * dim: (idx + 1) * dim]
         yield new_toks
 
+def run_basic_eval(checkpoint, srcs):
+    AutoMod = AutoModelForSeq2SeqLM
+    torch_dtype = torch.float32
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint) 
+    model = AutoMod.from_pretrained(
+        checkpoint,
+        torch_dtype=torch_dtype,
+        pad_token_id=tokenizer.eos_token_id
+    ).to(device)
+    generation_config = GenerationConfig.from_pretrained(checkpoint)
+    output_sents = [] 
+    # Inference
+    for orig_sent in tqdm(srcs): 
+        generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
+        generate_kwargs["eos_token_id"] = [
+            tokenizer.eos_token_id,
+            tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+        input_tokens = tokenizer(orig_sent, return_tensors="pt").to(device)
+        test_outputs_raw = model.generate(**input_tokens, **generate_kwargs)
+        test_outputs = test_outputs_raw[0]
+        test_outputs_detok_raw = tokenizer.decode(test_outputs)
+        test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
+        output_text = test_outputs_detok.strip()
+        output_sents.append(output_text)
+    assert len(output_sents) == len(srcs)
+    return output_sents 
+
 def run_flores_eval(checkpoint, flores_code, outs_file):
     # (1) Set up model
     AutoMod = AutoModelForSeq2SeqLM

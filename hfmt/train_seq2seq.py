@@ -21,7 +21,21 @@ def my_str(s):
         return ""
     return str(s)
 
-def get_data(train_path, dev_path="", total_n=1000000, train_ratio=0.9):
+def preprocess_fn(samples, instruction_prefix, tokenizer):
+    inputs = [instruction_prefix + " " + my_str(s) for s in samples["src"]]
+    targets = [my_str(s) for s in samples["trg"]]
+    model_inputs = tokenizer(inputs, text_target=targets,
+                            max_length=100,truncation=True,padding='max_length')
+    return model_inputs
+
+def get_data(
+        train_path, 
+        dev_path="", 
+        total_n=1000000, 
+        train_ratio=0.9, 
+        instruction_prefix="",
+        tokenizer=None
+    ):
     if dev_path:
         custom_splits = {"train": train_path, "dev": dev_path}
         data = load_dataset(
@@ -46,7 +60,8 @@ def get_data(train_path, dev_path="", total_n=1000000, train_ratio=0.9):
             'dev': dataset.take(dev_n),
             'train': dataset.skip(dev_n).take(total_n - dev_n)
         })
-    data = data.map(preprocess_fn, batched=True)
+    mapping_fn = lambda x: preprocess_fn(x, instruction_prefix, tokenizer)
+    data = data.map(mapping_fn, batched=True)
     return data
 
 def main():
@@ -101,13 +116,6 @@ def main():
     ###################################
     ## Helper functions
 
-    def preprocess_fn(samples):
-        inputs = [instruction_prefix + " " + my_str(s) for s in samples["src"]]
-        targets = [my_str(s) for s in samples["trg"]]
-        model_inputs = tokenizer(inputs, text_target=targets,
-                                max_length=100,truncation=True,padding='max_length')
-        return model_inputs
-
 
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -144,8 +152,28 @@ def main():
     ## Load data
     logging.info(f"======== Loading data ========")
     start_time = time.time()
-    D = get_data(args.train, args.dev, total_n=args.data_amount)
+    D = get_data(
+        args.train, 
+        args.dev, 
+        total_n=args.data_amount, 
+        instruction_prefix=instruction_prefix, 
+        tokenizer=tokenizer
+    )
     logging.info(D)
+    for Dkey in list(D.keys()):
+        logging.info(f"Printing data sample for {Dkey}")
+        logging.info("=" * 20)
+        for idx, datum in enumerate(D[Dkey]):
+            logging.info('\tsrc: ' + datum['src'])
+            logging.info('\ttrg: ' + datum['trg'])
+            logging.info('>>>>')
+            if idx > 3:
+                break 
+        logging.info("=" * 10)
+        logging.info(f"Length of {Dkey}: " + str(len([d for d in D[Dkey]])))
+        logging.info("=" * 20)
+        logging.info("")
+
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=args.checkpoint)
     end_time = time.time()
     logging.info(f"Loading data - Elapsed time: {end_time-start_time:.1f}s")

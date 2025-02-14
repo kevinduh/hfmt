@@ -121,14 +121,14 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
     return ref_sents, output_sents
 
 def main(
-		eval_set, 
-		checkpoint, 
-		pretrain, 
-		summarization, 
-		outfile, 
-		instruction="", 
-		language="english",
-		verbose=False
+		eval_set: str, 
+		checkpoint: str, 
+		pretrain: bool, 
+		summarization: bool, 
+		outfile: str, 
+		instruction: str="", 
+		language: str="english",
+		verbose: bool=False
 	):
 
     ###################################

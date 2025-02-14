@@ -49,6 +49,7 @@ ISO2NAME = {
 	"sw": "swahili",
 	"pcm": "pidgin"
 }
+NAME2ISO = {ISO2NAME[iso]: iso for iso in ISO2NAME}
 LANG2FLORES_CODE = {
 	"spanish": "spa_Latn",
 	"arabic": "arb_Arab", 
@@ -180,8 +181,13 @@ def run_eval(
 		score['flores_bleu'] = flores_bleu
 	
 	# Do a train set eval here 
-	if sanity_check and not score_only:
+	if sanity_check and not e2e: # and not score_only:
 		tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+		
+		# Define train_data_path
+		iso2 = NAME2ISO[src_language]
+		train_data_path = f"egs/data/CCMatrix-train/{iso2}-en.train.bitext"
+
 		D = train.get_data(
 			train_data_path, 
 			total_n=200, 

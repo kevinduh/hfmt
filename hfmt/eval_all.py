@@ -164,7 +164,7 @@ def run_eval(
 	)
 
 	# Do FLORES eval
-	if flores_eval and not score_only and src_language != "pidgin": # TODO add kreyol-mt FIXME
+	if flores_eval and not os.path.exists(flores_outfile) and src_language != "pidgin": # TODO add kreyol-mt FIXME
 		flores_code = LANG2FLORES_CODE[src_language]
 		refs, hyps = cascade.run_flores_eval(
 			model_checkpoint, 

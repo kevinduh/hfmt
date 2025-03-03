@@ -11,6 +11,8 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, AutoConfig, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, AutoModelForCausalLM
 
+from constants import LANG2FLORES_CODE
+
 #os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
 
@@ -38,32 +40,56 @@ def split_up_tokens(toks, dim=512):
             new_toks[key] = toks[key][:, idx * dim: (idx + 1) * dim]
         yield new_toks
 
-def run_basic_eval(checkpoint, srcs):
+def batch_list(l, bs=64):
+    i = 0
+    while i < len(l):
+        yield l[i: i + bs]
+        i += bs
+
+def run_basic_eval(checkpoint, srcs, language):
     AutoMod = AutoModelForSeq2SeqLM
     torch_dtype = torch.float32
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained(checkpoint) 
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = tokenizer.eos_token
+    if "nllb" in checkpoint.lower():
+        tokenizer.src_lang = LANG2FLORES_CODE[language]
+        tokenizer.tgt_lang = "eng_Latn"
     model = AutoMod.from_pretrained(
         checkpoint,
         torch_dtype=torch_dtype,
         pad_token_id=tokenizer.eos_token_id
     ).to(device)
-    generation_config = GenerationConfig.from_pretrained(checkpoint)
+    # generation_config = GenerationConfig.from_pretrained(checkpoint)
     output_sents = [] 
     # Inference
-    for orig_sent in tqdm(srcs): 
+    for sent_batch in tqdm(batch_list(srcs)): 
         generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
         generate_kwargs["eos_token_id"] = [
             tokenizer.eos_token_id,
-            tokenizer.convert_tokens_to_ids("<|eot_id|>")
+            # tokenizer.convert_tokens_to_ids("<|eot_id|>")
         ]
-        input_tokens = tokenizer(orig_sent, return_tensors="pt").to(device)
-        test_outputs_raw = model.generate(**input_tokens, **generate_kwargs)
-        test_outputs = test_outputs_raw[0]
-        test_outputs_detok_raw = tokenizer.decode(test_outputs)
-        test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-        output_text = test_outputs_detok.strip()
-        output_sents.append(output_text)
+        if "nllb" in checkpoint.lower():
+            generate_kwargs = {
+            	"forced_bos_token_id": tokenizer.convert_tokens_to_ids("eng_Latn"),
+                "max_length": 128
+            }
+        input_tokens = tokenizer(
+			sent_batch, 
+			return_tensors="pt",
+			padding=True,
+			truncation=True,
+			max_length=512,
+		).to(device)
+        test_outs = model.generate(**input_tokens, **generate_kwargs)
+        decoded_sents = [
+			tokenizer.decode(
+				output,
+				skip_special_tokens=True
+			).strip() for output in test_outs
+		]
+        output_sents += decoded_sents
     assert len(output_sents) == len(srcs)
     return output_sents 
 
@@ -73,12 +99,17 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
     torch_dtype = torch.float32
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained(checkpoint) 
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = tokenizer.eos_token
+    if "nllb" in checkpoint.lower():
+        tokenizer.src_lang = flores_code
+        tokenizer.tgt_lang = "eng_Latn"
     model = AutoMod.from_pretrained(
         checkpoint,
         torch_dtype=torch_dtype,
         pad_token_id=tokenizer.eos_token_id
     ).to(device)
-    generation_config = GenerationConfig.from_pretrained(checkpoint)
+    # generation_config = GenerationConfig.from_pretrained(checkpoint)
     if not os.path.exists(outs_file):
         # (2) Set up data
         eval_data = load_dataset(
@@ -90,22 +121,35 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
         input_sents = [eval_datum["sentence"].strip() for eval_datum in eval_data]
         output_sents = [] 
         # (3) Inference
-        for orig_sent in tqdm(input_sents): 
+        for sent_batch in tqdm(batch_list(input_sents)): 
             generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
             generate_kwargs["eos_token_id"] = [
                 tokenizer.eos_token_id,
-                tokenizer.convert_tokens_to_ids("<|eot_id|>")
+                # tokenizer.convert_tokens_to_ids("<|eot_id|>")
             ]
-            input_tokens = tokenizer(orig_sent, return_tensors="pt").to(device)
-            test_outputs_raw = model.generate(**input_tokens, **generate_kwargs)
-            test_outputs = test_outputs_raw[0]
-            test_outputs_detok_raw = tokenizer.decode(test_outputs)
-            test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-            output_text = test_outputs_detok.strip()
-            output_sents.append(output_text)
+            if "nllb" in checkpoint.lower():
+                generate_kwargs = {
+					"forced_bos_token_id": tokenizer.convert_tokens_to_ids("eng_Latn"),
+					"max_length": 128
+				}
+            input_tokens = tokenizer(
+				sent_batch, 
+				return_tensors="pt",
+				padding=True,
+				truncation=True,
+				max_length=512,
+			).to(device)
+            test_outs = model.generate(**input_tokens, **generate_kwargs)
+            decoded_sents = [
+				tokenizer.decode(
+					output,
+					skip_special_tokens=True
+				).strip() for output in test_outs
+			]
+            output_sents += decoded_sents
         # (3.5) Write outputs for later 
         with open(outs_file, 'w') as f:
-            json.dump(output_sents, f)
+            json.dump(output_sents, f, indent=4, ensure_ascii=False)
     else:
         # (2-3) Just read the inference sentences 
         with open(outs_file, 'r') as f:
@@ -128,10 +172,16 @@ def main(
 		outfile: str, 
 		instruction: str="", 
 		language: str="english",
-		verbose: bool=False
+		verbose: bool=False,
+		mt_model_dim: int=512,
 	):
 
     ###################################
+
+    if summarization:
+        batch_size = 4
+    else:
+        batch_size = 64
 
     if eval_set.endswith(".json") or eval_set.endswith(".jsonl"):
         filetype = "json"
@@ -177,6 +227,11 @@ def main(
     global experiment_id
     experiment_id = outdir.replace(os.sep,'_').replace('models_','')
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = tokenizer.eos_token
+    if "nllb" in checkpoint.lower():
+        tokenizer.src_lang = LANG2FLORES_CODE[language]
+        tokenizer.tgt_lang = "eng_Latn"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if verbose:
@@ -200,13 +255,11 @@ def main(
             logging.info("Training from scratch with pretrained model's config only")
         model = AutoMod.from_config(config).to(device)
 	
-    generation_config = GenerationConfig.from_pretrained(checkpoint)
+    # generation_config = GenerationConfig.from_pretrained(checkpoint)
 
     num_param = sum(p.numel() for p in model.parameters())
     if verbose:
         logging.info(f"Number of parameters: {num_param}")
-    # for i in model.named_parameters():
-    #     logging.info(f"{i[0]} -> {i[1].device}")
 
     ###################################
     ## Inference on Eval set
@@ -217,43 +270,89 @@ def main(
     #eval_data = eval_data.select(range(3))
     start_time = time.time()
     outputs = []
-    for i in tqdm(range(len(eval_data))): # komya
-        orig_inputs = instruction_prefix + eval_data[i]["text"]
-        orig_inputs = orig_inputs.strip()
+    valid_input_sizes = [1]
+    input_texts = [eval_datum["text"] for eval_datum in eval_data]
+    for doc_batch in tqdm(batch_list(input_texts)): # komya
+        doc_batch = [
+			instruction_prefix + sent.strip() for sent in doc_batch
+		]
         generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
         generate_kwargs["eos_token_id"] = [
 			tokenizer.eos_token_id,
-			tokenizer.convert_tokens_to_ids("<|eot_id|>")
+			# tokenizer.convert_tokens_to_ids("<|eot_id|>")
 		]
         if summarization:
             generate_kwargs["max_new_tokens"] = 256
-            generate_kwargs["do_sample"] = True
-            generate_kwargs["temperature"] = 0.6
-            generate_kwargs["top_p"] = 0.9 
-            test_inputs = tokenizer(orig_inputs, return_tensors="pt").to(device)
+            generate_kwargs["do_sample"] = False # True
+            # generate_kwargs["temperature"] =  0.6
+            # generate_kwargs["top_p"] = 0.9 
+            test_inputs = tokenizer(
+				doc_batch, 
+				return_tensors="pt",
+				padding=True,
+				truncation=True,
+			).to(device)
+            test_input_size = test_inputs['input_ids'].shape[1]
             try:
-                test_outputs_raw = model.generate(**test_inputs, **generate_kwargs)
-                test_outputs = test_outputs_raw[0][test_inputs['input_ids'].shape[1]:]
-                test_outputs_detok_raw = tokenizer.decode(test_outputs)
-                test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-                output_text = test_outputs_detok
-            except OutOfMemoryError: # HACK FIXME
-                output_text = ""
-            outputs.append({"summary": output_text.strip()})
+                test_outs = model.generate(**test_inputs, **generate_kwargs)
+                valid_input_sizes.append(test_input_size)
+            except OutOfMemoryError: # Now just reduce size of tensor for inputs 
+                valid_input_size = max(valid_input_sizes)
+                test_inputs = tokenizer(
+	                doc_batch,
+	                return_tensors="pt",
+	                padding=True,
+	                truncation=True,
+					max_length=valid_input_size
+	            ).to(device)
+                test_outs = model.generate(**test_inputs, **generate_kwargs)
+                #for key in test_inputs:
+                #    test_inputs[key] = test_inputs[key][:, :valid_input_size]
+            decoded_sents = [
+                tokenizer.decode(
+        	        output,
+    	            skip_special_tokens=True
+	            ).strip() for output in test_outs
+	        ]
+            outputs += [
+				{
+					"summary": output_text.strip()
+				} for output_text in decoded_sents
+			]
         else:
-            input_sents = split_sentences(orig_inputs, language)
-            output_text = ""
-            for input_sent in input_sents:
-                input_tokens = tokenizer(input_sent, return_tensors="pt").to(device)
-                for tokens_slice in split_up_tokens(input_tokens):
-                    test_outputs_raw = model.generate(**tokens_slice, **generate_kwargs)
-                    test_outputs = test_outputs_raw[0]
-                    test_outputs_detok_raw = tokenizer.decode(test_outputs)
-                    test_outputs_detok = tokenizer.decode(test_outputs, skip_special_tokens=True)
-                    output_text += test_outputs_detok.strip() + ' '
-            outputs.append({"text": output_text.strip()})
-        if i <= 3 and verbose:
-            logging.info(f"{i}: {eval_data[i]}")
+            if pretrain and "nllb" in checkpoint:
+                generate_kwargs = {
+					"forced_bos_token_id": tokenizer.convert_tokens_to_ids("eng_Latn"),
+					"max_length": 128
+				}
+            output_translations = []
+            for input_doc in doc_batch:
+                input_sents = split_sentences(input_doc, language)
+                output_text = ""
+                for sent_batch in batch_list(input_sents):
+                    input_tokens = tokenizer(
+						sent_batch,
+						return_tensors="pt",
+						padding=True,
+						truncation=True,
+						max_length=mt_model_dim,
+					).to(device)
+                    test_outs = model.generate(**input_tokens, **generate_kwargs)
+                    decoded_sents = [
+						tokenizer.decode(
+							output,
+							skip_special_tokens=True
+						).strip() for output in test_outs
+					]
+                    output_text += ' '.join(decoded_sents) + ' '
+                output_translations.append(output_text)
+            outputs += [
+				{
+					"text": output_text.strip()
+				} for output_text in output_translations
+			]
+        if verbose:
+            # logging.info(f"{i}: {eval_data[i]}")
             logging.info(f"original_inputs: {orig_inputs}")
             logging.info(f"inputs: {test_inputs}")
             logging.info(f"outputs: {test_outputs}")
@@ -286,6 +385,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--outfile", required=True, help="Output file")
     parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
     parser.add_argument("-l", "--language", type=str, default="english", help="Source text language")
+    parser.add_argument("--mt_model_dim", type=int, default=512)
 
     args = parser.parse_args()
 
@@ -297,5 +397,6 @@ if __name__ == "__main__":
 		outfile=args.outfile, 
 		instruction=args.instruction, 
 		language=args.language,
-		verbose=True
+		verbose=True,
+		mt_model_dim=args.mt_model_dim
 	)

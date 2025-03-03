@@ -7,24 +7,69 @@ import csv
 import argparse
 import logging
 import sys
-#import wandb
+import wandb
 from datetime import datetime
 from datasets import load_dataset, IterableDatasetDict
 from transformers import AutoTokenizer, AutoConfig, DataCollatorForSeq2Seq, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2SeqTrainer
+from transformers import TrainerCallback
+from private import WANDB_API_KEY
+import optuna
 
-#os.environ["WANDB_PROJECT"]="hfmt"
+wandb.login(key=WANDB_API_KEY)
+os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
+
+class WandbMetricsCallback(TrainerCallback):
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if metrics:
+            loss = metrics.get("eval_loss", None)
+            perplexity = np.exp(loss) if loss is not None and loss < 100 else np.exp(100)  # Avoid overflow
+            
+            wandb.log({
+                "epoch": state.epoch,
+                "dev_bleu": metrics.get("bleu", None),
+                "dev_perplexity": perplexity,
+            })
+
+def hp_space_optuna(trial):
+    return {
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 5e-4),
+        "per_device_train_batch_size": trial.suggest_categorical("per_device_train_batch_size", [4, 8, 16]),
+        "weight_decay": trial.suggest_loguniform("weight_decay", 1e-5, 1e-2),
+    }
+
+def wandb_hp_space(trial):
+    return {
+        "method": "random",
+        "metric": {}, # {"name": "objective", "goal": "minimize"},
+        "parameters": {
+            "learning_rate": {"distribution": "uniform", "min": 2e-6, "max": 2e-2},
+            "per_device_train_batch_size": {"values": [16, 32, 64]},
+        },
+    }
+
+def compute_gridsearch_objective(metrics):
+    return metrics["eval_bleu"], metrics["eval_loss"]
 
 def my_str(s):
     if not s:
         return ""
     return str(s)
 
-def preprocess_fn(samples, instruction_prefix, tokenizer):
+def preprocess_fn(samples, instruction_prefix, tokenizer, nllb=False):
     inputs = [instruction_prefix + " " + my_str(s) for s in samples["src"]]
     targets = [my_str(s) for s in samples["trg"]]
-    model_inputs = tokenizer(inputs, text_target=targets,
+    if nllb:
+        tokenizer.src_lang = tokenizer.src_lang
+        model_inputs = tokenizer(inputs, 
+                            max_length=100,truncation=True,padding='max_length')
+        tokenizer.tgt_lang = tokenizer.tgt_lang
+        labels = tokenizer(targets, 
+							max_length=100, truncation=True, padding='max_length')
+        model_inputs['labels'] = labels['input_ids']
+    else:
+        model_inputs = tokenizer(inputs, text_target=targets,
                             max_length=100,truncation=True,padding='max_length')
     return model_inputs
 
@@ -34,7 +79,9 @@ def get_data(
         total_n=1000000, 
         train_ratio=0.9, 
         instruction_prefix="",
-        tokenizer=None
+        tokenizer=None,
+        checkpoint_name="",
+        overfit_intentionally=False
     ):
     if dev_path:
         custom_splits = {"train": train_path, "dev": dev_path}
@@ -46,6 +93,19 @@ def get_data(
             streaming=True,
             quoting=csv.QUOTE_NONE
         )
+    elif overfit_intentionally:
+        dataset = load_dataset(
+            "csv",
+            delimiter="\t",
+            column_names=['src', 'trg'],
+            data_files={'full': train_path},
+            streaming=True,
+            quoting=csv.QUOTE_NONE
+        )['full'].take(total_n)
+        data = IterableDatasetDict({
+            'dev': dataset,
+            'train': dataset
+        })
     else:
         dataset = load_dataset(
             "csv",
@@ -60,7 +120,12 @@ def get_data(
             'dev': dataset.take(dev_n),
             'train': dataset.skip(dev_n).take(total_n - dev_n)
         })
-    mapping_fn = lambda x: preprocess_fn(x, instruction_prefix, tokenizer)
+    mapping_fn = lambda x: preprocess_fn(
+		x, 
+		instruction_prefix, 
+		tokenizer, 
+		nllb="nllb" in checkpoint_name.lower()
+	)
     data = data.map(mapping_fn, batched=True)
     return data
 
@@ -89,6 +154,8 @@ def main():
     parser.add_argument("--warmup_steps", type=int, default=0)
     parser.add_argument("--label_smoothing_factor", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--overfit_intentionally", action="store_true")
+    parser.add_argument("--grid_search", action="store_true")
     
     args = parser.parse_args()
 
@@ -97,8 +164,8 @@ def main():
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     logging.info(args)
 
-    # wandb.init(name=args.outdir, project='hfmt', dir=os.path.join(args.outdir,'wandb'),
-    #            config=args)
+    wandb.init(name=args.outdir, project='hfmt', dir=os.path.join(args.outdir,'wandb'),
+               config=args)
     
     ###################################
     ## User settings 
@@ -135,13 +202,15 @@ def main():
         decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
         r1 = metric1.compute(predictions=decoded_preds, references=decoded_labels)
         r2 = metric2.compute(predictions=decoded_preds, references=decoded_labels)
+        
         result = {
             "bleu": round(r1["score"],2), 
             "chrf": round(r2["score"],2),
-            "precisions": [round(p,1) for p in r1["precisions"]],
+            #"precisions": [round(p,1) for p in r1["precisions"]],
+            "precision": round(np.mean(r1["precisions"]),2),
             "bp": round(r1["bp"],2),
             "ref_len": r1["ref_len"], 
-            "sys_len": r1["sys_len"]
+            "sys_len": r1["sys_len"],
             }
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         result["sys_len_avg"] = round(np.mean(prediction_lens),2)
@@ -157,7 +226,9 @@ def main():
         args.dev, 
         total_n=args.data_amount, 
         instruction_prefix=instruction_prefix, 
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
+        checkpoint_name=args.checkpoint,
+        overfit_intentionally=args.overfit_intentionally
     )
     logging.info(D)
     for Dkey in list(D.keys()):
@@ -184,12 +255,19 @@ def main():
     ## Model Configuration
     logging.info(f"======== Model Configuration ========")
     config = AutoConfig.from_pretrained(args.checkpoint)
-    if args.pretrain == True:
+    if args.pretrain:
         logging.info("Fine-tuning a pretrained model")
         model = AutoModelForSeq2SeqLM.from_pretrained(args.checkpoint).to(device)
+        model_init = lambda x: AutoModelForSeq2SeqLM.from_pretrained(args.checkpoint).to(device)
     else:
         logging.info("Training from scratch with pretrained model's config only")
         model = AutoModelForSeq2SeqLM.from_config(config).to(device)
+        model_init = lambda x: AutoModelForSeq2SeqLM.from_config(config).to(device)
+
+    if args.grid_search:
+        trainer_kwargs = {"model_init": model_init}
+    else:
+        trainer_kwargs = {"model": model}
 
     generation_config = GenerationConfig.from_pretrained(args.checkpoint)
 
@@ -205,7 +283,7 @@ def main():
         predict_with_generate=True,
         fp16=False,
         push_to_hub=False,
-        report_to="none",#"wandb",
+        report_to="wandb",
         run_name=args.outdir.replace(os.sep,'_').replace('models_',''),
         logging_steps=args.logging_steps,
         eval_steps=args.eval_steps,
@@ -219,14 +297,30 @@ def main():
     logging.info(training_args)
 
     trainer = Seq2SeqTrainer(
-        model=model,
         args=training_args,
         train_dataset=D["train"],
         eval_dataset=D["dev"],
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
+        **trainer_kwargs
     )
+
+    trainer.add_callback(WandbMetricsCallback())
+
+    if args.grid_search:
+        print("#" * 10, "GRID SEARCHING HYPERPARAMS", "#" * 10)
+        best_run = trainer.hyperparameter_search(
+            direction=["maximize", "minimize"],  # or "minimize" depending on your metric
+            # backend="wandb",  # Can also use "optuna", "ray" or "sigopt"
+            hp_space=wandb_hp_space,
+            n_trials=10,  # Number of trials
+			compute_objective=compute_gridsearch_objective,
+        )
+        for key, value in best_run.hyperparameters.items():
+            print(key, value)
+            setattr(trainer.args, key, value)
+        print("#" * 10, "~ end chosen hyperparams ~", "#" * 10, flush=True)
 
     num_param = sum(p.numel() for p in model.parameters())
     logging.info(f"Number of parameters: {num_param}")

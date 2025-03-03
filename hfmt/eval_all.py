@@ -4,11 +4,12 @@ from tqdm import tqdm
 import cascade_seq2seq as cascade 
 import train_seq2seq as train
 import scoring
+from constants import LANG2FLORES_CODE
 
 from transformers import AutoTokenizer
 
 RUNNING_E2E=True 
-RUNNING_HELSINKI=True
+RUNNING_PRETRAIN=True
 SANITY_CHECK=True # switch this later
 
 SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
@@ -19,15 +20,15 @@ E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 		"Passage: "
 PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
-LANGS2AMOUNTS = {
-	"es": [1000, 10000, 100000, 1000000], # has Helsinki
-	"sw": [1000, 10000, 100000, 1000000],
-	"ar": [1000, 10000, 100000, 1000000], # has Helsinki
-	"zh": [1000, 10000, 100000, 1000000], # has Helsinki
-	"ja": [1000, 10000, 100000, 1000000], # has Helsinki
-	"ru": [1000, 10000, 100000, 1000000], # has Helsinki
-	"ta": [1000, 10000, 100000, 1000000],
-	"pcm": [1000, 10000],
+LANGS2AMOUNTS = { # HACK FIXME 
+	"es": ["100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	#"sw": [1000, 10000, 100000, 1000000],
+	"ar": ["100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	#"zh": [1000, 10000, 100000, 1000000], # has Helsinki
+	#"ja": [1000, 10000, 100000, 1000000], # has Helsinki
+	#"ru": [1000, 10000, 100000, 1000000], # has Helsinki
+	#"ta": [1000, 10000, 100000, 1000000],
+	#"pcm": [1000, 10000],
 }
 LANGS2HELSINKI_IDS = {
 	"es": "Helsinki-NLP/opus-mt-es-en",
@@ -38,6 +39,11 @@ LANGS2HELSINKI_IDS = {
 	"ru": "Helsinki-NLP/opus-mt-ru-en",
 	"ta": "Helsinki-NLP/opus-mt-dra-en",
 	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
+}
+NLLB_MOD_ID = "facebook/nllb-200-distilled-600M"
+MODEL2LANG2PT_ID = {
+	"helsinki": LANGS2HELSINKI_IDS,
+	"nllb": {lang_: NLLB_MOD_ID for lang_ in LANGS2HELSINKI_IDS}
 }
 ISO2NAME = {
 	"es": "spanish",
@@ -50,15 +56,6 @@ ISO2NAME = {
 	"pcm": "pidgin"
 }
 NAME2ISO = {ISO2NAME[iso]: iso for iso in ISO2NAME}
-LANG2FLORES_CODE = {
-	"spanish": "spa_Latn",
-	"arabic": "arb_Arab", 
-	"chinese_simplified": "zho_Hans",
-	"russian": "rus_Cyrl",
-	"japanese": "jpn_Jpan",
-	"tamil": "tam_Taml",
-	"swahili": "swh_Latn", 
-}
 
 def get_args(
 		lang, 
@@ -164,21 +161,22 @@ def run_eval(
 	)
 
 	# Do FLORES eval
-	if flores_eval and not os.path.exists(flores_outfile) and src_language != "pidgin": # TODO add kreyol-mt FIXME
+	if flores_eval and src_language != "pidgin": # TODO add kreyol-mt FIXME
 		flores_code = LANG2FLORES_CODE[src_language]
 		refs, hyps = cascade.run_flores_eval(
 			model_checkpoint, 
 			flores_code, 
 			flores_outfile
 		)
-		flores_bleu = scoring.get_score(
-			refs, 
-			hyps, 
-			metric="bleu", 
-			submetric="bleu"
-		)
-		score['bleu'] = flores_bleu
-		score['flores_bleu'] = flores_bleu
+		for submetric in ["chrf++", "bleu2", "bleu4"]:
+			metric = submetric[:4]
+			flores_score = scoring.get_score(
+				refs, 
+				hyps, 
+				metric=metric, 
+				submetric=submetric
+			)
+			score[f'flores_{submetric}'] = flores_score
 	
 	# Do a train set eval here 
 	if sanity_check and not e2e: # and not score_only:
@@ -192,18 +190,38 @@ def run_eval(
 			train_data_path, 
 			total_n=200, 
 			train_ratio=1.,
-			tokenizer=tokenizer
+			tokenizer=tokenizer,
+			checkpoint_name=model_checkpoint
 		)
 		srcs = [datum['src'] for datum in D['train']]
 		refs = [datum['trg'] for datum in D['train']]
-		hyps = cascade.run_basic_eval(model_checkpoint, srcs)
-		trainset_bleu = scoring.get_score(
-			refs, 
-			hyps, 
-			metric="bleu", 
-			submetric="bleu"
-		)
-		score['trainset_bleu'] = trainset_bleu
+		hyps = cascade.run_basic_eval(
+			model_checkpoint, 
+			srcs, 
+			language=src_language
+		) 
+		
+		# Create outfile for this 
+		outdir = os.path.split(mt_outfile)[0]
+		outdata = [
+			{"hyp": hyp, "ref": ref, "src": src} for hyp, ref, src in zip(
+				hyps, refs, srcs
+			)
+		]
+		outline_file = os.path.join(outdir, "trainset_hyp_ref_srcs.jsonl")
+		with open(outline_file, 'w') as f:
+			json.dump(outdata, f, indent=4, ensure_ascii=False)
+		
+		for submetric in ["chrf++", "bleu2", "bleu4"]:
+			metric = submetric[:4] 
+			trainset_score = scoring.get_score(
+				refs, 
+				hyps,
+				srcs,
+				metric=metric, 
+				submetric=submetric
+			)
+			score[f'trainset_{submetric}'] = trainset_score
 
 	with open(scores_json, 'w') as f:
 			json.dump(score, f)
@@ -214,9 +232,18 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 	
 	all_results = {}
 
+	out_json_dir = os.path.join(rootdir, 'egs', 'scores')
+	if not os.path.exists(out_json_dir):
+		os.makedirs(out_json_dir)
+	out_json_path = os.path.join(out_json_dir, "full_results.json")
+	if os.path.exists(out_json_path):
+		with open(out_json_path) as f:
+			all_results = json.load(f)
+
 	for lang in jobs:
 
-		all_results[lang] = {}
+		if lang not in all_results:
+			all_results[lang] = {}
 
 		# define variables independent of train_amount
 	
@@ -254,35 +281,37 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 			# collect score 
 			all_results[lang][train_amount] = score
 
-		if RUNNING_HELSINKI:
+		if RUNNING_PRETRAIN:
 
-			_, \
-			mt_outfile, \
-			final_outfile, \
-			scores_json, \
-			flores_outfile, \
-			score_only = get_args(
-				lang=lang, 
-				id_="pretrain", 
-				model_id="helsinki", 
-				home_trained=False
-			)
+			for pt_mod in ("nllb", "helsinki"): 
+			
+				_, \
+				mt_outfile, \
+				final_outfile, \
+				scores_json, \
+				flores_outfile, \
+				score_only = get_args(
+					lang=lang, 
+					id_="pretrain", 
+					model_id=pt_mod, 
+					home_trained=False
+				)
 
-			score = run_eval(
-				crosssum_testset=crosssum_testset,
-                model_checkpoint=LANGS2HELSINKI_IDS[lang],
-                mt_outfile=mt_outfile,
-                src_language=language,
-                hf_summarize_model=HF_SUMMARIZE_MODEL,
-                final_outfile=final_outfile,
-                summarize_instruction=SUMMARIZE_INSTRUCTION,
-                scores_json=scores_json,
-                score_only=score_only, 
-				flores_outfile=flores_outfile
-            )
+				score = run_eval(
+					crosssum_testset=crosssum_testset,
+                	model_checkpoint=MODEL2LANG2PT_ID[pt_mod][lang],
+                	mt_outfile=mt_outfile,
+                	src_language=language,
+                	hf_summarize_model=HF_SUMMARIZE_MODEL,
+                	final_outfile=final_outfile,
+                	summarize_instruction=SUMMARIZE_INSTRUCTION,
+                	scores_json=scores_json,
+                	score_only=score_only, 
+					flores_outfile=flores_outfile
+            	)
 
-			# collect score
-			all_results[lang]["helsinki"] = score
+				# collect score
+				all_results[lang][pt_mod] = score
 
 		if RUNNING_E2E:
 			# Now run end to end
@@ -333,13 +362,14 @@ def main(rootdir=PROJECT_DIR, jobs=LANGS2AMOUNTS):
 			all_results[lang]['e2e'] = score
 	
 	# Create out JSON for all results
-	out_json_dir = os.path.join(rootdir, 'egs', 'scores')
-	if not os.path.exists(out_json_dir):
-		os.makedirs(out_json_dir)
-	out_json_path = os.path.join(out_json_dir, "full_results.json")
 	with open(out_json_path, 'w') as f:
 		json.dump(all_results, f, indent=4)
 	print("Written", out_json_path)
+
+	with open(out_json_path, 'r') as f:
+		read_json = json.load(f)
+	with open(out_json_path, 'w') as f:
+		json.dump(read_json, f, indent=4, ensure_ascii=False)
 
 	return all_results
 

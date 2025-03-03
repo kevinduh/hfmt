@@ -7,8 +7,7 @@ import qe
 
 METRIC2KEY = {
 	"rouge": "summary", 
-	"comet": "text",	
-	"bleu": None
+	"comet": "text"
 }
 
 def get_texts(data_file, key='summary'):
@@ -19,6 +18,14 @@ def get_texts(data_file, key='summary'):
 	with open(data_file, 'r') as f:
 		data = json.load(f)
 	return [datum[key] for datum in data]
+
+def get_multi_refs(srcs, refs):
+	src2refs = {}
+	for src, ref in zip(srcs, refs):
+		if src not in src2refs:
+			src2refs[src] = []
+		src2refs[src].append(ref)
+	return [src2refs[src] for src in srcs]
 
 def main(
 		ref_file, 
@@ -59,11 +66,11 @@ def main(
 	
 	if "comet_qe" not in score_dict and mt_out_file:
 		comet_qe = get_score(
-            ref_file,
-            mt_out_file,
-            metric="comet",
-            submetric="qe"
-        )
+			ref_file,
+			mt_out_file,
+			metric="comet",
+			submetric="qe"
+		)
 		score_dict["comet_qe"] = comet_qe
 
 	# Write to out file
@@ -74,18 +81,23 @@ def main(
 	
 	return score_dict
 
-def get_score(ref_, hyp_, metric="rouge", submetric="rougeL"):
+def get_score(ref_, hyp_, src_=None, metric="rouge", submetric="rougeL"):
 
-	key = METRIC2KEY[metric]
+	key = METRIC2KEY.get(metric, None)
 
 	if type(ref_) == list:
 		assert type(hyp_) == list, "Both must be lists or both str's"
 		refs = ref_
 		hyps = hyp_
+		srcs = src_
 	elif type(ref_) == str:
 		assert type(hyp_) == str, "Both must be lists or both str's"
 		refs = get_texts(ref_, key)
 		hyps = get_texts(hyp_, key)
+		if src_:
+			srcs = get_texts(src_, key)
+		else:
+			srcs = None
 	else:
 		raise TypeError("ref_ and hyp_ must be lists or str's")
 
@@ -97,11 +109,27 @@ def get_score(ref_, hyp_, metric="rouge", submetric="rougeL"):
 	#if metric == "bleu":
 	#	refs = [refs]
 
+	load_kwargs = {} 
+	compute_kwargs = {}
+	if metric == "chrf":
+		if submetric == "chrf++":
+			load_kwargs["word_order"] = 2
+	if metric == "bleu":
+		assert submetric.startswith("bleu")
+		if len(submetric) == 5:
+			max_order = int(submetric[4])
+			compute_kwargs['max_order'] = max_order
+		submetric = "bleu"
+
 	# Compute ROUGE or BLEU
 
-	scorer = evaluate.load(metric)
-	results = scorer.compute(predictions=hyps, references=refs)
-	metric_score = results[submetric]
+	scorer = evaluate.load(metric, **load_kwargs)
+	if srcs and metric == "bleu":
+		refs = get_multi_refs(srcs, refs)
+	results = scorer.compute(predictions=hyps, references=refs, **compute_kwargs)
+	metric_key = "score" if metric == "chrf" else submetric
+	divisor = 100. if metric == "chrf" else 1.
+	metric_score = results[metric_key] / divisor
 
 	return metric_score
 

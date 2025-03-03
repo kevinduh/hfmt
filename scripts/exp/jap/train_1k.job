@@ -18,12 +18,12 @@ conda activate $ENV_NAME
 data_amount=1000
 src_lang=ja
 trainset=$rootdir/egs/data/CCMatrix-train/$src_lang-en.train.bitext
-checkpoint="Helsinki-NLP/opus-mt-de-en"
+checkpoint="Helsinki-NLP/opus-mt-ja-en"
 instruction=""
 
 ###########################
 # hyperparameters:
-# lr_scheduler_type: linear, reduce_lr_on_plateau
+# lr_scheduler_type: linear, inverse_sqrt
 # learning_rate: 2e-5, 2e-4
 # weight_decay: 0.01
 # batch_size: 16, 32, 64
@@ -31,7 +31,7 @@ instruction=""
 pretrain=0
 outdir=$rootdir/egs/models/$src_lang-en_$data_amount-marian.1
 cmdarg="--max_steps 100000 --logging_steps 10 --eval_steps 1000 --warmup_steps 0 \
-        --lr_scheduler_type reduce_lr_on_plateau --learning_rate 2e-5 --weight_decay 0.01 \
+        --lr_scheduler_type inverse_sqrt --learning_rate 2e-5 --weight_decay 0.01 \
         --label_smoothing_factor 0.0 --seed 37 --batch_size 16"
 ###########################
 

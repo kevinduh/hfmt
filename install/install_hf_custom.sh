@@ -58,7 +58,7 @@ if [[ "$FORCE_NEW_ENV" == true ]]; then
   fi
 fi
 
-check_dir_exists $SOCKEYE
+check_dir_exists $TRANSFORMERS
 pwd
 source ./install/path.sh
 

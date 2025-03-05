@@ -21,9 +21,9 @@ E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 LANGS2AMOUNTS = { # HACK FIXME 
-	"es": ["100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	# "es": ["1000000", "100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
 	#"sw": [1000, 10000, 100000, 1000000],
-	"ar": ["100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	"ar": ["100000-MultiHPLT"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
 	#"zh": [1000, 10000, 100000, 1000000], # has Helsinki
 	#"ja": [1000, 10000, 100000, 1000000], # has Helsinki
 	#"ru": [1000, 10000, 100000, 1000000], # has Helsinki

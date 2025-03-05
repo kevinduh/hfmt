@@ -21,12 +21,17 @@ and each datum maps ("src_text" | "tgt_text") -> text
 """
 
 try:
-	LIMIT = sys.argv[1] 
+	TRAIN_LIMIT = sys.argv[1] 
 except IndexError:
-	LIMIT = 1000000
-OUTDIR = "CCMatrix-train"
-if not os.path.exists(OUTDIR):
-	os.makedirs(OUTDIR)
+	TRAIN_LIMIT = 1000000
+TEST_LIMIT = 1000
+LIMIT = TRAIN_LIMIT + (5 * TEST_LIMIT)
+TRAINDIR = "CCMatrix-train"
+TESTDIR = "CCMatrix-test"
+if not os.path.exists(TRAINDIR):
+	os.makedirs(TRAINDIR)
+if not os.path.exists(TESTDIR):
+	os.makedirs(TESTDIR)
 cc_langs = ["es", "ar", "ja", "ru", "sw", "zh", "ta"]
 
 for src in cc_langs:
@@ -52,15 +57,33 @@ for src in cc_langs:
 		line = src_text + '\t' + tgt_text + '\n'
 		lines2write.append(line)
 	
-	outfile = os.path.join(OUTDIR, f"{src}-en.train.bitext")
+	outfile = os.path.join(TRAINDIR, f"{src}-en.train.bitext")
+	train_lines = lines2write[:TRAIN_LIMIT]
 	with open(outfile, 'w') as f:
-		f.writelines(lines2write)
-	print("Written", outfile, f"with {len(lines2write)} lines")
-	
+		f.writelines(train_lines)
+	print("Written", outfile, f"with {len(train_lines)} lines")
+
+	testfile = os.path.join(TESTDIR, f"{src}-en.test.bitext")
+	# Create test lines now 
+	print("\t... making test set ...")
+	possible_test_lines = lines2write[TRAIN_LIMIT:]
+	train_set = set(train_lines)
+	test_lines = [] 
+	for test_line in possible_test_lines:
+		if test_line not in train_lines:
+			test_lines.append(test_line)
+		if len(test_lines) >= TEST_LIMIT:
+			break
+	with open(testfile, 'w') as f:
+		f.writelines(test_lines)
+	print("Written", testfile, f"with {len(test_lines)} lines")
+
+	print('=')
+
 # Now for pcm 
 
 pcm_dataset = load_dataset("jhu-clsp/kreyol-mt", "pcm-eng", split="train")
-my_pcm_data = pcm_dataset[:LIMIT]['translation']
+my_pcm_data = pcm_dataset[:TRAIN_LIMIT]['translation']
 
 lines2write_pcm = [] 
 for datum in my_pcm_data:
@@ -69,7 +92,7 @@ for datum in my_pcm_data:
 	line = src_text + '\t' + tgt_text + '\n'
 	lines2write_pcm.append(line)
 
-outfile = os.path.join(OUTDIR, "pcm-en.train.bitext")
+outfile = os.path.join(TRAINDIR, "pcm-en.train.bitext")
 with open(outfile, 'w') as f:
 	f.writelines(lines2write_pcm)
 print("Written", outfile, f"with {len(lines2write_pcm)} lines")

@@ -8,8 +8,9 @@ import argparse
 import logging
 import sys
 import wandb
+import yaml
 from datetime import datetime
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets, DatasetDict
 from transformers import AutoTokenizer, AutoConfig, DataCollatorForSeq2Seq, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
@@ -23,8 +24,7 @@ def main():
     ###################################
     ## Set arguments
     parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
-    parser.add_argument("-t", "--train", required=True, help="Train bitext")
-    parser.add_argument("-d", "--dev", required=True, help="Dev bitext")
+    parser.add_argument("-t", "--train", required=True, help="Training configuration YAML file")
     parser.add_argument("-e", "--eval", help="Eval source text")
     parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
     parser.add_argument("-p", "--pretrain", action='store_true', 
@@ -75,11 +75,15 @@ def main():
         return model_inputs
 
 
-    def get_data(train_path, dev_path, tokenizer):
-        custom_splits = {"train": train_path, "dev": dev_path}
-        data = load_dataset("csv", delimiter = "\t", column_names=['src','trg'], 
-                            data_files = custom_splits, streaming=True,
-                            quoting=csv.QUOTE_NONE)
+    def get_data(train_yamlfile, tokenizer):
+        with open(train_yamlfile) as F:
+            train_yaml = yaml.safe_load(F)
+        logging.info(f"Loading data... {train_yaml}")
+        d_src = load_dataset("text", data_files={"train":train_yaml["train"]["src"], "dev":train_yaml["dev"]["src"]}, streaming=False).rename_column("text", "src")
+        d_trg = load_dataset("text", data_files={"train":train_yaml["train"]["trg"], "dev":train_yaml["dev"]["trg"]}, streaming=False).rename_column("text", "trg")
+        data = DatasetDict({"train": concatenate_datasets([d_src['train'], d_trg['train']], axis=1),
+                            "dev": concatenate_datasets([d_src['dev'], d_trg['dev']], axis=1)})                            
+
         data = data.map(preprocess_fn, batched=True)
         return data
 
@@ -119,7 +123,11 @@ def main():
     ## Load data
     logging.info(f"======== Loading data ========")
     start_time = time.time()
-    D = get_data(args.train, args.dev, tokenizer)
+
+    ## TODO (check data loader)
+    #D = get_data(args.train, args.dev, tokenizer)
+
+    D = get_data(args.train, tokenizer)
     logging.info(D)
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=args.checkpoint)
     end_time = time.time()

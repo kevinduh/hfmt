@@ -71,7 +71,7 @@ def main():
         inputs = [instruction_prefix + " " + s for s in samples["src"]]
         targets = [s for s in samples["trg"]]
         model_inputs = tokenizer(inputs, text_target=targets,
-                                max_length=100,truncation=True,padding='max_length')
+                                max_length=128, truncation=True)
         return model_inputs
 
 
@@ -123,10 +123,6 @@ def main():
     ## Load data
     logging.info(f"======== Loading data ========")
     start_time = time.time()
-
-    ## TODO (check data loader)
-    #D = get_data(args.train, args.dev, tokenizer)
-
     D = get_data(args.train, tokenizer)
     logging.info(D)
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=args.checkpoint)

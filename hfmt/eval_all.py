@@ -105,6 +105,55 @@ def get_args(
 		scores_json, \
 		flores_outfile, \
 		score_only
+	
+def tset_eval(model_checkpoint, src_language, mt_outfile, traintest='train'):
+	tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+		
+	# Define train_data_path
+	iso2 = NAME2ISO[src_language]
+	train_data_path = f"egs/data/CCMatrix-{traintest}/{iso2}-en.{traintest}.bitext"
+
+	total_n = {"train": 200, "test": 1000}.get(traintest, 0)
+
+	D = train.get_data(
+		train_data_path, 
+		total_n=total_n, 
+		train_ratio=1.,
+		tokenizer=tokenizer,
+		checkpoint_name=model_checkpoint
+	)
+	srcs = [datum['src'] for datum in D['train']]
+	refs = [datum['trg'] for datum in D['train']]
+	hyps = cascade.run_basic_eval(
+		model_checkpoint, 
+		srcs, 
+		language=src_language
+	) 
+	
+	# Create outfile for this 
+	outdir = os.path.split(mt_outfile)[0]
+	outdata = [
+		{"hyp": hyp, "ref": ref, "src": src} for hyp, ref, src in zip(
+			hyps, refs, srcs
+		)
+	]
+	outline_file = os.path.join(outdir, f"{traintest}set_hyp_ref_srcs.jsonl")
+	with open(outline_file, 'w') as f:
+		json.dump(outdata, f, indent=4, ensure_ascii=False)
+	
+	score = {}
+	for submetric in ["chrf++", "bleu2", "bleu4"]:
+		metric = submetric[:4] 
+		trainset_score = scoring.get_score(
+			refs, 
+			hyps,
+			srcs,
+			metric=metric, 
+			submetric=submetric
+		)
+		score[f'trainset_{submetric}'] = trainset_score
+	
+	return score 
 
 def run_eval(
 		crosssum_testset="egs/data/CrossSum-test/spanish-english.toy.jsonl",
@@ -180,48 +229,21 @@ def run_eval(
 	
 	# Do a train set eval here 
 	if sanity_check and not e2e: # and not score_only:
-		tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
-		
-		# Define train_data_path
-		iso2 = NAME2ISO[src_language]
-		train_data_path = f"egs/data/CCMatrix-train/{iso2}-en.train.bitext"
-
-		D = train.get_data(
-			train_data_path, 
-			total_n=200, 
-			train_ratio=1.,
-			tokenizer=tokenizer,
-			checkpoint_name=model_checkpoint
-		)
-		srcs = [datum['src'] for datum in D['train']]
-		refs = [datum['trg'] for datum in D['train']]
-		hyps = cascade.run_basic_eval(
+		# NEED: model_checkpoint, src_language, mt_outfile, train/test
+		trainset_score = tset_eval(
 			model_checkpoint, 
-			srcs, 
-			language=src_language
-		) 
-		
-		# Create outfile for this 
-		outdir = os.path.split(mt_outfile)[0]
-		outdata = [
-			{"hyp": hyp, "ref": ref, "src": src} for hyp, ref, src in zip(
-				hyps, refs, srcs
-			)
-		]
-		outline_file = os.path.join(outdir, "trainset_hyp_ref_srcs.jsonl")
-		with open(outline_file, 'w') as f:
-			json.dump(outdata, f, indent=4, ensure_ascii=False)
-		
-		for submetric in ["chrf++", "bleu2", "bleu4"]:
-			metric = submetric[:4] 
-			trainset_score = scoring.get_score(
-				refs, 
-				hyps,
-				srcs,
-				metric=metric, 
-				submetric=submetric
-			)
-			score[f'trainset_{submetric}'] = trainset_score
+			src_language, 
+			mt_outfile, 
+			traintest='train'
+		)
+		score.update(trainset_score)
+		testset_score = tset_eval(
+			model_checkpoint, 
+			src_language, 
+			mt_outfile, 
+			traintest='test'
+		)
+		score.update(testset_score)
 
 	with open(scores_json, 'w') as f:
 			json.dump(score, f)

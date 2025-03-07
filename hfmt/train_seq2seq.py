@@ -13,6 +13,7 @@ from datetime import datetime
 from datasets import load_dataset, concatenate_datasets, DatasetDict
 from transformers import AutoTokenizer, AutoConfig, DataCollatorForSeq2Seq, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2SeqTrainer
+from torch.utils.data import DataLoader
 
 os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
@@ -129,8 +130,6 @@ def main():
     end_time = time.time()
     logging.info(f"Loading data - Elapsed time: {end_time-start_time:.1f}s")
 
-
-
     ###################################
     ## Model Configuration
     logging.info(f"======== Model Configuration ========")
@@ -197,25 +196,28 @@ def main():
     ## Inference on Eval set
     logging.info(f"======== Testing ========")
     eval_data = load_dataset("text", data_files=args.eval, streaming=False, split="train")
-    #eval_data = eval_data.select(range(3))
+    eval_dataloader = DataLoader(eval_data, batch_size=64)
+
     start_time = time.time()
     with open(os.path.join(args.outdir,"eval.pred.trg"), "w") as O:
-        for i in range(len(eval_data)):
-            orig_inputs = instruction_prefix + " " + eval_data[i]["text"]
-            test_inputs = tokenizer(orig_inputs, return_tensors="pt").to(device)
+        for i, eval_batch in enumerate(eval_dataloader):
+            orig_inputs = [instruction_prefix + " " + s for s in eval_batch["text"]]
+            test_inputs = tokenizer(orig_inputs, max_length=128, 
+                truncation=True, padding=True, return_tensors="pt").to(device)
             test_outputs = model.generate(**test_inputs, max_new_tokens=128, do_sample=False)
-            test_outputs_detok = tokenizer.decode(test_outputs[0])
-            test_outputs_detok2 = tokenizer.decode(test_outputs[0], skip_special_tokens=True)
-            
-            O.write(test_outputs_detok2 + "\n")
+            test_outputs_detok = tokenizer.batch_decode(test_outputs, skip_special_tokens=True)
+            for testout in test_outputs_detok:
+                O.write(testout + "\n")
+
             if i <= 3:
-                logging.info(f"{i}: {eval_data[i]}")
+                logging.info(f"{i}:")
                 logging.info(f"original_inputs: {orig_inputs}")
                 logging.info(f"inputs: {test_inputs}")
                 logging.info(f"outputs: {test_outputs}")
-                logging.info(f"detokenized outputs: {test_outputs_detok}")
+                logging.info(f"detokenized outputs w/ special token: {tokenizer.batch_decode(test_outputs)}")
+
     end_time = time.time()
-    logging.info(f"Testing - Elapsed time for {i} sentences: {end_time-start_time:.1f}s")
+    logging.info(f"Testing - Elapsed time for {len(eval_data)} sentences in {i+1} batches: {end_time-start_time:.1f}s")
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,7 @@ import os, pdb
 import torch
 import evaluate
 import numpy as np
+import pickle as pkl
 import csv
 import argparse
 import logging
@@ -15,6 +16,8 @@ from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2Se
 from transformers import TrainerCallback
 from private import WANDB_API_KEY
 import optuna
+
+NUM_TRIALS = 5
 
 wandb.login(key=WANDB_API_KEY)
 os.environ["WANDB_PROJECT"]="hfmt"
@@ -45,7 +48,7 @@ def wandb_hp_space(trial):
         "metric": {}, # {"name": "objective", "goal": "minimize"},
         "parameters": {
             "learning_rate": {"distribution": "uniform", "min": 2e-6, "max": 2e-2},
-            "per_device_train_batch_size": {"values": [16, 32, 64]},
+            # "per_device_train_batch_size": {"values": [16, 32, 64]},
         },
     }
 
@@ -114,7 +117,10 @@ def get_data(
             data_files={'full': train_path},
             streaming=True,
             quoting=csv.QUOTE_NONE
-        )['full'].take(total_n)
+        )['full']
+        if not total_n:
+            total_n = len(dataset)
+        dataset = dataset.take(total_n)
         dev_n = min(1000, int((1 - train_ratio) * total_n))
         data = IterableDatasetDict({
             'dev': dataset.take(dev_n),
@@ -314,9 +320,13 @@ def main():
             direction=["maximize", "minimize"],  # or "minimize" depending on your metric
             # backend="wandb",  # Can also use "optuna", "ray" or "sigopt"
             hp_space=wandb_hp_space,
-            n_trials=10,  # Number of trials
+            n_trials=NUM_TRIALS,  # Number of trials
 			compute_objective=compute_gridsearch_objective,
         )
+        pkl_path = os.path.join(args.outdir, "best_run.pkl")
+        with open(pkl_path, 'wb') as f:
+            pkl.dump(best_run, f)
+        print("#" * 10, "Written", pkl_path, flush=True)
         for key, value in best_run.hyperparameters.items():
             print(key, value)
             setattr(trainer.args, key, value)

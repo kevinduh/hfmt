@@ -11,6 +11,8 @@ from transformers import AutoTokenizer
 RUNNING_E2E=True 
 RUNNING_PRETRAIN=True
 SANITY_CHECK=True # switch this later
+ALLOW_SCORE_ONLY=True
+SKIP_MT=True # FIXME
 
 SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
 		"Do not provide any explanations or text apart from the summary.\n"\
@@ -21,13 +23,13 @@ E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 LANGS2AMOUNTS = { # HACK FIXME 
-	# "es": ["1000000", "100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
-	#"sw": [1000, 10000, 100000, 1000000],
-	"ar": ["100000-MultiHPLT"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
-	#"zh": [1000, 10000, 100000, 1000000], # has Helsinki
-	#"ja": [1000, 10000, 100000, 1000000], # has Helsinki
-	#"ru": [1000, 10000, 100000, 1000000], # has Helsinki
-	#"ta": [1000, 10000, 100000, 1000000],
+	"es": ["100000", "pT-100000"],#["1000000", "100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	#"sw": [100000],#[1000, 10000, 100000, 1000000],
+	"ar": ["100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	#"zh": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
+	#"ja": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
+	#"ru": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
+	#"ta": [100000],#[1000, 10000, 100000, 1000000],
 	#"pcm": [1000, 10000],
 }
 LANGS2HELSINKI_IDS = {
@@ -91,7 +93,7 @@ def get_args(
 	# score_only
 	score_only = False
 
-	if os.path.exists(final_outfile):
+	if os.path.exists(final_outfile) and ALLOW_SCORE_ONLY:
 		print(final_outfile, "already exists")
 		score_only = True
 		#with open(scores_json, 'r') as f:
@@ -106,14 +108,21 @@ def get_args(
 		flores_outfile, \
 		score_only
 	
-def tset_eval(model_checkpoint, src_language, mt_outfile, traintest='train'):
+def tset_eval(
+		model_checkpoint, 
+		src_language, 
+		mt_outfile, 
+		split='train',
+		data_temp="egs/data/CCMatrix-{split}/{lang}-en.{split}.bitext",
+		use_iso=True,
+		total_n=None,
+		keyword=None
+	):
 	tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 		
 	# Define train_data_path
-	iso2 = NAME2ISO[src_language]
-	train_data_path = f"egs/data/CCMatrix-{traintest}/{iso2}-en.{traintest}.bitext"
-
-	total_n = {"train": 200, "test": 1000}.get(traintest, 0)
+	lang = NAME2ISO[src_language] if use_iso else src_language
+	train_data_path = data_temp.format(split=split, lang=lang)
 
 	D = train.get_data(
 		train_data_path, 
@@ -137,21 +146,23 @@ def tset_eval(model_checkpoint, src_language, mt_outfile, traintest='train'):
 			hyps, refs, srcs
 		)
 	]
-	outline_file = os.path.join(outdir, f"{traintest}set_hyp_ref_srcs.jsonl")
+	if not keyword:
+		keyword = split
+	outline_file = os.path.join(outdir, f"{keyword}set_hyp_ref_srcs.jsonl")
 	with open(outline_file, 'w') as f:
 		json.dump(outdata, f, indent=4, ensure_ascii=False)
 	
 	score = {}
 	for submetric in ["chrf++", "bleu2", "bleu4"]:
 		metric = submetric[:4] 
-		trainset_score = scoring.get_score(
+		tset_score = scoring.get_score(
 			refs, 
 			hyps,
 			srcs,
 			metric=metric, 
 			submetric=submetric
 		)
-		score[f'trainset_{submetric}'] = trainset_score
+		score[f'{keyword}_{submetric}'] = tset_score
 	
 	return score 
 
@@ -179,15 +190,16 @@ def run_eval(
 			assert not flores_eval
 			summarize_infile = crosssum_testset
 		else:
-			# MT step
-			cascade.main(
-				eval_set=crosssum_testset, 
-				checkpoint=model_checkpoint, 
-				pretrain=True, 
-				summarization=False, 
-				outfile=mt_outfile, 
-				language=src_language
-			)
+			if not SKIP_MT:
+				# MT step
+				cascade.main(
+					eval_set=crosssum_testset, 
+					checkpoint=model_checkpoint, 
+					pretrain=True, 
+					summarization=False, 
+					outfile=mt_outfile, 
+					language=src_language
+				)
 			summarize_infile = mt_outfile
 
 		# Summarization step
@@ -227,21 +239,40 @@ def run_eval(
 			)
 			score[f'flores_{submetric}'] = flores_score
 	
-	# Do a train set eval here 
+	# EXTRA SCORING
+
+	# Test on train subset
 	if sanity_check and not e2e: # and not score_only:
 		# NEED: model_checkpoint, src_language, mt_outfile, train/test
 		trainset_score = tset_eval(
 			model_checkpoint, 
 			src_language, 
 			mt_outfile, 
-			traintest='train'
+			split='train',
+			total_n=200
 		)
 		score.update(trainset_score)
+	
+	if not e2e:
+		# Test on CCMatrix test set
 		testset_score = tset_eval(
 			model_checkpoint, 
 			src_language, 
 			mt_outfile, 
-			traintest='test'
+			split='test',
+			total_n=1000
+		)
+		score.update(testset_score)
+
+		# Test on in-domain CrossSum test set 
+		xsum_score = tset_eval(
+			model_checkpoint,
+			src_language,
+			mt_outfile,
+			split='devtest',
+			data_temp="egs/data/CrossSum-MT-{split}/{lang}-english.txt",
+			use_iso=False,
+			keyword='xsum_dev'
 		)
 		score.update(testset_score)
 

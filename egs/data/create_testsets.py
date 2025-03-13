@@ -5,14 +5,15 @@ import os, json, pdb
 # languages are: ["es", "ar", "ja", "ru", "sw", "zh", "pcm", "ta"]
 
 langs = [
-	"spanish",
-	"arabic",
-	"japanese",
-	"russian",
-	"swahili",
-	"chinese_simplified",
-	"pidgin",
-	"tamil",
+	#"spanish",
+	#"arabic",
+	#"japanese",
+	#"russian",
+	#"swahili",
+	#"chinese_simplified",
+	#"pidgin",
+	#"tamil",
+	"english"
 ]
 
 # Create output directories
@@ -27,10 +28,10 @@ if not os.path.exists(mtdevdir):
 	print("Created", mtdevdir, flush=True)
 
 # Get english sset
-eng_ds = load_dataset(f"csebuetnlp/CrossSum", "english-english")
-eng_url2idx = {}
-for i, sample in enumerate(eng_ds['test']):
-	eng_url2idx[sample['target_url']] = i
+#eng_ds = load_dataset(f"csebuetnlp/CrossSum", "english-english")
+#eng_url2idx = {}
+#for i, sample in enumerate(eng_ds['test']):
+#	eng_url2idx[sample['target_url']] = i
 
 # Retrieve test sets 
 

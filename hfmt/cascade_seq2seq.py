@@ -16,6 +16,9 @@ from constants import LANG2FLORES_CODE
 #os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
 
+MT_BATCHSIZE = 64
+SUMMARIZE_BATCHSIZE = 1 #4
+
 def split_sentences(paragraph, language):
 # Regular expression patterns for different languages
     if language == 'arabic':
@@ -40,7 +43,7 @@ def split_up_tokens(toks, dim=512):
             new_toks[key] = toks[key][:, idx * dim: (idx + 1) * dim]
         yield new_toks
 
-def batch_list(l, bs=64):
+def batch_list(l, bs=MT_BATCHSIZE):
     i = 0
     while i < len(l):
         yield l[i: i + bs]
@@ -228,7 +231,9 @@ def main(
     experiment_id = outdir.replace(os.sep,'_').replace('models_','')
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     if not tokenizer.pad_token:
-        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token = tokenizer.bos_token if summarization else tokenizer.eos_token
+    if summarization:
+        tokenizer.padding_side = 'left'
     if "nllb" in checkpoint.lower():
         tokenizer.src_lang = LANG2FLORES_CODE[language]
         tokenizer.tgt_lang = "eng_Latn"
@@ -272,7 +277,8 @@ def main(
     outputs = []
     valid_input_sizes = [1]
     input_texts = [eval_datum["text"] for eval_datum in eval_data]
-    for doc_batch in tqdm(batch_list(input_texts)): # komya
+    print(input_texts, flush=True)
+    for doc_batch in tqdm(batch_list(input_texts, bs=SUMMARIZE_BATCHSIZE)): # komya
         doc_batch = [
 			instruction_prefix + sent.strip() for sent in doc_batch
 		]
@@ -282,21 +288,22 @@ def main(
 			# tokenizer.convert_tokens_to_ids("<|eot_id|>")
 		]
         if summarization:
-            generate_kwargs["max_new_tokens"] = 256
-            generate_kwargs["do_sample"] = False # True
+            # generate_kwargs["max_new_tokens"] = 256
+            # generate_kwargs["do_sample"] = False # True
             # generate_kwargs["temperature"] =  0.6
             # generate_kwargs["top_p"] = 0.9 
             test_inputs = tokenizer(
 				doc_batch, 
 				return_tensors="pt",
 				padding=True,
-				truncation=True,
+				#truncation=True,
 			).to(device)
             test_input_size = test_inputs['input_ids'].shape[1]
             try:
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
                 valid_input_sizes.append(test_input_size)
             except OutOfMemoryError: # Now just reduce size of tensor for inputs 
+                print("WARNING: OutOfMemoryError")
                 valid_input_size = max(valid_input_sizes)
                 test_inputs = tokenizer(
 	                doc_batch,
@@ -308,11 +315,13 @@ def main(
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
                 #for key in test_inputs:
                 #    test_inputs[key] = test_inputs[key][:, :valid_input_size]
+            # Truncate outs
+            decode_outs = test_outs[:, test_input_size:]
             decoded_sents = [
                 tokenizer.decode(
         	        output,
     	            skip_special_tokens=True
-	            ).strip() for output in test_outs
+	            ).strip() for output in decode_outs
 	        ]
             outputs += [
 				{

@@ -10,9 +10,14 @@ from transformers import AutoTokenizer
 
 RUNNING_E2E=True 
 RUNNING_PRETRAIN=True
-SANITY_CHECK=True # switch this later
+SANITY_CHECK=False # switch this later
 ALLOW_SCORE_ONLY=True
-SKIP_MT=True # FIXME
+SKIP_MT=False # FIXME
+NLLB_SAVE=True # FIXME
+
+CHKPT_DIR=f"egs/models/{lang}-en_{id_}-{model_id}.1"
+if NLLB_SAVE:
+	CHKPT_DIR=f"egs/models/nllb/{lang}-en_{id_}-{model_id}.1"
 
 SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
 		"Do not provide any explanations or text apart from the summary.\n"\
@@ -25,7 +30,7 @@ HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 LANGS2AMOUNTS = { # HACK FIXME 
 	"es": ["100000", "pT-100000"],#["1000000", "100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
 	#"sw": [100000],#[1000, 10000, 100000, 1000000],
-	"ar": ["100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	"ar": ["pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
 	#"zh": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
 	#"ja": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
 	#"ru": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
@@ -70,7 +75,7 @@ def get_args(
 	Get args to run run_eval() 
 	"""
 	# model_checkpoint
-	chkpt_dir = f"egs/models/{lang}-en_{id_}-{model_id}.1"
+	chkpt_dir = CHKPT_DIR
 	full_chkpt_dir = os.path.join(rootdir, chkpt_dir)
 	if home_trained:
 		glob_string = os.path.join(full_chkpt_dir, "checkpoint-*")
@@ -192,6 +197,7 @@ def run_eval(
 		else:
 			if not SKIP_MT:
 				# MT step
+				print("STEP: Running MT inference", flush=True)
 				cascade.main(
 					eval_set=crosssum_testset, 
 					checkpoint=model_checkpoint, 
@@ -203,6 +209,7 @@ def run_eval(
 			summarize_infile = mt_outfile
 
 		# Summarization step
+		print("STEP: Running LLM inference", flush=True)
 		cascade.main(
 			eval_set=summarize_infile, 
 			checkpoint=hf_summarize_model, 
@@ -213,6 +220,7 @@ def run_eval(
 		)
 
 	# Scoring
+	print("STEP: Running main scoring", flush=True)
 	mt_file_for_eval = mt_outfile if os.path.exists(str(mt_outfile)) else ""
 	score = scoring.main(
 		ref_file=crosssum_testset, 
@@ -220,16 +228,20 @@ def run_eval(
 		out_file=scores_json,
 		mt_out_file=mt_file_for_eval
 	)
+	print(f"STEP: Result of main scoring = {score}", flush=True)
+
+	# EXTRA SCORING
 
 	# Do FLORES eval
 	if flores_eval and src_language != "pidgin": # TODO add kreyol-mt FIXME
+		print("STEP: Running FLORES eval", flush=True)
 		flores_code = LANG2FLORES_CODE[src_language]
 		refs, hyps = cascade.run_flores_eval(
 			model_checkpoint, 
 			flores_code, 
 			flores_outfile
 		)
-		for submetric in ["chrf++", "bleu2", "bleu4"]:
+		for submetric in ["chrf++", "bleu4"]:
 			metric = submetric[:4]
 			flores_score = scoring.get_score(
 				refs, 
@@ -239,10 +251,9 @@ def run_eval(
 			)
 			score[f'flores_{submetric}'] = flores_score
 	
-	# EXTRA SCORING
-
 	# Test on train subset
 	if sanity_check and not e2e: # and not score_only:
+		print("STEP: Running sanity check eval on train subset", flush=True)
 		# NEED: model_checkpoint, src_language, mt_outfile, train/test
 		trainset_score = tset_eval(
 			model_checkpoint, 
@@ -255,6 +266,7 @@ def run_eval(
 	
 	if not e2e:
 		# Test on CCMatrix test set
+		print("STEP: Running CCMatrix test eval", flush=True)
 		testset_score = tset_eval(
 			model_checkpoint, 
 			src_language, 
@@ -265,6 +277,7 @@ def run_eval(
 		score.update(testset_score)
 
 		# Test on in-domain CrossSum test set 
+		print("STEP: Running CrossSum devtest eval", flush=True)
 		xsum_score = tset_eval(
 			model_checkpoint,
 			src_language,
@@ -274,10 +287,11 @@ def run_eval(
 			use_iso=False,
 			keyword='xsum_dev'
 		)
-		score.update(testset_score)
+		score.update(xsum_score)
 
+	print(f"STEP: Final score dict: {score}")
 	with open(scores_json, 'w') as f:
-			json.dump(score, f)
+			json.dump(score, f, indent=4)
 
 	return score
 

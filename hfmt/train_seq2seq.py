@@ -86,6 +86,8 @@ def get_data(
         checkpoint_name="",
         overfit_intentionally=False
     ):
+    if not total_n:
+        total_n = 0
     if dev_path:
         custom_splits = {"train": train_path, "dev": dev_path}
         data = load_dataset(
@@ -118,13 +120,17 @@ def get_data(
             streaming=True,
             quoting=csv.QUOTE_NONE
         )['full']
-        if not total_n:
-            total_n = len(dataset)
-        dataset = dataset.take(total_n)
+        if total_n:
+            dataset = dataset.take(total_n)
         dev_n = min(1000, int((1 - train_ratio) * total_n))
+        dev_dataset = dataset.take(dev_n)
+        if dev_n:
+            train_dataset = dataset.skip(dev_n).take(total_n - dev_n)
+        else:
+            train_dataset = dataset
         data = IterableDatasetDict({
-            'dev': dataset.take(dev_n),
-            'train': dataset.skip(dev_n).take(total_n - dev_n)
+            'dev': dev_dataset,
+            'train': train_dataset
         })
     mapping_fn = lambda x: preprocess_fn(
 		x, 

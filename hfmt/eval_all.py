@@ -15,9 +15,9 @@ ALLOW_SCORE_ONLY=True
 SKIP_MT=False # FIXME
 NLLB_SAVE=True # FIXME
 
-CHKPT_DIR=f"egs/models/{lang}-en_{id_}-{model_id}.1"
+CHKPT_DIR="egs/models/{lang}-en_{id_}-{model_id}.1"
 if NLLB_SAVE:
-	CHKPT_DIR=f"egs/models/nllb/{lang}-en_{id_}-{model_id}.1"
+	CHKPT_DIR="egs/models/nllb/{lang}-en_{id_}-{model_id}.1"
 
 SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
 		"Do not provide any explanations or text apart from the summary.\n"\
@@ -75,7 +75,7 @@ def get_args(
 	Get args to run run_eval() 
 	"""
 	# model_checkpoint
-	chkpt_dir = CHKPT_DIR
+	chkpt_dir = CHKPT_DIR.format(lang=lang, id_=id_, model_id=model_id)
 	full_chkpt_dir = os.path.join(rootdir, chkpt_dir)
 	if home_trained:
 		glob_string = os.path.join(full_chkpt_dir, "checkpoint-*")

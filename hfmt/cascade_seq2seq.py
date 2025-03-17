@@ -49,6 +49,43 @@ def batch_list(l, bs=MT_BATCHSIZE):
         yield l[i: i + bs]
         i += bs
 
+def prep_summarize_tokens1(doc_batch, tokenizer, device, max_len=None):
+    return tokenizer(
+        doc_batch,
+        return_tensors="pt",
+		padding=True,
+		truncation=bool(max_len),
+		max_length=max_len
+	).to(device)
+
+def prep_summarize_tokens3(doc_batch, tokenizer, device, max_len=None):
+    new_doc_batch = [doc + "\nSummary: " for doc in doc_batch]
+    return tokenizer(
+        new_doc_batch,
+        return_tensors="pt",
+                padding=True,
+                truncation=bool(max_len),
+                max_length=max_len
+		).to(device)
+
+def prep_summarize_tokens2(doc_batch, tokenizer, device, max_len=None):
+    new_doc_batch = [
+        [{'role': 'user', 'content': doc}] for doc in doc_batch
+    ]
+    input_ids = tokenizer.apply_chat_template(
+        new_doc_batch,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        padding=True,
+		truncation=bool(max_len),
+		max_length=max_len
+    ).to(device)
+    return {"input_ids": input_ids}
+
+PROMPTING_STRATEGIES = [
+	prep_summarize_tokens1, prep_summarize_tokens2, prep_summarize_tokens3
+]
+
 def run_basic_eval(checkpoint, srcs, language):
     AutoMod = AutoModelForSeq2SeqLM
     torch_dtype = torch.float32
@@ -177,14 +214,10 @@ def main(
 		language: str="english",
 		verbose: bool=False,
 		mt_model_dim: int=512,
+		prompting_strategy=-1
 	):
 
     ###################################
-
-    if summarization:
-        batch_size = 4
-    else:
-        batch_size = 64
 
     if eval_set.endswith(".json") or eval_set.endswith(".jsonl"):
         filetype = "json"
@@ -216,6 +249,7 @@ def main(
     if summarization:
         AutoMod = AutoModelForCausalLM
         torch_dtype = torch.bfloat16
+        prep_summarize_tokens = PROMPTING_STRATEGIES[prompting_strategy]
     else:
         AutoMod = AutoModelForSeq2SeqLM
         torch_dtype = torch.float32
@@ -292,12 +326,7 @@ def main(
             # generate_kwargs["do_sample"] = False # True
             # generate_kwargs["temperature"] =  0.6
             # generate_kwargs["top_p"] = 0.9 
-            test_inputs = tokenizer(
-				doc_batch, 
-				return_tensors="pt",
-				padding=True,
-				#truncation=True,
-			).to(device)
+            test_inputs = prep_summarize_tokens(doc_batch, tokenizer, device)
             test_input_size = test_inputs['input_ids'].shape[1]
             try:
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
@@ -305,13 +334,12 @@ def main(
             except OutOfMemoryError: # Now just reduce size of tensor for inputs 
                 print("WARNING: OutOfMemoryError")
                 valid_input_size = max(valid_input_sizes)
-                test_inputs = tokenizer(
-	                doc_batch,
-	                return_tensors="pt",
-	                padding=True,
-	                truncation=True,
-					max_length=valid_input_size
-	            ).to(device)
+                test_inputs = prep_summarize_tokens(
+					doc_batch, 
+					tokenizer, 
+					device,
+					max_len=valid_input_size
+				)
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
                 #for key in test_inputs:
                 #    test_inputs[key] = test_inputs[key][:, :valid_input_size]

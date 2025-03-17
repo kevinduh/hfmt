@@ -44,15 +44,25 @@ def main(
 	else:
 		score_dict = {}
 
-	if "rouge" not in score_dict:
+	if "rouge2" not in score_dict:
 		rouge_score = get_score(
 			ref_file, 
 			hyp_file, 
 			metric="rouge", 
 			submetric="rougeL"
 		)
-		score_dict["rouge"] = rouge_score
-		print(f"Calculated rouge for {hyp_file}: {rouge_score}")
+		score_dict["rougeL"] = rouge_score
+		print(f"Calculated rougeL for {hyp_file}: {rouge_score}")
+		
+		rouge_score = get_score(
+                        ref_file,
+                        hyp_file,
+                        metric="rouge",
+                        submetric="rouge2"
+                )
+		score_dict["rouge2"] = rouge_score
+		print(f"Calculated rouge2 for {hyp_file}: {rouge_score}")
+
 
 	if "bleu" not in score_dict and mt_out_file and flores_ref_file\
 			and flores_hyp_file:

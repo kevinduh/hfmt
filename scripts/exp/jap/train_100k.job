@@ -3,7 +3,7 @@
 #$ -l gpu=1,h_rt=80:00:00,num_proc=8,mem_free=25G
 #$ -q gpu.q@@v100
 #$ -j y
-#$ -o qlog/jap/
+#$ -o qlog/nllb/jap/
 #$ -V -cwd
 
 #qlogin -q gpu.q@@v100 -l num_proc=10,mem_free=32G,h_rt=72:00:00,gpu=1
@@ -18,7 +18,7 @@ conda activate $ENV_NAME
 data_amount=100000
 src_lang=ja
 trainset=$rootdir/egs/data/CCMatrix-train/$src_lang-en.train.bitext
-checkpoint="Helsinki-NLP/opus-mt-ja-en"
+checkpoint="facebook/nllb-200-distilled-600M"
 instruction=""
 
 ###########################
@@ -29,10 +29,10 @@ instruction=""
 # batch_size: 16, 32, 64
 # seed 42, 37
 pretrain=0
-outdir=$rootdir/egs/models/$src_lang-en_$data_amount-marian.1
+outdir=$rootdir/egs/models/nllb/$src_lang-en_$data_amount-marian.1
 cmdarg="--max_steps 100000 --logging_steps 10 --eval_steps 1000 --warmup_steps 0 \
         --lr_scheduler_type inverse_sqrt --learning_rate 2e-5 --weight_decay 0.01 \
-        --label_smoothing_factor 0.0 --seed 37 --batch_size 16"
+        --label_smoothing_factor 0.0 --seed 37 --batch_size 32"
 ###########################
 
 mkdir -p $outdir

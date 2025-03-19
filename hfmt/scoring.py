@@ -38,11 +38,12 @@ def main(
 
 	###################################
 
-	if out_file and os.path.exists(out_file):
-		with open(out_file, 'r') as f:
-			score_dict = json.load(f)
-	else:
-		score_dict = {}
+	#if out_file and os.path.exists(out_file):
+	#	with open(out_file, 'r') as f:
+	#		score_dict = json.load(f)
+	#else:
+	#	score_dict = {}
+	score_dict = {}
 
 	if "rouge2" not in score_dict:
 		rouge_score = get_score(

@@ -12,6 +12,7 @@ from transformers import AutoTokenizer, AutoConfig, GenerationConfig
 from transformers import AutoModelForSeq2SeqLM, AutoModelForCausalLM
 
 from constants import LANG2FLORES_CODE
+from prompts import *
 
 #os.environ["WANDB_PROJECT"]="hfmt"
 experiment_id=""
@@ -49,7 +50,19 @@ def batch_list(l, bs=MT_BATCHSIZE):
         yield l[i: i + bs]
         i += bs
 
-def prep_summarize_tokens1(doc_batch, tokenizer, device, max_len=None):
+def prep_summarize_tokens1(
+		doc_batch, 
+		tokenizer, 
+		device,
+		prefix="",
+		max_len=None
+	):
+    """
+	Regular text tokenization like before (bad for instructions)
+	"""
+    doc_batch = [
+	   prefix + sent.strip() for sent in doc_batch
+	]
     return tokenizer(
         doc_batch,
         return_tensors="pt",
@@ -58,7 +71,19 @@ def prep_summarize_tokens1(doc_batch, tokenizer, device, max_len=None):
 		max_length=max_len
 	).to(device)
 
-def prep_summarize_tokens3(doc_batch, tokenizer, device, max_len=None):
+def prep_summarize_tokens3(
+		doc_batch, 
+		tokenizer, 
+		device,
+		prefix="",
+		max_len=None
+	):
+    """
+	Adding a suffix (helps a lot, actually)
+	"""
+    doc_batch = [
+	    prefix + sent.strip() for sent in doc_batch
+	]
     new_doc_batch = [doc + "\nSummary: " for doc in doc_batch]
     return tokenizer(
         new_doc_batch,
@@ -68,7 +93,20 @@ def prep_summarize_tokens3(doc_batch, tokenizer, device, max_len=None):
                 max_length=max_len
 		).to(device)
 
-def prep_summarize_tokens2(doc_batch, tokenizer, device, max_len=None):
+def prep_summarize_tokens2(
+		doc_batch, 
+		tokenizer, 
+		device,
+		prefix="",
+		max_len=None
+	):
+    """
+	Uses a templated input and no attention mask, but otherwise same as 
+	prior approach
+	"""
+    doc_batch = [
+	    prefix + sent.strip() for sent in doc_batch
+	]
     new_doc_batch = [
         [{'role': 'user', 'content': doc}] for doc in doc_batch
     ]
@@ -82,8 +120,45 @@ def prep_summarize_tokens2(doc_batch, tokenizer, device, max_len=None):
     ).to(device)
     return {"input_ids": input_ids}
 
+def prep_summarize_tokens4(
+        doc_batch,
+		tokenizer,
+        device,
+		prefix=SUMMARIZE_INSTRUCTION,
+        max_len=None
+    ):
+    """
+	This is the function for one-shot prompting
+    """
+    #doc_batch = [
+    #        prefix + sent.strip() for sent in doc_batch
+    #    ]
+    new_doc_batch = [
+        [
+			{'role': 'system', 'content': prefix.split('\n')[0]},
+			{'role': 'system', 'content': "Here is an example."},
+			{'role': 'user', 'content': "Passage: " + SHOT1_DOC},
+			{'role': 'assistant', 'content': "Summary: " + SHOT1_SUMMARY},
+			{'role': 'system', 'content': "Now here is the passage for you to summarize."},
+			{'role': 'user', 'content': "Passage: " + doc},
+		] for doc in doc_batch
+    ]
+    input_ids = tokenizer.apply_chat_template(
+        new_doc_batch,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        padding=True,
+        truncation=bool(max_len),
+        max_length=max_len,
+		truncation_side='left'
+    ).to(device)
+    return {"input_ids": input_ids}
+
 PROMPTING_STRATEGIES = [
-	prep_summarize_tokens1, prep_summarize_tokens2, prep_summarize_tokens3
+	prep_summarize_tokens1, 
+	prep_summarize_tokens2, 
+	prep_summarize_tokens3, 
+	prep_summarize_tokens4
 ]
 
 def run_basic_eval(checkpoint, srcs, language):
@@ -214,7 +289,7 @@ def main(
 		language: str="english",
 		verbose: bool=False,
 		mt_model_dim: int=512,
-		prompting_strategy=-1
+		prompting_strategy=1 # corresponding to prep_summarize_tokens2 
 	):
 
     ###################################
@@ -313,9 +388,9 @@ def main(
     input_texts = [eval_datum["text"] for eval_datum in eval_data]
     print(input_texts, flush=True)
     for doc_batch in tqdm(batch_list(input_texts, bs=SUMMARIZE_BATCHSIZE)): # komya
-        doc_batch = [
-			instruction_prefix + sent.strip() for sent in doc_batch
-		]
+        #doc_batch = [ # MOVED THIS TO prep_summarize_tokens
+		#	instruction_prefix + sent.strip() for sent in doc_batch
+		#]
         generate_kwargs = {"max_new_tokens": 128, "do_sample": False}
         generate_kwargs["eos_token_id"] = [
 			tokenizer.eos_token_id,
@@ -326,7 +401,12 @@ def main(
             # generate_kwargs["do_sample"] = False # True
             # generate_kwargs["temperature"] =  0.6
             # generate_kwargs["top_p"] = 0.9 
-            test_inputs = prep_summarize_tokens(doc_batch, tokenizer, device)
+            test_inputs = prep_summarize_tokens(
+				doc_batch, 
+				tokenizer, 
+				device, 
+				prefix=instruction_prefix
+			)
             test_input_size = test_inputs['input_ids'].shape[1]
             try:
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
@@ -338,6 +418,7 @@ def main(
 					doc_batch, 
 					tokenizer, 
 					device,
+					prefix=instruction_prefix,
 					max_len=valid_input_size
 				)
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
@@ -351,6 +432,12 @@ def main(
     	            skip_special_tokens=True
 	            ).strip() for output in decode_outs
 	        ]
+            #print("~~" * 10)
+            #print("INPUT:")
+            #print(tokenizer.decode(test_inputs['input_ids']))
+            #print("OUTPUT:")
+            #print(decoded_sents[0])
+            #raise NotImplementedError
             outputs += [
 				{
 					"summary": output_text.strip()

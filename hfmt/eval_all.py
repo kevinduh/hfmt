@@ -11,7 +11,7 @@ from transformers import AutoTokenizer
 RUNNING_E2E=True 
 RUNNING_PRETRAIN=True
 SANITY_CHECK=False # switch this later
-ALLOW_SCORE_ONLY=True
+ALLOW_SCORE_ONLY=False
 SKIP_MT=False # FIXME
 NLLB_SAVE=True # FIXME
 
@@ -28,9 +28,9 @@ E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 HF_SUMMARIZE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 LANGS2AMOUNTS = { # HACK FIXME 
-	"es": ["100000", "pT-100000"],#["1000000", "100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	#"es": ["100000", "pT-100000"],#["1000000", "100000", "pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
 	#"sw": [100000],#[1000, 10000, 100000, 1000000],
-	"ar": ["pT-100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
+	"ar": ["100000"],#[200, 1000, 10000, 100000, 1000000], # has Helsinki
 	#"zh": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
 	#"ja": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki
 	#"ru": [100000],#[1000, 10000, 100000, 1000000], # has Helsinki

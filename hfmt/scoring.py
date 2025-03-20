@@ -1,6 +1,7 @@
 import os, pdb, json, argparse
-import evaluate
+from pprint import pprint
 
+import evaluate
 import qe
 
 #os.environ["WANDB_PROJECT"]="hfmt"
@@ -154,9 +155,12 @@ if __name__ == "__main__":
 	parser.add_argument("-m", "--mt_out_file", default="", help="MT out file for BLEU")
 	args = parser.parse_args()
 
-	main(
+	score = main(
 		ref_file=args.ref_file, 
 		hyp_file=args.hyp_file, 
 		out_file=args.out_file, 
 		mt_out_file=args.mt_out_file
 	)
+
+	print("This is the calculated score")
+	pprint(score)

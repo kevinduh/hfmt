@@ -84,7 +84,7 @@ def prep_summarize_tokens3(
     doc_batch = [
 	    prefix + sent.strip() for sent in doc_batch
 	]
-    new_doc_batch = [doc + "\nSummary: " for doc in doc_batch]
+    new_doc_batch = [doc + SUMMARIZE_CODA for doc in doc_batch]
     return tokenizer(
         new_doc_batch,
         return_tensors="pt",
@@ -92,6 +92,28 @@ def prep_summarize_tokens3(
                 truncation=bool(max_len),
                 max_length=max_len
 		).to(device)
+
+def prep_summarize_tokens5(
+        doc_batch, 
+        tokenizer, 
+        device,
+        prefix="",
+        max_len=None
+    ):
+    """
+    Adding a suffix (helps a lot, actually)
+    """
+    doc_batch = [
+        prefix + sent.strip() for sent in doc_batch
+    ]
+    new_doc_batch = [doc + HELMET_CODA for doc in doc_batch]
+    return tokenizer(
+        new_doc_batch,
+        return_tensors="pt",
+                padding=True,
+                truncation=bool(max_len),
+                max_length=max_len
+                ).to(device)
 
 def prep_summarize_tokens2(
 		doc_batch, 
@@ -158,7 +180,8 @@ PROMPTING_STRATEGIES = [
 	prep_summarize_tokens1, 
 	prep_summarize_tokens2, 
 	prep_summarize_tokens3, 
-	prep_summarize_tokens4
+	prep_summarize_tokens4,
+    prep_summarize_tokens5
 ]
 
 def run_basic_eval(checkpoint, srcs, language):
@@ -223,7 +246,7 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
         checkpoint,
         torch_dtype=torch_dtype,
         pad_token_id=tokenizer.eos_token_id,
-		device_map="auto"
+		#device_map="cpu"
     ).to(device)
     # generation_config = GenerationConfig.from_pretrained(checkpoint)
     if not os.path.exists(outs_file):

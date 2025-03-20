@@ -82,6 +82,6 @@ if __name__ == "__main__":
 	print(f"NER average F1: {score}")
 
 	""" Example runs:
-	- Spanish to English: python3 hfmt/ner_eval.py -r egs/data/CrossSum-test/english-spanish.jsonl -s egs/data/CrossSum-test/spanish-english.jsonl -h egs/models/nllb/es-en_e2e-llama.1/outs/final_outs.jsonl
+	- Spanish to English: python3 hfmt/ner_eval.py -r egs/data/CrossSum-test/english-spanish.jsonl -s egs/data/CrossSum-test/spanish-english.jsonl -t egs/models/nllb/es-en_e2e-llama.1/outs/final_outs.jsonl
 	- English monolingual: python3 hfmt/ner_eval.py -r egs/data/CrossSum-test/english-english_270.jsonl -s egs/data/CrossSum-test/english-english_270.jsonl -t egs/models/en-en_e2e-llama.1/outs/template_bs1.jsonl
 	"""

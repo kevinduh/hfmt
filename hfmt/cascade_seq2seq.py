@@ -246,7 +246,7 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
         checkpoint,
         torch_dtype=torch_dtype,
         pad_token_id=tokenizer.eos_token_id,
-		#device_map="cpu"
+		#device_map="auto"
     ).to(device)
     # generation_config = GenerationConfig.from_pretrained(checkpoint)
     if not os.path.exists(outs_file):

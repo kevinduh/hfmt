@@ -1,5 +1,7 @@
 from ner_eval import ner_eval
 
+import json
+
 """
 python3 hfmt/ner_eval.py -r egs/data/CrossSum-test/english-spanish.jsonl -s egs/data/CrossSum-test/spanish-english.jsonl -t egs/models/nllb/es-en_e2e-llama.1/outs/final_outs.jsonl
 
@@ -36,7 +38,7 @@ with open(FULL_SCORE_FILE, 'r') as f:
 
 backup_score_file = FULL_SCORE_FILE.replace(".json", "_backup.json")
 with open(backup_score_file, 'w') as f:
-    json.dump(full_score, f, indent=4)
+    json.dump(full_scores, f, indent=4)
 
 for iso in ISO2NAME:
     language = ISO2NAME[iso]
@@ -56,6 +58,6 @@ for iso in ISO2NAME:
         full_scores[iso][model]['ner_f1'] = ner_f1_score
 
 with open(FULL_SCORE_FILE, 'w') as f:
-    json.dump(full_score, f, indent=4)
+    json.dump(full_scores, f, indent=4)
 
 print("Rewritten", FULL_SCORE_FILE)

@@ -11,6 +11,12 @@ PATTERN_INSTRUCTION="Summarize the following passage in one sentence. "\
 	"Consider only main points. Do not consider irrelevant statements.\n"\
 	"Passage: "
 
+HELMET_DEMO='Example summaries:\n\nSummary: None\n\nSummary: This is a § 1983 inmate case filed in Louisiana federal courts to challenge the operation and conditions of confinement in Louisiana juvenile detention facilities as a result of Department of Justice investigations documenting severe abuse problems and other deficiencies. The parties entered into various consent decrees over the years. On April 28, 2006, all parties filed a joint motion to dismiss the cases, citing that the State had reached substantial compliance with the provisions of the 2004 Settlement Agreement.  The District Court (Judge James Brady) approved the motion and dismissed all of the consolidated cases on May 2, 2006.\n\nNow, write a summary of the following legal documents.\n'
+
+HELMET_INSTRUCTION=f"You are given the legal documents in a civil rights lawsuit, and you are tasked to summarize the case. Write a concise summary of one paragraph (200 to 250 words). The summary should contain a short description of the background, the parties involved, and the outcomes of the case.\n\n{HELMET_DEMO}Legal documents:\n"
+
+HELMET_CODA="\n\nNow please summarize the case.\n\nSummary:"
+
 SUMMARIZE_CODA = "\nSummary: "
 
 with open("egs/data/CrossSum-test/english-english_full.jsonl", 'r') as f:

@@ -5,15 +5,15 @@ import os, json, pdb
 # languages are: ["es", "ar", "ja", "ru", "sw", "zh", "pcm", "ta"]
 
 langs = [
-	#"spanish",
-	#"arabic",
-	#"japanese",
-	#"russian",
-	#"swahili",
-	#"chinese_simplified",
-	#"pidgin",
-	#"tamil",
-	"english"
+	"spanish",
+	"arabic",
+	"japanese",
+	"russian",
+	"swahili",
+	"chinese_simplified",
+	"pidgin",
+	"tamil",
+	#"english"
 ]
 
 # Create output directories
@@ -47,7 +47,9 @@ for lang in langs:
 	# Loaded dataset maps "test" -> list{item -> "summary", "text"}
 	test_ds = ds['test']
 	test_list = [item for item in test_ds]
-	
+	bwd_test_ds = bwd_ds['test']
+	bwd_test_list = [item for item in bwd_test_ds]
+
 	# get MT segments for dev
 	bwd_url2idx = {}
 	for i, sample in enumerate(bwd_ds['test']):
@@ -69,6 +71,13 @@ for lang in langs:
 	with open(out_json, 'w') as f:
 		json.dump(test_list, f, indent=4, ensure_ascii=False)
 	print('Written', out_json, flush=True)
+
+	# And reverse
+	bwd_out_json = os.path.join(outdir, f"{bwd_lang_pair}.jsonl")
+	with open(bwd_out_json, 'w') as f:
+		json.dump(bwd_test_list, f, indent=4, ensure_ascii=False)
+	print('Written', bwd_out_json, flush=True)
+
 
 print('done')
 # 

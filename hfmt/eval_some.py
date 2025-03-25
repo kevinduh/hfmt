@@ -387,7 +387,12 @@ if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument("--langs", type=list, default=['all'])
+	parser.add_argument(
+            "--langs",
+            nargs='+',
+            type=str, 
+            default=['all']
+    )
 	parser.add_argument("--pt_mod", type=str, default='marian')
 	parser.add_argument("--home_trained", action="store_true")
 	parser.add_argument("--allow_score_only", action="store_true")

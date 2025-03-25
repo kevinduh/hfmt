@@ -1,4 +1,4 @@
-import os, glob, json
+import os, glob, json, argparse
 from tqdm import tqdm
 
 import cascade_seq2seq as cascade 
@@ -287,7 +287,8 @@ def main(
 		skip_mt=False,
 		hf_summarize_model="meta-llama/Meta-Llama-3-8B-Instruct",
 		crosssum_path="egs/data/CrossSum-test/{language}-english.jsonl",
-		model_dir=os.path.join(PROJECT_DIR, "egs/models/nllb")
+		model_dir=os.path.join(PROJECT_DIR, "egs/models/nllb"),
+		instruction_type='cascade'
 	):
 
 	if run_type == 'e2e':
@@ -336,7 +337,7 @@ def main(
 			allow_score_only=allow_score_only
 		)
 
-		if not home_trained:
+		if not home_trained and run_type != 'e2e':
 			model_checkpoint = MODEL2LANG2PT_ID[pt_mod][lang]
 
 		if run_type == 'e2e':
@@ -345,7 +346,7 @@ def main(
 			language = None 
 
 		e2e = run_type == 'e2e'
-		summarize_instruction = E2E_INSTRUCTION if e2e else SUMMARIZE_INSTRUCTION
+		summarize_instruction = E2E_INSTRUCTION if instruction_type == 'e2e' else SUMMARIZE_INSTRUCTION
 
 		# src_language already done
 		# hf_summarize_model already done
@@ -412,6 +413,11 @@ if __name__ == "__main__":
 		type=str, 
 		default="/exp/nrobinson/xling_summarizn/hfmt/egs/models/nllb"
 	)
+	parser.add_argument(
+		"--instruction_type",
+		type=str,
+		default="cascade"
+	)
 
 	args = parser.parse_args()
 
@@ -425,6 +431,7 @@ if __name__ == "__main__":
 		skip_mt=args.skip_mt,
 		hf_summarize_model=args.hf_summarize_model,
 		crosssum_path=args.crosssum_path,
-		model_dir=args.model_dir
+		model_dir=args.model_dir,
+		instruction_type=args.instruction_type
 	)
 

@@ -1,0 +1,11 @@
+train:
+  src:
+    - __HFMT_ROOT__/egs/data/example.de-en.train.de
+  trg:
+    - __HFMT_ROOT__/egs/data/example.de-en.train.en
+dev:
+  src:
+    - __HFMT_ROOT__/egs/data/example.de-en.dev.de
+  trg:
+    - __HFMT_ROOT__/egs/data/example.de-en.dev.de
+

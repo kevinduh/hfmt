@@ -307,7 +307,7 @@ def main(
 		next_idx = out_path_idx + 1
 		out_json_path = out_json_path.replace(
 				f"-{out_path_idx}.json",
-				f"-{new_idx}.json"
+				f"-{next_idx}.json"
 		)
 
 	for lang in langs:

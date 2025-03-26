@@ -1,4 +1,4 @@
-# HFMT - Machine Translation scripts based on HuggingFace Transformers
+# HFMT - Machine Translation and Cross-lingual NLP scripts based on HuggingFace Transformers
 
 ## Installation
 
@@ -21,7 +21,8 @@ Before running the scripts, please set the `HFMT_ROOT` variable, e.g. `export HF
 
 Currently implemented: 
 * `hfmt/train_seq2seq.py`: Trains a Seq2Seq model (either by fine-tuning a pretrained model or training from scratch)
-* todo: training decoder only models ...
+* `hfmt/decode_summarization.py`: Runs inference on CausalLM models, with prompts for summarization
+* todo: cascading of models, ...
 
 Scripts that perform training integrate with (Weights & Biases)[https://wandb.ai/] for logging purposes, so it is recommended that you set up a free account on that service. 
 
@@ -59,7 +60,7 @@ Next, we run the training script:
 qsub -S /bin/bash -V -cwd -j y -q gpu.q@@v100 -l gpu=1,h_rt=24:00:00,num_proc=8,mem_free=25G egs/translation/train_seq2seq_t5.sh
 ```
 
-This will probably take around 15 minutes. For a real run, we will likely want to increase the `--max_steps` hyperparameter in the script. Here are some of the important settings in `egs/translation/train_seq2seq_t5.sh`, which can be modified for your own runs:
+This will probably take around 15 minutes. For a real run, we will likely want to increase the `--max_steps` hyperparameter in the script. Here are some of the important settings in `egs/translation/train_seq2seq_t5.sh`, which should be modified for your own runs:
 
 ```bash
 
@@ -74,3 +75,14 @@ cmdarg="--max_steps 5000 ..." # various additional hyperparameters
 ```
 
 See `egs/translation/train_seq2seq_marian.sh` for a different example.
+
+## Usage example: decoding with a Summarization model
+
+To do text summarization, we can run inference on a LLM using the appropriate prompt. 
+Here is an example dataset in English, where the `text` field is an article to be summarized and the `summary` field is a reference: `egs/data/summarization.en-en.jsonl`
+
+Here is an example script that runs `hfmt/decode_summarization.py` and compute ROUGE scores. 
+```bash
+qsub -S /bin/bash -V -cwd -j y -q gpu.q@@a100 -l gpu=1,h_rt=24:00:00,num_proc=8,mem_free=25G egs/summarization/decode_summarization.sh
+```
+

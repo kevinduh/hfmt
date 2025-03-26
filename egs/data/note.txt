@@ -1,0 +1,8 @@
+example.de-en.* 
+- sample machine translation data from TED talks
+- plain text format, sentence-aligned
+
+summarization.en-en.jsonl
+- sample English summarization data from CrossSum: https://huggingface.co/datasets/csebuetnlp/CrossSum
+- reformatted as jsonl format, each entry consists of "text" and reference "summary"
+

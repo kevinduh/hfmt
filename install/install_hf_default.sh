@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-HF_COMMIT=19dabe96362803fb0a9ae7073d03533966598b17 # (huggingface transformers version 11/30/2024)
+HF_COMMIT=2b8a15cc3f1a0c94cf817a8fd8c87bca28737e09 # (huggingface transformers version 03/24/2025)
 
 # Get this version of HF Transformers
 rootdir="$(readlink -f "$(dirname "$0")/../")"

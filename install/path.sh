@@ -3,5 +3,4 @@
 # Modify this to match your setup
 
 source /opt/anaconda3/etc/profile.d/conda.sh
-conda activate hfmt2
-echo "Activated"
+conda activate hfmt

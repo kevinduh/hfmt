@@ -60,7 +60,6 @@ fi
 
 check_dir_exists $TRANSFORMERS
 pwd
-source ./install/path.sh
 
 # 1. setup python virtual environment 
 venv=$ENV_NAME # set your virtual enviroment name

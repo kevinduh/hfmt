@@ -98,22 +98,46 @@ def prep_summarize_tokens5(
         tokenizer, 
         device,
         prefix="",
-        max_len=None
+        max_len=131072
     ):
     """
     Adding a suffix (helps a lot, actually)
     """
-    doc_batch = [
-        prefix + sent.strip() for sent in doc_batch
+    new_doc_batch = [
+        prefix + sent.strip() + HELMET_CODA for sent in doc_batch
     ]
-    new_doc_batch = [doc + HELMET_CODA for doc in doc_batch]
-    return tokenizer(
+    try_tokens = tokenizer(
         new_doc_batch,
         return_tensors="pt",
-                padding=True,
-                truncation=bool(max_len),
-                max_length=max_len
-                ).to(device)
+    )
+    
+    if try_tokens.input_ids.shape[1] > max_len:
+        amt_to_truncate = try_tokens.input_ids.shape[1] - max_len
+        context_tokens = tokenizer(
+            [sent.strip() for sent in doc_batch],
+            return_tensors="pt"
+        )
+        truncated_context_len = context_tokens.input_ids.shape[1] - amt_to_truncate
+        real_context_tokens = tokenizer(
+            [sent.strip() for sent in doc_batch],
+            return_tensors="pt",
+            truncation=True,
+            max_length=truncated_context_len
+        )
+        real_context = [
+            tokenizer.decode(output) for output in real_context_tokens.input_ids
+        ]
+        real_doc_batch = [
+            prefix + sent.strip() + HELMET_CODA for sent in real_context
+        ]
+        tokens = tokenizer(
+            real_doc_batch,
+            return_tensors="pt",
+        ).to(device)
+    else:
+        tokens = try_tokens.to(device)
+
+    return tokens
 
 def prep_summarize_tokens2(
 		doc_batch, 
@@ -220,7 +244,9 @@ def run_basic_eval(checkpoint, srcs, language):
 			truncation=True,
 			max_length=512,
 		).to(device)
+        #print("*" * 8, input_tokens.input_ids.shape, flush=True)
         test_outs = model.generate(**input_tokens, **generate_kwargs)
+        #print("*" * 8, 'success!', flush=True)
         decoded_sents = [
 			tokenizer.decode(
 				output,
@@ -410,7 +436,7 @@ def main(
     outputs = []
     valid_input_sizes = [1]
     input_texts = [eval_datum["text"] for eval_datum in eval_data]
-    print(input_texts, flush=True)
+    #print(input_texts, flush=True)
     for doc_batch in tqdm(batch_list(input_texts, bs=SUMMARIZE_BATCHSIZE)): # komya
         #doc_batch = [ # MOVED THIS TO prep_summarize_tokens
 		#	instruction_prefix + sent.strip() for sent in doc_batch
@@ -433,11 +459,15 @@ def main(
 			)
             test_input_size = test_inputs['input_ids'].shape[1]
             try:
+                #print("*" * 8, test_inputs.input_ids.shape, flush=True)
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
+                #print("*" * 8, 'success!', flush=True)
                 valid_input_sizes.append(test_input_size)
-            except OutOfMemoryError: # Now just reduce size of tensor for inputs 
-                print("WARNING: OutOfMemoryError")
-                valid_input_size = max(valid_input_sizes)
+            except RuntimeError: # Now just reduce size of tensor for inputs 
+                #print("WARNING: OutOfMemoryError")
+                torch.cuda.empty_cache()
+                valid_input_size = int(max(valid_input_sizes) * 0.8)
+                #print('*' * 8, f'valid input size: {valid_input_size}')
                 test_inputs = prep_summarize_tokens(
 					doc_batch, 
 					tokenizer, 
@@ -445,7 +475,9 @@ def main(
 					prefix=instruction_prefix,
 					max_len=valid_input_size
 				)
+                #print("*" * 8, test_inputs.input_ids.shape, flush=True)
                 test_outs = model.generate(**test_inputs, **generate_kwargs)
+                #print("*" * 8, 'success!', flush=True)
                 #for key in test_inputs:
                 #    test_inputs[key] = test_inputs[key][:, :valid_input_size]
             # Truncate outs

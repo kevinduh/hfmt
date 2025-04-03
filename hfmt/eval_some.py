@@ -17,7 +17,7 @@ SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
 E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 		" Do not provide any explanations or text apart from the summary.\n"\
 		"Passage: "
-PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
+PROJECT_DIR="/export/fs05/nrobin38/xling_summarizn/hfmt"
 LANGS = [
 	'es', 
 	'sw', 
@@ -421,7 +421,8 @@ if __name__ == "__main__":
 	parser.add_argument(
 		"--instruction_type",
 		type=str,
-		default="cascade"
+		default="cascade",
+        choices=["cascade", "e2e"]
 	)
 
 	args = parser.parse_args()

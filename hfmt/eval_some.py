@@ -39,9 +39,12 @@ LANGS2HELSINKI_IDS = {
 	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
 }
 NLLB_MOD_ID = "facebook/nllb-200-distilled-600M"
+NLLB_LANG2PT_ID = {lang_: NLLB_MOD_ID for lang_ in LANGS2HELSINKI_IDS}
+KMT_LANG2PT_ID = {lang_: "jhu-clsp/kreyol-mt" for lang_ in LANGS2HELSINKI_IDS}
 MODEL2LANG2PT_ID = {
 	"helsinki": LANGS2HELSINKI_IDS,
-	"nllb": {lang_: NLLB_MOD_ID for lang_ in LANGS2HELSINKI_IDS}
+	"nllb": NLLB_LANG2PT_ID,
+	"kreyol-mt": KMT_LANG2PT_ID
 }
 ISO2NAME = {
 	"es": "spanish",
@@ -118,7 +121,15 @@ def tset_eval(
 		total_n=None,
 		keyword=None
 	):
-	tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+	if 'kreyol' in model_checkpoint:
+		tokenizer = AutoTokenizer.from_pretrained(
+			model_checkpoint, 
+			do_lower_case=False, 
+			use_fast=False, 
+			keep_accents=True
+		) 
+	else:
+		tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 		
 	# Define train_data_path
 	lang = NAME2ISO[src_language] if use_iso else src_language
@@ -401,7 +412,7 @@ if __name__ == "__main__":
 		"--run_type", 
 		type=str, 
 		default='100000', 
-		choices=["100000", "pretrain", "e2e"]
+		choices=["100000", "10000", "pretrain", "e2e"]
 	)
 	parser.add_argument(
 		"--hf_summarize_model", 

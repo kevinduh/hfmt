@@ -10,7 +10,11 @@ langs = [
 	"swahili",
 	"tamil",
 	"chinese_simplified",
-	"pidgin"
+	"pidgin",
+	"amharic",
+	"kyrgyz", 
+	"sinhala",
+	"kirundi"
 ]
 
 for lang in langs:

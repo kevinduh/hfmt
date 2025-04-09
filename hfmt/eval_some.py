@@ -18,7 +18,7 @@ SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
 E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 		" Do not provide any explanations or text apart from the summary.\n"\
 		"Passage: "
-PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
+PROJECT_DIR="/export/fs05/nrobin38/xling_summarizn/hfmt"
 LANGS = [
 	'es', 
 	'sw', 
@@ -37,7 +37,11 @@ LANGS2HELSINKI_IDS = {
 	"ja": "Helsinki-NLP/opus-mt-ja-en",
 	"ru": "Helsinki-NLP/opus-mt-ru-en",
 	"ta": "Helsinki-NLP/opus-mt-dra-en",
-	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
+	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "am": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "ky": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "si": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "rn": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
 }
 NLLB_MOD_ID = "facebook/nllb-200-distilled-600M"
 NLLB_LANG2PT_ID = {lang_: NLLB_MOD_ID for lang_ in LANGS2HELSINKI_IDS}
@@ -194,6 +198,7 @@ def run_eval(
 		e2e=False,
 		score_only=False,
 		flores_eval=True,
+		train_test=True,
 		flores_outfile=None,
 		skip_mt=False
 	) -> float:
@@ -265,15 +270,16 @@ def run_eval(
 	
 	if not e2e:
 		# Test on CCMatrix test set
-		print("STEP: Running CCMatrix test eval", flush=True)
-		testset_score = tset_eval(
-			model_checkpoint, 
-			src_language, 
-			mt_outfile, 
-			split='test',
-			total_n=1000
-		)
-		score.update(testset_score)
+		if train_test:
+			print("STEP: Running CCMatrix test eval", flush=True)
+			testset_score = tset_eval(
+				model_checkpoint, 
+				src_language, 
+				mt_outfile, 
+				split='test',
+				total_n=1000
+			)
+			score.update(testset_score)
 
 		# Test on in-domain CrossSum test set 
 		print("STEP: Running CrossSum devtest eval", flush=True)
@@ -380,6 +386,7 @@ def main(
 			e2e=e2e,
 			score_only=score_only,
 			flores_eval=False,
+			train_test=False,
 			skip_mt=skip_mt
 		)
 		print(f"(*) Completed eval for {lang}!", flush=True)
@@ -436,7 +443,7 @@ if __name__ == "__main__":
 	parser.add_argument(
 		"--model_dir", 
 		type=str, 
-		default="/exp/nrobinson/xling_summarizn/hfmt/egs/models/nllb"
+		default="/export/fs05/nrobin38/xling_summarizn/hfmt/egs/models/nllb"
 	)
 	parser.add_argument(
 		"--instruction_type",

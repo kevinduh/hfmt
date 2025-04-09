@@ -6,4 +6,8 @@ LANG2FLORES_CODE = {
         "japanese": "jpn_Jpan",
         "tamil": "tam_Taml",
         "swahili": "swh_Latn",
+        "amharic": "amh_Ethi",
+        "kyrgyz": "kir_Cyrl",
+        "sinhala": "sin_Sinh",
+        "kirundi": "run_Latn"
 }

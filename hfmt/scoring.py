@@ -144,7 +144,7 @@ def get_score(ref_, hyp_, src_=None, metric="rouge", submetric="rougeL"):
 	results = scorer.compute(predictions=hyps, references=refs, **compute_kwargs)
 	metric_key = "score" if metric == "chrf" else submetric
 	if metric == "chrf":
-		metric_score = results[metric_key] / divisor
+		metric_score = results[metric_key] / 100.
 	else:
 		metric_score = results[metric_key]
 

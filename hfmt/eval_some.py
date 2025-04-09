@@ -1,5 +1,6 @@
 import os, glob, json, argparse
 from tqdm import tqdm
+import torch
 
 import cascade_seq2seq as cascade 
 import train_seq2seq as train
@@ -17,7 +18,7 @@ SUMMARIZE_INSTRUCTION="Summarize the following passage in one sentence. "\
 E2E_INSTRUCTION="Summarize the following passage in one sentence in English."\
 		" Do not provide any explanations or text apart from the summary.\n"\
 		"Passage: "
-PROJECT_DIR="/export/fs05/nrobin38/xling_summarizn/hfmt"
+PROJECT_DIR="/exp/nrobinson/xling_summarizn/hfmt"
 LANGS = [
 	'es', 
 	'sw', 
@@ -54,7 +55,11 @@ ISO2NAME = {
 	"ja": "japanese", 
 	"ta": "tamil",
 	"sw": "swahili",
-	"pcm": "pidgin"
+	"pcm": "pidgin",
+	"am": "amharic",
+	"ky": "kyrgyz",
+	"si": "sinhala",
+	"rn": "kirundi"
 }
 NAME2ISO = {ISO2NAME[iso]: iso for iso in ISO2NAME}
 
@@ -224,6 +229,7 @@ def run_eval(
 			outfile=final_outfile, 
 			instruction=summarize_instruction
 		)
+		print(f"(*) Completed summarization step for {src_language}!", flush=True)
 
 	# Scoring
 	print("STEP: Running main scoring", flush=True)
@@ -376,10 +382,13 @@ def main(
 			flores_eval=False,
 			skip_mt=skip_mt
 		)
+		print(f"(*) Completed eval for {lang}!", flush=True)
 		
 		# collect score 
 		label = run_type if home_trained else pt_mod
 		all_results[lang][label] = score
+
+		torch.cuda.empty_cache()
 	
 	# Create out JSON for all results
 	with open(out_json_path, 'w') as f:
@@ -433,7 +442,7 @@ if __name__ == "__main__":
 		"--instruction_type",
 		type=str,
 		default="cascade",
-        choices=["cascade", "e2e"]
+		choices=["cascade", "e2e"]
 	)
 
 	args = parser.parse_args()

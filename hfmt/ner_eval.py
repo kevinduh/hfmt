@@ -11,7 +11,9 @@ def my_f1(labels: list, preds: list) -> float:
 	TP = len([word for word in preds if word in labels])
 	FP = len([word for word in preds if word not in labels])
 	FN = len([word for word in labels if word not in preds])
-	return 2 * TP / (TP + TP + FP + FN)
+	if TP + FP + FN:
+		return 2 * TP / (TP + TP + FP + FN)
+	return 0
 
 def ner_eval(ref_file: str, src_file: str, hyp_file: str) -> float:
 

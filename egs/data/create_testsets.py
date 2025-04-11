@@ -5,14 +5,18 @@ import os, json, pdb
 # languages are: ["es", "ar", "ja", "ru", "sw", "zh", "pcm", "ta"]
 
 langs = [
-	"spanish",
-	"arabic",
-	"japanese",
-	"russian",
-	"swahili",
-	"chinese_simplified",
-	"pidgin",
-	"tamil",
+	#"spanish",
+	#"arabic",
+	#"japanese",
+	#"russian",
+	#"swahili",
+	#"chinese_simplified",
+	#"pidgin",
+	#"tamil",
+	"amharic",
+	"kyrgyz",
+	"kirundi",
+	"sinhala",
 	#"english"
 ]
 

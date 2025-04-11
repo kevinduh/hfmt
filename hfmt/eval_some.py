@@ -1,5 +1,6 @@
 import os, glob, json, argparse
 from tqdm import tqdm
+import torch
 
 import cascade_seq2seq as cascade 
 import train_seq2seq as train
@@ -36,7 +37,11 @@ LANGS2HELSINKI_IDS = {
 	"ja": "Helsinki-NLP/opus-mt-ja-en",
 	"ru": "Helsinki-NLP/opus-mt-ru-en",
 	"ta": "Helsinki-NLP/opus-mt-dra-en",
-	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
+	"pcm": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "am": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "ky": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "si": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul",
+    "rn": "Helsinki-NLP/opus-mt-tc-bible-big-mul-mul"
 }
 NLLB_MOD_ID = "facebook/nllb-200-distilled-600M"
 NLLB_LANG2PT_ID = {lang_: NLLB_MOD_ID for lang_ in LANGS2HELSINKI_IDS}
@@ -54,7 +59,11 @@ ISO2NAME = {
 	"ja": "japanese", 
 	"ta": "tamil",
 	"sw": "swahili",
-	"pcm": "pidgin"
+	"pcm": "pidgin",
+	"am": "amharic",
+	"ky": "kyrgyz",
+	"si": "sinhala",
+	"rn": "kirundi"
 }
 NAME2ISO = {ISO2NAME[iso]: iso for iso in ISO2NAME}
 
@@ -189,6 +198,7 @@ def run_eval(
 		e2e=False,
 		score_only=False,
 		flores_eval=True,
+		train_test=True,
 		flores_outfile=None,
 		skip_mt=False
 	) -> float:
@@ -224,6 +234,7 @@ def run_eval(
 			outfile=final_outfile, 
 			instruction=summarize_instruction
 		)
+		print(f"(*) Completed summarization step for {src_language}!", flush=True)
 
 	# Scoring
 	print("STEP: Running main scoring", flush=True)
@@ -259,15 +270,16 @@ def run_eval(
 	
 	if not e2e:
 		# Test on CCMatrix test set
-		print("STEP: Running CCMatrix test eval", flush=True)
-		testset_score = tset_eval(
-			model_checkpoint, 
-			src_language, 
-			mt_outfile, 
-			split='test',
-			total_n=1000
-		)
-		score.update(testset_score)
+		if train_test:
+			print("STEP: Running CCMatrix test eval", flush=True)
+			testset_score = tset_eval(
+				model_checkpoint, 
+				src_language, 
+				mt_outfile, 
+				split='test',
+				total_n=1000
+			)
+			score.update(testset_score)
 
 		# Test on in-domain CrossSum test set 
 		print("STEP: Running CrossSum devtest eval", flush=True)
@@ -374,12 +386,16 @@ def main(
 			e2e=e2e,
 			score_only=score_only,
 			flores_eval=False,
+			train_test=False,
 			skip_mt=skip_mt
 		)
+		print(f"(*) Completed eval for {lang}!", flush=True)
 		
 		# collect score 
 		label = run_type if home_trained else pt_mod
 		all_results[lang][label] = score
+
+		torch.cuda.empty_cache()
 	
 	# Create out JSON for all results
 	with open(out_json_path, 'w') as f:
@@ -427,13 +443,13 @@ if __name__ == "__main__":
 	parser.add_argument(
 		"--model_dir", 
 		type=str, 
-		default="/exp/nrobinson/xling_summarizn/hfmt/egs/models/nllb"
+		default="/export/fs05/nrobin38/xling_summarizn/hfmt/egs/models/nllb"
 	)
 	parser.add_argument(
 		"--instruction_type",
 		type=str,
 		default="cascade",
-        choices=["cascade", "e2e"]
+		choices=["cascade", "e2e"]
 	)
 
 	args = parser.parse_args()

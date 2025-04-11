@@ -7,7 +7,8 @@ import qe
 #os.environ["WANDB_PROJECT"]="hfmt"
 
 METRIC2KEY = {
-	"rouge": "summary", 
+	"rouge": "summary",
+	"bertscore": "summary",
 	"comet": "text"
 }
 
@@ -126,6 +127,8 @@ def get_score(ref_, hyp_, src_=None, metric="rouge", submetric="rougeL"):
 	if metric == "chrf":
 		if submetric == "chrf++":
 			load_kwargs["word_order"] = 2
+	if metric == "bertscore":
+		compute_kwargs["lang"] = "en"
 	if metric == "bleu":
 		assert submetric.startswith("bleu")
 		if len(submetric) == 5:
@@ -140,8 +143,10 @@ def get_score(ref_, hyp_, src_=None, metric="rouge", submetric="rougeL"):
 		refs = get_multi_refs(srcs, refs)
 	results = scorer.compute(predictions=hyps, references=refs, **compute_kwargs)
 	metric_key = "score" if metric == "chrf" else submetric
-	divisor = 100. if metric == "chrf" else 1.
-	metric_score = results[metric_key] / divisor
+	if metric == "chrf":
+		metric_score = results[metric_key] / 100.
+	else:
+		metric_score = results[metric_key]
 
 	return metric_score
 

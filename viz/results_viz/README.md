@@ -1,6 +1,6 @@
 # Scores
 
-## Spanish (`Llama-3.0`)
+## [Spanish](../single_outs/combined_lang_reports/es.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |

@@ -10,7 +10,7 @@
 | E2E  | 19.5  | 7.8  | 0.789  | -2.99  | 0.217  | NA  |
 | Ceiling | 19.9  | 8.3  | 0.792  | -3.01  | 0.26  | NA  |
 
-## Arabic (`Llama-3.0`)
+## [Arabic](../single_outs/combined_lang_reports/ar.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |

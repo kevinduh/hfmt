@@ -12,11 +12,12 @@
 
 ## Arabic
 
-| Item              | In Stock | Price |
-| :---------------- | :------: | ----: |
-| Python Hat        |   True   | 23.99 |
-| SQL Hat           |   True   | 23.99 |
-| Codecademy Tee    |  False   | 19.99 |
-| Codecademy Hoodie |  False   | 42.99 |
+| System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
+| :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
+| Scratch (100k CCMatrix)  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  |
+| Helsinki Spanish        | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  |
+| NLLB    | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  |
+| E2E  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  |
+| Ceiling | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  | xx.xx  |
 
 

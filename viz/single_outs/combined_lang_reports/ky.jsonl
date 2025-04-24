@@ -1,0 +1,1073 @@
+[
+    {
+        "nllb": {
+            "llama_hyp_summary": "The study found that people who lived in good spirits, whether optimists or pessimists, were more likely to live to be 85 years or older.",
+            "bart_score": -2.217162847518921,
+            "mt_hyp_summary": "A study by American scientists showed that optimists have a higher chance of living longer than pessimists who are always complaining about the details of their lives.",
+            "rouge1": 0.3829787234042554
+        },
+        "e2e": {
+            "llama_hyp_summary": "Optimistic people live longer and healthier lives, with a 11-15% increase in lifespan, due to their ability to cope with stress and maintain a positive outlook.",
+            "bart_score": -2.7779455184936523,
+            "rouge1": 0.24489795918367346
+        },
+        "ceil": {
+            "llama_hyp_summary": "Optimistic people were found to live longer, with an 11-15% longer lifespan on average, and were more likely to reach the age of 85 compared to pessimistic individuals.",
+            "bart_score": -2.7079193592071533,
+            "rouge1": 0.27450980392156865
+        },
+        "ref_summary": "Optimists are more likely to live longer than those who have a more negative approach to life, a US study has found.",
+        "ref_url": "https://www.bbc.com/news/health-49447685",
+        "foreign_summary": "Жашоодо майда-баратка көп кейиген, дайыма наалыган пессимисттерге караганда оптимисттердин көп жашаганга шансы чоң болорун америкалык окумуштуулардын изилдөөсү көрсөттү."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "DNA analysis reveals that flies carry over 600 types of bacteria, including those that can cause pneumonia, intestinal infections, and blood disease, which can spread through each step of the mouse.",
+            "bart_score": -3.4574615955352783,
+            "mt_hyp_summary": "An American entomologist's study found that mosquitoes spread more diseases than previously thought.",
+            "rouge1": 0.0
+        },
+        "e2e": {
+            "llama_hyp_summary": "The study found that houseflies and blowflies can carry over 600 types of bacteria, including some that can cause serious diseases in humans, and that these flies can spread bacteria through their entire body, including their wings and feet.",
+            "bart_score": -3.543053388595581,
+            "rouge1": 0.0
+        },
+        "ceil": {
+            "llama_hyp_summary": "Researchers have found that henipaviruses and a rabies-like virus are widespread in a species of fruit bat in Africa, posing a potential risk to human health due to the bats' close proximity to cities and hunting for food.",
+            "bart_score": -3.3396596908569336,
+            "rouge1": 0.04
+        },
+        "ref_summary": "Bats harbour more deadly viruses than was previously thought, scientists say.",
+        "ref_url": "https://www.bbc.com/news/science-environment-25003792",
+        "foreign_summary": "Америкалык энтомологдордун изилдөөсү чымын мурда ойлогондон да көп илдетти таратаарын аныктады."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Lewis Hein, a renowned photographer and sociologist, created a rare painting called \"The East Side\" in 1900, which was later sold at auction for $80,000.",
+            "bart_score": -3.188661575317383,
+            "mt_hyp_summary": "At a New York auction, 24 of the archival paintings of the documentary master, Lewis Heine, were sold, and they were part of his famous collection.",
+            "rouge1": 0.17857142857142855
+        },
+        "e2e": {
+            "llama_hyp_summary": "Lewis Hine's photographs, taken between 1904 and 1930, document the lives of immigrants, workers, and children in the United States, highlighting social and economic issues of the time.",
+            "bart_score": -2.8016674518585205,
+            "rouge1": 0.2711864406779661
+        },
+        "ceil": {
+            "llama_hyp_summary": "Here is the summary:\n\nAmerican sociologist Lewis Hine was a pioneering documentary photographer who used his work to fight for social justice, capturing images of the poor, immigrants, and child laborers to raise awareness and advocate for change.",
+            "bart_score": -4.090360164642334,
+            "rouge1": 0.17647058823529413
+        },
+        "ref_summary": "Twenty-four photographs from the Lewis Hine archive have been auctioned in New York. The rare prints were from the collection of the late New York photographer Isador Sy Seidman.",
+        "ref_url": "https://www.bbc.com/news/in-pictures-43031764",
+        "foreign_summary": "Нью-Йоркто өткөн аукциондо документалдык сүрөттөрдүн чебери Льюис Хайндын архивдеги 24 сүрөтү сатылды. Бул сүрөттөр анын белгилүү коллекциясынын бир бөлүгү эле."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Doctors recommend brain gymnastics and alertness to reduce the risk of dementia, while a study predicts that several risk factors will increase the number of people affected by dementia to 131 million worldwide by 2050.",
+            "bart_score": -3.70998477935791,
+            "mt_hyp_summary": "If people were to keep their brains in check, they would be able to reduce dementia by a third in the world, according to a study by an international group of neuroscientists and neurosurgeons published in the medical journal Lancet.",
+            "rouge1": 0.22580645161290322
+        },
+        "e2e": {
+            "llama_hyp_summary": "Researchers believe that dementia can be prevented or delayed by addressing nine risk factors, including lack of education, hearing loss, smoking, and sedentary lifestyle, and that if these factors are not addressed, the number of people affected by dementia could increase to 131 million by 2050.",
+            "bart_score": -3.075294017791748,
+            "rouge1": 0.2465753424657534
+        },
+        "ceil": {
+            "llama_hyp_summary": "A new study suggests that 35% of dementia risk is potentially modifiable through lifestyle changes, including lack of education, hearing loss, smoking, and physical inactivity, and that making positive changes can reduce the risk of dementia.",
+            "bart_score": -3.130059003829956,
+            "rouge1": 0.12698412698412698
+        },
+        "ref_summary": "One in three cases of dementia could be prevented if more people looked after their brain health throughout life, according to an international study in the Lancet.",
+        "ref_url": "https://www.bbc.com/news/health-40655566",
+        "foreign_summary": "Адамдар эгерде өздөрүнүн мээсин жакшы карап жашаса, дүйнөдө деменцияны (алжууну) үчтөн бирге азайтууга мүмкүн болмок. Медициналык Lancet журналында жарыяланган нейробиологдор менен нейрохирургдардын эл аралык тобунун изилдөөсүндө ушундай тыянак жазылган."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Uighur activists and families have been searching for their loved ones worldwide and criticizing the Chinese government's handling of the situation, including allegations of torture and deaths in \"re-education camps\".",
+            "bart_score": -2.931391716003418,
+            "mt_hyp_summary": "The Chinese state media has released a video showing the life of a famous Uyghur musician, who was reportedly killed in a \"training camp\".",
+            "rouge1": 0.14814814814814814
+        },
+        "e2e": {
+            "llama_hyp_summary": "Uyghur activists are searching for their missing relatives in China, using social media to spread awareness and demand justice, while also accusing the Chinese government of suppressing their culture and religion.",
+            "bart_score": -2.9667820930480957,
+            "rouge1": 0.1509433962264151
+        },
+        "ceil": {
+            "llama_hyp_summary": "A video released by China appears to show Abdurehim Heyit, a Uighur musician, stating he is in good health, contradicting reports of his death in a Chinese detention camp.",
+            "bart_score": -2.778797149658203,
+            "rouge1": 0.5098039215686274
+        },
+        "ref_summary": "Chinese state media have released a video appearing to show a Uighur musician previously reported to have died in a detention camp.",
+        "ref_url": "https://www.bbc.com/news/world-asia-47191952",
+        "foreign_summary": "Кытайдын мамлекеттик медиа агенттиги белгилүү уйгур музыканты тирүү экенин көрсөткөн видео жарыялады. Буга чейин музыкант \"тарбиялоо лагеринде\" каза тапты деген сөз тараган."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The International Air Transport Association (IATA) has stated that it will be challenging to quickly distribute the vaccine to some parts of Africa due to the vaccine's unavailability.",
+            "bart_score": -2.9635114669799805,
+            "mt_hyp_summary": "Aviation experts warned that the delivery of a vaccine against coronavirus to the world's population would be the largest logistics project in history, and that it would be a challenge.",
+            "rouge1": 0.3333333333333333
+        },
+        "e2e": {
+            "llama_hyp_summary": "The International Air Transport Association (IATA) estimates that 8,000 Boeing 747 planes would be needed to distribute vaccines worldwide, and is urging airlines, airports, and medical personnel to prepare for the logistics of vaccine distribution.",
+            "bart_score": -2.959972858428955,
+            "rouge1": 0.2181818181818182
+        },
+        "ceil": {
+            "llama_hyp_summary": "The International Air Transport Association estimates that the equivalent of 8,000 Boeing 747s will be needed to distribute a Covid-19 vaccine globally, requiring careful advance planning and precise logistics to ensure safe and secure transportation.",
+            "bart_score": -3.741360902786255,
+            "rouge1": 0.28571428571428575
+        },
+        "ref_summary": "Shipping a coronavirus vaccine around the world will be the \"largest transport challenge ever\" according to the airline industry.",
+        "ref_url": "https://www.bbc.com/news/business-54067499",
+        "foreign_summary": "Авиа тармактын адистери коронавируска каршы вакцинаны дүйнө калкына жеткирүү тарыхтагы эң ири логистикалык долбоор болорун белгилеп, аны аткарууда бир топ кыйынчылыктар болорун эскертти."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The intelligence services of three countries accused Russia's intelligence agencies of launching a cyberattack on the developers of a COVID-19 vaccine.",
+            "bart_score": -3.9811367988586426,
+            "mt_hyp_summary": "Britain, the US and Canada have reported that a Russian hacker group, allegedly linked to the Kremlin, has attacked a West-based laboratory working on a Covid-19 vaccine.",
+            "rouge1": 0.1818181818181818
+        },
+        "e2e": {
+            "llama_hyp_summary": "The US, UK, and Canada accused Russia of launching a cyber attack on organizations involved in COVID-19 vaccine development, with the UK's foreign minister calling it a \"mindless\" act.",
+            "bart_score": -3.678908586502075,
+            "rouge1": 0.30769230769230765
+        },
+        "ceil": {
+            "llama_hyp_summary": "The UK's National Cyber Security Centre has accused a hacking group, Cozy Bear, of being \"almost certainly\" part of Russian intelligence services, targeting pharmaceutical companies and research centers in the UK, Canada, and US to steal information on coronavirus vaccine development.",
+            "bart_score": -3.1313304901123047,
+            "rouge1": 0.4444444444444444
+        },
+        "ref_summary": "Russian spies are targeting organisations trying to develop a coronavirus vaccine in the UK, US and Canada, security services have warned.",
+        "ref_url": "https://www.bbc.com/news/technology-53429506",
+        "foreign_summary": "Британия, АКШ жана Канада Орусиянын хакер тобунун чабуулуна кабылганын билдиришти. Кремлге байланышы бар делген топ батыштагы Covid-19 вирусуна каршы вакцинанын үстүнөн иштеп жаткан лабораторияларга чабуул койгон."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A clash between the National Police and the Border Service of a country resulted in 11 police officers and 5 others being injured.",
+            "bart_score": -4.022173881530762,
+            "mt_hyp_summary": "Former Georgian President and former Governor of Ukraine's Odessa region, Mikhail Saakashvili, was taken to Ukraine by hundreds of his supporters who broke through the border border siege, the BBC reported.",
+            "rouge1": 0.2127659574468085
+        },
+        "e2e": {
+            "llama_hyp_summary": "Former Georgian President Mikheil Saakashvili was taken to Lviv, Ukraine, by bus and gave a statement to journalists, saying he was waiting for his wife and son in the city, but Ukraine's State Border Service considered his actions illegal and accused him of violating the border.",
+            "bart_score": -2.985917806625366,
+            "rouge1": 0.3098591549295775
+        },
+        "ceil": {
+            "llama_hyp_summary": "Former Georgian President Mikheil Saakashvili was swept across the Ukrainian border by a crowd and entered the country illegally, sparking scuffles with border officials and injuring 16 guards.",
+            "bart_score": -3.1706206798553467,
+            "rouge1": 0.2692307692307692
+        },
+        "ref_summary": "Mikheil Saakashvili, Georgia's ex-president and one-time regional governor in Ukraine, has crossed into the country, helped by hundreds of his supporters.",
+        "ref_url": "https://www.bbc.com/news/world-europe-41219773",
+        "foreign_summary": "Грузиянын мурдагы президенти, Украинанын Одесса облусунун экс-губернатору Михаил Саакашвилини жүздөгөн тарапташтары Украина аймагына алып өттү. Алар украиналык чек арачылардын курчоосун бузуп өтүп кетишти деп билдирди окуя болгон жерден Би-би-си кабарчысы."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The death penalty was carried out in the country in 2013, with over a thousand people witnessing the execution, which was reportedly carried out by the family of the executed person.",
+            "bart_score": -3.0291476249694824,
+            "mt_hyp_summary": "NGOs in South Korea have identified 318 places in the DPRK where people who disagree with the regime have been executed.",
+            "rouge1": 0.17857142857142855
+        },
+        "e2e": {
+            "llama_hyp_summary": "North Korea has been executing people, including high-ranking officials, in public, often in front of thousands of spectators, as a form of punishment for political crimes.",
+            "bart_score": -2.7200794219970703,
+            "rouge1": 0.2692307692307692
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Transitional Justice Working Group's report, based on interviews with 610 North Korean defectors, documents decades of public executions, including killings of people for minor offenses, with crowds of over 1,000 people gathering to watch, and family members, including children, sometimes forced to witness the events.",
+            "bart_score": -3.3661048412323,
+            "rouge1": 0.1643835616438356
+        },
+        "ref_summary": "A South Korean NGO says it has identified 318 sites in North Korea that have been used by the government to carry out public executions.",
+        "ref_url": "https://www.bbc.com/news/world-asia-48590691",
+        "foreign_summary": "Түштүк Кореядагы бейөкмөт уюмдар КЭДР аймагында режимге ыңгайсыз кишилерди өлүм жазасына тарткан 318 жайды аныктаганын билдирди. Transitional Justice Working Group укук коргоо уюмунун кызматкерлери Түндүк Кореядан качып өткөн 610 киши менен маектешкен."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Two North Korean girls, Mira and Juin, escaped from a high-rise building in Yangtze, China, after being forced to perform pornography for years.",
+            "bart_score": -3.247220039367676,
+            "mt_hyp_summary": "Two young girls who had fled North Korea were forced into sexual slavery in China and were forced to flee again many years later.",
+            "rouge1": 0.2916666666666667
+        },
+        "e2e": {
+            "llama_hyp_summary": "Two North Korean girls, Mira and Joo-in, were forced into prostitution in China after being lured by false promises of a better life. They were sold to a brothel and subjected to physical and emotional abuse. After several years, they managed to escape and were helped by a pastor who provided them with food, shelter, and psychological support. The girls were eventually able to return to South Korea, where they received counseling and assistance to help them reintegrate into society.",
+            "bart_score": -2.327601909637451,
+            "rouge1": 0.1904761904761905
+        },
+        "ceil": {
+            "llama_hyp_summary": "Two North Korean defectors, Mira and Jiyun, were forced into sexcam work in China after being tricked by traffickers and promised a better life, but eventually escaped with the help of a Christian charity and were flown to South Korea, where they will undergo a screening process and receive training to adjust to their new life.",
+            "bart_score": -3.3861916065216064,
+            "rouge1": 0.2
+        },
+        "ref_summary": "Trafficked into the sex industry after defecting from North Korea, two young women spent years in captivity before finally getting the chance to escape.",
+        "ref_url": "https://www.bbc.com/news/world-asia-46610882",
+        "foreign_summary": "Түндүк Кореядан качып чыккан эки жаш кыз Кытайда жыныстык кулчулукка кабылып, көп жылдан кийин Кытайдан кайра качууга аргасыз болушкан."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Dr. Saad Jabri reported that his eldest son aided in the theft of his children Omar and Sara from their home in Saudi Arabia on March 16th.",
+            "bart_score": -3.963449001312256,
+            "mt_hyp_summary": "A senior Saudi intelligence official who has been in contact with Western intelligence and the kingdom for many years has been subjected to persecution by the authorities, and his family and relatives have been reported to be persecuted.",
+            "rouge1": 0.18181818181818185
+        },
+        "e2e": {
+            "llama_hyp_summary": "Dr. Saad Al-Jabri, a former Saudi official, has been accused of helping to expose Al-Qaeda's plans to the West, and his children, Omar and Sara, have been arrested in Saudi Arabia on unknown charges.",
+            "bart_score": -3.0754196643829346,
+            "rouge1": 0.3157894736842105
+        },
+        "ceil": {
+            "llama_hyp_summary": "Dr. Saad al-Jabri, a former Saudi intelligence official who helped foil an al-Qaeda bomb plot, has had his children seized by the Saudi authorities as \"hostages\" in an attempt to force him to return to Saudi Arabia.",
+            "bart_score": -2.5930771827697754,
+            "rouge1": 0.3076923076923077
+        },
+        "ref_summary": "A senior Saudi security official who for years was the key go-between for Britain's MI6 and other Western spy agencies in Saudi Arabia is now being persecuted along with his family, according to former Western intelligence officials.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-52790864",
+        "foreign_summary": "Көп жылдан бери Батыш өлкөлөрүнүн чалгын кызматтары менен падышачылыктын байланыштарын түзүп келген Сауд Арабиясынын атайын кызматынын жогорку даражадагы кызматкери бийликтин куугунтугуна кабылды. Анын үй-бүлөсү, жакындары дагы куугунтукка алынганы тууралуу маалыматтар айтылууда."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Zhang Zhang, a lawyer and journalist, has been detained and subjected to severe pressure to reveal information about the pandemic, resulting in her health being damaged due to starvation and mistreatment.",
+            "bart_score": -3.8571910858154297,
+            "mt_hyp_summary": "A Chinese court sentenced a citizen journalist in Wuhan to four years in prison for covering the coronavirus situation, Zhang Zhang was charged with \"inciting violence\" and \"inciting violence\", the most commonly used articles against dissidents and activists in China.",
+            "rouge1": 0.1702127659574468
+        },
+        "e2e": {
+            "llama_hyp_summary": "Chinese journalist Zhang Zhan was arrested in May and has been on a hunger strike, with her lawyer saying she is in poor health and has been subjected to mistreatment.",
+            "bart_score": -3.099592924118042,
+            "rouge1": 0.21739130434782608
+        },
+        "ceil": {
+            "llama_hyp_summary": "Zhang Zhan, a 37-year-old former lawyer and citizen journalist, was found guilty of \"picking quarrels and provoking trouble\" and sentenced to four to five years in prison for reporting on the Wuhan coronavirus outbreak in China.",
+            "bart_score": -2.3240785598754883,
+            "rouge1": 0.3333333333333333
+        },
+        "ref_summary": "A Chinese citizen journalist who covered Wuhan's coronavirus outbreak has been jailed for four years.",
+        "ref_url": "https://www.bbc.com/news/world-asia-china-55463241",
+        "foreign_summary": "Кытайдын соту Ухань шаарындагы коронавируска байланышкан кырдаалды чагылдырган жарандык журналистти төрт жыл абак жазасына кести. Чжан Чжань \"кастыкты козутуу\", \"башаламандыкка шыкактаган\" деген беренелер менен айыпталды. Бул Кытайда диссидент жана активисттерге эң көп колдонулган беренелер."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The passage discusses the impact of the Game of Thrones series on the lives of its actors, including Kit Harington and Emilia Clarke, who have pursued other projects and struggled to reach the same level of fame.",
+            "bart_score": -2.8315579891204834,
+            "mt_hyp_summary": "The eighth season of Game of Thrones, an American television series based on the novel Song of Ice and Fire by George Martin, has been running since 2011 and is the most popular series in the history of the NVO.",
+            "rouge1": 0.14545454545454545
+        },
+        "e2e": {
+            "llama_hyp_summary": "The passage discusses the impact of the Game of Thrones series on the lives of its actors, including Emilia Clarke, Kit Harington, Lena Headey, Nikolaj Coster-Waldau, Sophie Turner, and Peter Dinklage, who have all experienced significant changes in their careers and personal lives since the show's conclusion.",
+            "bart_score": -2.1952579021453857,
+            "rouge1": 0.11940298507462686
+        },
+        "ceil": {
+            "llama_hyp_summary": "George R.R. Martin has added a fifth writer to the team working on the TV adaptations of his A Song of Ice and Fire series, but has not revealed the identity of the new writer.",
+            "bart_score": -2.499228000640869,
+            "rouge1": 0.2962962962962963
+        },
+        "ref_summary": "A fifth Game of Thrones spin-off pilot is being developed by HBO and George R R Martin.",
+        "ref_url": "https://www.bbc.com/news/newsbeat-39933630",
+        "foreign_summary": "Америкалык жазуучу Жорж Мартиндин «Муз жана от ыры» деген чыгармасынын негизинде тартылган \"Такты оюндары\" (Game of Thrones) сериалынын 8-сезону жарыкка чыкты. Бул тасма 2011-жылдан бери НВО тарыхындагы эң популярдуу сериал болуп калды."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Nikolai Pashinyan, an opposition politician, was arrested and then released, following the election of Sergei Sargsyan as prime minister despite widespread protests.",
+            "bart_score": -2.5512843132019043,
+            "mt_hyp_summary": "Armenian Prime Minister Serzh Sargsyan resigned under pressure.",
+            "rouge1": 0.28571428571428564
+        },
+        "e2e": {
+            "llama_hyp_summary": "Protesters in Yerevan, Armenia, have been joined by soldiers, demanding the resignation of former President Sерж Sаргсян, who was reappointed as Prime Minister despite opposition.",
+            "bart_score": -3.6360714435577393,
+            "rouge1": 0.3111111111111111
+        },
+        "ceil": {
+            "llama_hyp_summary": "Armenian Prime Minister Serzh Sargsyan resigned after 11 days of protests, following the release of opposition leader Nikol Pashinyan from detention, and amid widespread opposition to his appointment as prime minister.",
+            "bart_score": -2.068467855453491,
+            "rouge1": 0.39215686274509803
+        },
+        "ref_summary": "There were scenes of jubilation in the Armenian capital Yerevan after protests forced the resignation of Prime Minister Serzh Sargsyan.",
+        "ref_url": "https://www.bbc.com/news/world-europe-43868433",
+        "foreign_summary": "Армениянын премьер-министри Серж Саргсян кысым алдында кызматтан кетти."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The chief medical officer of the Royal Hospital for Disease Control and Prevention in London and doctors in the Gulf Coast regularly make difficult decisions, including turning off life-support devices, and sometimes blame themselves for patient deaths.",
+            "bart_score": -3.7814671993255615,
+            "mt_hyp_summary": "A respiratory device with a respirator in hand can save a patient's life if they are infected with Covid-19, which can deliver air to the lungs of patients with shortness of breath and release carbon dioxide.",
+            "rouge1": 0.14084507042253522
+        },
+        "e2e": {
+            "llama_hyp_summary": "Medical staff at a hospital are daily faced with the difficult decision of whether to remove life-support machines from patients with COVID-19, as the virus continues to spread and overwhelm healthcare systems.",
+            "bart_score": -3.113837242126465,
+            "rouge1": 0.3283582089552239
+        },
+        "ceil": {
+            "llama_hyp_summary": "Juanita Nittla, a senior sister in the intensive care unit at London's Royal Free Hospital, has been working in the NHS for 16 years and has had to make difficult decisions about withdrawing life support from patients with Covid-19.",
+            "bart_score": -3.082179069519043,
+            "rouge1": 0.2972972972972973
+        },
+        "ref_summary": "Having access to a ventilator can mean the difference between life and death for patients who are seriously ill with Covid-19. But sometimes even these breathing machines cannot save someone's life.",
+        "ref_url": "https://www.bbc.com/news/health-52345177",
+        "foreign_summary": "Дем алууга жардам берген аппараттын колдо болгону Covid-19 вирусун жуктурган бейтаптын өмүрүн сактап калышы ыктымал. Бул аппараттар деми кыстыккан бейтаптардын өпкөсүнө аба жеткирип, көмүр кычкыл заттарды чыгарып турат."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A representative of Afghanistan's Ministry of Education announced that girls would no longer be allowed to sing in public, sparking widespread criticism on social media.",
+            "bart_score": -2.1761727333068848,
+            "mt_hyp_summary": "The Afghan Ministry of Education is investigating whether girls over the age of 12 are prohibited from singing in public.",
+            "rouge1": 0.25
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Afghan Ministry of Education has announced that girls over 12 years old will no longer be allowed to sing in public or attend concerts, sparking widespread criticism and concerns that the country is being Talibanized.",
+            "bart_score": -2.527041435241699,
+            "rouge1": 0.3333333333333333
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Afghan government's ban on girls 12 and older from singing at school functions and older girls from having male music teachers sparked widespread criticism on social media, with many comparing it to the Taliban's restrictions on women's rights.",
+            "bart_score": -3.469860553741455,
+            "rouge1": 0.2777777777777778
+        },
+        "ref_summary": "The Afghan education ministry says it is investigating a recent statement from the director of education in the capital, Kabul, which banned girls older than 12 from singing in public.",
+        "ref_url": "https://www.bbc.com/news/world-asia-56393819",
+        "foreign_summary": "Ооганстандын Билим берүү министрлиги 12 жаштан улуу кыздардын коомдук жайда ырдаганына тыюу салынганын текшерүүдө."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "China is testing the coronavirus in groups of people, with authorities conducting mass testing in cities such as Qingdao and Wuhan to identify the number of infected individuals.",
+            "bart_score": -2.8861687183380127,
+            "mt_hyp_summary": "China is running a coronavirus test in Kashkar, Xinjiang, with 138 people diagnosed with the virus in Kashkar, and now a city of 4.7 million people is running a test.",
+            "rouge1": 0.2978723404255319
+        },
+        "e2e": {
+            "llama_hyp_summary": "China is conducting mass testing for COVID-19 in various cities, including Qingdao and Wuhan, and has implemented strict measures to prevent the spread of the virus, including lockdowns and travel restrictions.",
+            "bart_score": -3.3365797996520996,
+            "rouge1": 0.2745098039215686
+        },
+        "ceil": {
+            "llama_hyp_summary": "Around 4.7 million people in Kashgar, China are being tested for COVID-19 after an asymptomatic woman working in a garment factory was found to be infected, with 138 asymptomatic cases discovered so far.",
+            "bart_score": -3.719675302505493,
+            "rouge1": 0.18518518518518517
+        },
+        "ref_summary": "China is once again mass testing an entire city for the coronavirus amid a regional outbreak in Xinjiang province.",
+        "ref_url": "https://www.bbc.com/news/world-asia-china-54687533",
+        "foreign_summary": "Кытай Шинжаң аймагындагы Кашкар шаарында коронавирусту аныктоочу тестти жапырт өткөрөт. Кашкарда 138 кишиден вирус аныкталды. Эми 4,7 миллион калкы бар шаарда жапырт тестирлөө болот."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Researchers at Harvard Medical School analyzed satellite images of Chinese hospital parking lots and found evidence that the coronavirus started in November 2019.",
+            "bart_score": -3.5812628269195557,
+            "mt_hyp_summary": "In August last year, after a traffic jam in Wuhan hospitals, researchers concluded that the coronavirus could have started at that point.",
+            "rouge1": 0.22641509433962265
+        },
+        "e2e": {
+            "llama_hyp_summary": "Researchers at Harvard Medical School analyzed satellite images of five hospitals in Wuhan, China, and found that the number of cars in the parking lots increased significantly in August, coinciding with the peak of internet searches for keywords related to COVID-19 symptoms.",
+            "bart_score": -3.7720065116882324,
+            "rouge1": 0.24657534246575347
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Harvard University study on the early spread of COVID-19 in Wuhan, China has been criticized for methodological shortcomings, including flawed analysis of satellite imagery and online search data, raising doubts about its overall findings.",
+            "bart_score": -3.817762851715088,
+            "rouge1": 0.2727272727272727
+        },
+        "ref_summary": "There's been criticism of a study from the US suggesting that the coronavirus could have been present in the Chinese city of Wuhan as early as August last year.",
+        "ref_url": "https://www.bbc.com/news/world-asia-china-53005768",
+        "foreign_summary": "Былтыр август айында Ухандын ооруканаларындагы автоунаа токтотуучу жайларда болгон кымгууттуктан улам изилдөөчүлөр коронавирус илдети ошондо эле башталышы мүмкүн деген тыянакка келүүдө."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Over 647,000 Rohingya Muslims have been forcibly displaced to Bangladesh due to conflicts in Myanmar, with reports indicating a higher death toll than officially reported.",
+            "bart_score": -3.15104079246521,
+            "mt_hyp_summary": "According to Doctors Without Borders, 6,700 Rohingya Muslims died in August's Myanmar riots.",
+            "rouge1": 0.12244897959183673
+        },
+        "e2e": {
+            "llama_hyp_summary": "The International Organization for Migration reports that over 647,000 Rohingya Muslims have been forced to flee to Bangladesh, with many killed or injured in violence and military operations in Myanmar.",
+            "bart_score": -2.7162926197052,
+            "rouge1": 0.25925925925925924
+        },
+        "ceil": {
+            "llama_hyp_summary": "A survey by MSF found that at least 9,000 Rohingya died in Myanmar between August and September, with at least 6,700 deaths caused by violence, including 730 children under five, raising the possibility of taking a case to the International Criminal Court for crimes against humanity.",
+            "bart_score": -2.753875255584717,
+            "rouge1": 0.3098591549295775
+        },
+        "ref_summary": "At least 6,700 Rohingya were killed in the month after violence broke out in Myanmar in August, Medecins Sans Frontieres (MSF) says.",
+        "ref_url": "https://www.bbc.com/news/world-asia-42348214",
+        "foreign_summary": "Чек арасыз дарыгерлер уюмунун айтымында, Мьянмада август айындагы коогалаңда 6,700 рохинжа мусулманы каза тапкан."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Israeli Prime Minister Benjamin Netanyahu criticized the International Court of Justice's decision on jurisdiction in the Palestinian territories, calling it an apology and hypocrisy of antisemitism.",
+            "bart_score": -3.205420732498169,
+            "mt_hyp_summary": "The International Criminal Court (ICC) in The Hague has announced that it has opened an official investigation into allegations of military crimes in the Palestinian Autonomous Region.",
+            "rouge1": 0.3404255319148936
+        },
+        "e2e": {
+            "llama_hyp_summary": "The International Criminal Court has issued a decision to investigate alleged war crimes committed by Israel in the Gaza Strip and West Bank, which Israel's Prime Minister Benjamin Netanyahu has condemned as \"antisemitism\" and \"apocalypse\".",
+            "bart_score": -2.6851484775543213,
+            "rouge1": 0.42857142857142855
+        },
+        "ceil": {
+            "llama_hyp_summary": "The International Criminal Court (ICC) has launched an investigation into alleged war crimes, crimes against humanity, and genocide in the Israeli-occupied West Bank, East Jerusalem, and Gaza Strip since June 2014.",
+            "bart_score": -1.840656042098999,
+            "rouge1": 0.4615384615384615
+        },
+        "ref_summary": "The International Criminal Court's chief prosecutor has opened a formal investigation into alleged war crimes in the Palestinian territories.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-56249927",
+        "foreign_summary": "Гаагадагы эл аралык сот (ICC) Палестин автоном аймагында аскер кылмышы катталган болушу мүмкүн деген билдирүүлөр боюнча расмий иликтөө башталганын жарыялады."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Einstein left a letter to a hotel clerk in Tokyo in 1922, which was later sold for more than expected, and he believed that the letter's value lay beyond its monetary worth.",
+            "bart_score": -3.486375093460083,
+            "mt_hyp_summary": "Albert Einstein's letter on the recipe for a temporary life was sold at an auction in Jerusalem for $1.56 million.",
+            "rouge1": 0.1754385964912281
+        },
+        "e2e": {
+            "llama_hyp_summary": "Albert Einstein's notes, including one written in German, were sold at an auction for a high price, with one note selling for $240,000, despite being left behind at a hotel in Tokyo in 1922.",
+            "bart_score": -3.1486833095550537,
+            "rouge1": 0.3666666666666667
+        },
+        "ceil": {
+            "llama_hyp_summary": "Einstein gave a signed note to a courier in Tokyo in 1922, which reads \"A calm and humble life will bring more happiness than the pursuit of success and the constant restlessness that comes with it\", and it sold for $240,000 at auction.",
+            "bart_score": -3.72845458984375,
+            "rouge1": 0.23529411764705885
+        },
+        "ref_summary": "A note written by Albert Einstein containing advice on happy living has sold at an auction house in Jerusalem for $1.56m (£1.19m).",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-41742785",
+        "foreign_summary": "Альберт Эйнштейндин «бактылуу жашоонун рецепти» тууралуу жазган каты Иерусалимдеги аукциондо 1,56 млн долларга сатылды."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Alfred Chesnutt, Andrew Stuart, and Ramson Watkins, who were previously convicted of murdering a 14-year-old boy in 1984, were acquitted on Monday.",
+            "bart_score": -3.1815707683563232,
+            "mt_hyp_summary": "Three men in Maryland, U.S.A., who had been sentenced to life in prison for murder, were released after 36 years.",
+            "rouge1": 0.13333333333333333
+        },
+        "e2e": {
+            "llama_hyp_summary": "Alfred Chestnut, Andrew Stewart, and Raynard Washtkin were wrongly convicted of murdering a 14-year-old boy in 1984 and were sentenced to life in prison, but were later exonerated after new evidence emerged.",
+            "bart_score": -2.857682228088379,
+            "rouge1": 0.21818181818181817
+        },
+        "ceil": {
+            "llama_hyp_summary": "Three men, Alfred Chestnut, Andrew Stewart, and Ransom Watkins, who were wrongly convicted of murdering a 14-year-old boy in 1983 and sentenced to life in prison, were exonerated and released after a judge cleared their convictions following a review of their case.",
+            "bart_score": -2.7463254928588867,
+            "rouge1": 0.27692307692307694
+        },
+        "ref_summary": "Three men falsely convicted of murder in the US state of Maryland have been set free after 36 years in prison.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-50557396",
+        "foreign_summary": "АКШнын Мэриленд штатында адам өлтүрүү беренеси боюнча абакка кесилген үч адам 36 жылдан кийин эркиндикке чыкты. Сот жаңы далилдерди карап, аларды актады."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The earthquake resulted in 24 deaths and 804 injuries in Turkey, with varying magnitude ratings from the USGS and Turkish authorities.",
+            "bart_score": -3.799459457397461,
+            "mt_hyp_summary": "On Sunday, an earthquake along the southwestern coast of the Aegean Sea severely affected the Turkish region of Izmir and the Greek island of Samos.",
+            "rouge1": 0.21276595744680848
+        },
+        "e2e": {
+            "llama_hyp_summary": "A 7.0-magnitude earthquake struck Turkey, causing widespread damage and at least 24 deaths, with many more injured and missing.",
+            "bart_score": -2.5303714275360107,
+            "rouge1": 0.3404255319148936
+        },
+        "ceil": {
+            "llama_hyp_summary": "A 7.0 magnitude earthquake struck off Turkey's Izmir province, causing widespread damage and at least 20 deaths, with a mini-tsunami flooding the city and nearby Samos in Greece.",
+            "bart_score": -2.995706796646118,
+            "rouge1": 0.42105263157894735
+        },
+        "ref_summary": "A powerful earthquake has struck off Turkey's Aegean coast and north of the Greek island of Samos, destroying homes and killing at least 22 people.",
+        "ref_url": "https://www.bbc.com/news/world-europe-54749509",
+        "foreign_summary": "Жума күнү Эгей деңизинин түштүк-батыш жээктеринде болгон жер титирөөдөн Түркиянын Измир аймагы жана Грециянын Самос аралы катуу жапа чекти."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "In 2016, Toyota sold 10,175,000 vehicles, a 0.2% increase from 2015, while Volkswagen reported a 3.8% increase in sales to 10,310 million units, making it the global leader.",
+            "bart_score": -2.8678183555603027,
+            "mt_hyp_summary": "Toyota, a Japanese automaker, has shifted the global lead in vehicle sales to Volkswagen, a German automaker.",
+            "rouge1": 0.14545454545454545
+        },
+        "e2e": {
+            "llama_hyp_summary": "In 2016, Toyota sold 10.175 million vehicles, a 0.2% increase from the previous year, while Volkswagen sold 10.31 million vehicles, a 3.8% increase, and became the global leader in the industry.",
+            "bart_score": -2.4920310974121094,
+            "rouge1": 0.17543859649122806
+        },
+        "ceil": {
+            "llama_hyp_summary": "Volkswagen sold 10.31 million vehicles globally in 2016, surpassing Toyota's sales of 10.175 million vehicles, despite the company's scandal over emissions tests cheating.",
+            "bart_score": -2.846613883972168,
+            "rouge1": 0.20408163265306123
+        },
+        "ref_summary": "Volkswagen has overtaken Toyota to become the world's best-selling carmaker, the first time the German company has held the position.",
+        "ref_url": "https://www.bbc.com/news/business-38793253",
+        "foreign_summary": "Япониялык унаа чыгарган Toyota компаниясы сатылган унаалар саны боюнча дүйнөлүк лидерликти германиялык Volkswagen компаниясына бошотту."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Kurdish forces in Syria are holding thousands of captured soldiers and are deciding what to do with them, with the last ISIS-held prisoner being released with US military and Kurdish forces' help.",
+            "bart_score": -3.7463250160217285,
+            "mt_hyp_summary": "The Kurdish administration in northern Syria has called for an international court to hold thousands of members of the Islamic State group held captive to account.",
+            "rouge1": 0.2580645161290323
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Syrian Democratic Forces are holding thousands of foreign fighters, including many children, in camps in Syria, and the US is urging them to be repatriated to their home countries.",
+            "bart_score": -3.0254976749420166,
+            "rouge1": 0.2758620689655172
+        },
+        "ceil": {
+            "llama_hyp_summary": "Thousands of Islamic State (IS) fighters and their families are being held by Kurdish-led forces in Syria, with many foreign fighters from 50 countries among them, and the Kurds are struggling to cope with the situation.",
+            "bart_score": -2.9096059799194336,
+            "rouge1": 0.3692307692307692
+        },
+        "ref_summary": "The Kurdish-led administration in northern Syria has called for the creation of an international tribunal to try thousands of suspected members of the Islamic State (IS) group.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-47704464",
+        "foreign_summary": "Сириянын түндүгүндөгү күрддөрдүн администрациясы \"Ислам мамлекети\" экстремисттик тобунун туткундалган миңдеген мүчөлөрүн жоопко тартуу үчүн эл аралык сот түзүүгө чакырды."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Husayn, a 20-year-old from a remote village in Ghazni province, is about to graduate and attend university, but his parents are unaware of his impending departure due to a lack of communication infrastructure in their village.",
+            "bart_score": -3.080209970474243,
+            "mt_hyp_summary": "Husayn Haidari spent three hours searching for his wife's brother, Latif, and for three hours he examined the bodies of the dead.",
+            "rouge1": 0.06349206349206349
+        },
+        "e2e": {
+            "llama_hyp_summary": "A bomb explosion at a school in Afghanistan's Ghazni province killed 25 people, including students and teachers, and injured over 100 others. The attack was claimed by the Taliban, who have been waging a violent insurgency against the government and its allies. The bombing is one of several recent attacks in Afghanistan, which has seen a surge in violence in recent weeks.",
+            "bart_score": -2.2275447845458984,
+            "rouge1": 0.11363636363636363
+        },
+        "ceil": {
+            "llama_hyp_summary": "In Afghanistan, a week of violence resulted in the deaths of at least 75 people and the wounding of over 200 others, with multiple attacks targeting civilians, including students, workers, and families, amid ongoing peace talks between the government and the Taliban.",
+            "bart_score": -3.1644322872161865,
+            "rouge1": 0.059701492537313425
+        },
+        "ref_summary": "It took Hussain Haidari three hours, and by the time he found his wife's cousin, Latif Sarwari, he had seen too many lifeless faces.",
+        "ref_url": "https://www.bbc.com/news/world-asia-54697454",
+        "foreign_summary": "Хуссейн Хайдари үч саат бою аялынын инисин Латифти издеди, үч саат бою жардырууда мүрт кеткен кишилердин жансыз денесин бирден карап чыкты."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Stephen Webber and Kenesha Anton, who were on holiday on Pemba Island, exchanged a romantic message through a window of their waterfront cabin at The Manta Resort.",
+            "bart_score": -4.694059371948242,
+            "mt_hyp_summary": "An American man died in a hurry to go on holiday to Tanzania and propose to his girlfriend.",
+            "rouge1": 0.09523809523809523
+        },
+        "e2e": {
+            "llama_hyp_summary": "Stephen Webb and Kenesha Antoine stayed at a luxury resort in Tanzania, where Stephen jumped off the balcony of their underwater room and wrote \"help me\" on the glass before drowning.",
+            "bart_score": -4.546374320983887,
+            "rouge1": 0.17391304347826086
+        },
+        "ceil": {
+            "llama_hyp_summary": "Steven Weber tragically drowned while free diving alone outside the underwater room at the Manta Resort in Tanzania, where he had planned to propose to his girlfriend Kenesha Antoine.",
+            "bart_score": -4.304727077484131,
+            "rouge1": 0.36363636363636365
+        },
+        "ref_summary": "An American man has drowned while proposing to his girlfriend underwater on holiday in Tanzania.",
+        "ref_url": "https://www.bbc.com/news/world-africa-49783851",
+        "foreign_summary": "Америкалык жигит Танзанияга эс алууга барып, сүйлөшүп жүргөн кызына баш кошууга сунуш кылам деп чөгүп өлдү."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The two-Korea liaison headquarters in the DPRK region has been vacant since January 2020 due to the Covid-19 pandemic, but an explosion occurred at the headquarters, leading to a breakdown in communication between North and South Korea.",
+            "bart_score": -4.702472686767578,
+            "mt_hyp_summary": "South Korean officials reported that North Korea had blown up a joint operation headquarters in the border town of Kason.",
+            "rouge1": 0.27118644067796605
+        },
+        "e2e": {
+            "llama_hyp_summary": "The North and South Korea communication office was established in 2018 to strengthen their ties, but it was suspended in January 2020 due to the COVID-19 pandemic and has not been reopened since then.",
+            "bart_score": -4.3094329833984375,
+            "rouge1": 0.2545454545454545
+        },
+        "ceil": {
+            "llama_hyp_summary": "The North Korean government destroyed the inter-Korean liaison office in Kaesong, a symbol of communication between the two countries, in response to the South's alleged failure to prevent anti-North propaganda from being sent across the border.",
+            "bart_score": -2.6755969524383545,
+            "rouge1": 0.4067796610169492
+        },
+        "ref_summary": "North Korea has blown up a joint liaison office with the South near the North's border town of Kaesong.",
+        "ref_url": "https://www.bbc.com/news/world-asia-53060620",
+        "foreign_summary": "Түштүк Кореянын расмийлери кабарлагандай, Түндүк Корея чек арадагы Кэсон шаарында жайгашкан биргелешип аракеттенүү штабын жардырып жиберген."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Greenland, the world's largest island, has a population of 60,000 people and is rich in natural resources, including ice, fish, and underground reserves of oil, uranium, and rare metals.",
+            "bart_score": -2.716336965560913,
+            "mt_hyp_summary": "US President Donald Trump has expressed a desire to buy Greenland, but received a negative response. Denmark has refused to sell it, as it has for 70 years, and Trump has cancelled his planned trip to the Kingdom.",
+            "rouge1": 0.17543859649122806
+        },
+        "e2e": {
+            "llama_hyp_summary": "The United States needs Greenland because of its strategic location, rich natural resources, and potential for future economic growth, making it a valuable asset for the country's military and economic interests.",
+            "bart_score": -2.93412709236145,
+            "rouge1": 0.20689655172413793
+        },
+        "ceil": {
+            "llama_hyp_summary": "US President Donald Trump cancelled a planned visit to Denmark after the Danish Prime Minister declined to discuss the US buying Greenland, an autonomous Danish territory, which Trump had expressed interest in purchasing.",
+            "bart_score": -2.777728796005249,
+            "rouge1": 0.576271186440678
+        },
+        "ref_summary": "US President Donald Trump has cancelled a state visit to Denmark after the nation's prime minister said Greenland was not for sale to the US.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-49416740",
+        "foreign_summary": "Америка президенти Дональд Трамп Гренландияны сатып алуу каалоосун билдирип, бирок тескери жооп алды. Дания 70 жыл мурункудай эле сатуудан баш тартты. Трамп болсо королдукка күтүлүп жаткан сапарын токтотту."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Turkey is a vital NATO member and strategic partner in the Middle East and EU, but its economy is struggling with a large foreign debt and currency devaluation.",
+            "bart_score": -2.936386823654175,
+            "mt_hyp_summary": "The Western world views Turkey as an important partner, but after the recent situation, Washington and several European countries are asking how important Ankara is.",
+            "rouge1": 0.23999999999999996
+        },
+        "e2e": {
+            "llama_hyp_summary": "Turkey is a NATO member and plays a crucial role in the alliance's eastern flank, but its relations with the US and Europe are strained due to various issues, including its authoritarian government, economic crisis, and disagreements over migration and security policies.",
+            "bart_score": -3.0383081436157227,
+            "rouge1": 0.24615384615384617
+        },
+        "ceil": {
+            "llama_hyp_summary": "Turkey's membership in NATO and its relationship with the US and EU are under strain due to President Erdogan's authoritarianism, economic crises, and disagreements over issues such as refugees and military alliances.",
+            "bart_score": -3.223606824874878,
+            "rouge1": 0.17857142857142858
+        },
+        "ref_summary": "Turkey matters to the West but the question now being asked in Washington and in several European capitals is \"just how much?\"",
+        "ref_url": "https://www.bbc.com/news/world-europe-45251729",
+        "foreign_summary": "Батыш мамлекеттери Түркияны маанилүү өнөктөш катары карашат. Бирок соңку кырдаалдан кийин Вашингтон жана Европанын бир нече өлкөсү Анкара \"канчалык маанилүү\" деген суроо жолдошууда."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Kazuo Ishiguro, author of eight books, including \"The Rest of the Day\" and \"Don't Leave Me\", has been honored for his work.",
+            "bart_score": -2.449373483657837,
+            "mt_hyp_summary": "This year's Nobel Prize in Literature was awarded to the British writer Kazuo Ishiguro of Japan, who said the Nobel Committee had not yet contacted him.",
+            "rouge1": 0.2857142857142857
+        },
+        "e2e": {
+            "llama_hyp_summary": "Haruki Murakami, a Japanese author, has written eight books, including \"The Wind-Up Bird Chronicle\" and \"After Dark\", and has been nominated for the Nobel Prize in Literature.",
+            "bart_score": -2.187736988067627,
+            "rouge1": 0.3
+        },
+        "ceil": {
+            "llama_hyp_summary": "Kazuo Ishiguro, a renowned novelist, has been awarded the Nobel Prize in Literature for his works that explore themes of memory, time, and self-delusion, and has been praised for his unique writing style and ability to create immersive and relatable stories.",
+            "bart_score": -2.5393013954162598,
+            "rouge1": 0.2962962962962963
+        },
+        "ref_summary": "British writer Kazuo Ishiguro has won the 2017 Nobel Prize for Literature.",
+        "ref_url": "https://www.bbc.com/news/entertainment-arts-41513246",
+        "foreign_summary": "Бул жылы адабият боюнча Нобель сыйлыгы британдык жазуучу, теги жапондук Кадзуо Исигурого ыйгарылды. Исигуро азырынча Нобель комитети байланышка чыга электигин айтты."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The BBC has been analyzing and discussing the differences and similarities between countries that have been part of the Union for over a decade, including a Kyrgyz businessman's experience in Ukraine.",
+            "bart_score": -3.739987373352051,
+            "mt_hyp_summary": "Ukraine's newly inaugurated President, Vladimir Zelensky, took the oath of office and announced his resignation from the Supreme Rada.",
+            "rouge1": 0.16326530612244897
+        },
+        "e2e": {
+            "llama_hyp_summary": "Here is the summary in one sentence:\n\nTalay Sary, a Kyrgyzstani entrepreneur, discusses the Ukrainian presidential election, highlighting the country's political divisions, corruption, and the need for a clean and fair election process.",
+            "bart_score": -4.3504815101623535,
+            "rouge1": 0.15686274509803924
+        },
+        "ceil": {
+            "llama_hyp_summary": "Volodymyr Zelensky, a former television star and comedian, was sworn in as Ukraine's new president, dissolving parliament and announcing plans to prioritize ending the conflict with Russian-backed rebels in the east.",
+            "bart_score": -2.413965940475464,
+            "rouge1": 0.39999999999999997
+        },
+        "ref_summary": "Comedian Volodymyr Zelensky announced a snap parliamentary election during his swearing-in as Ukraine's new president.",
+        "ref_url": "https://www.bbc.com/news/world-europe-48330955",
+        "foreign_summary": "Украинанын кызматка жаңы киришкен президенти Владимир Зеленский ант берип жатып, Жогорку Раданы тарата турганын жарыялады."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The UN Security Council is set to discuss the violence in Myanmar, where a military operation in Rakhine state has resulted in the deaths of 400 people and the displacement of 370,000 Rohingya Muslims.",
+            "bart_score": -2.1323955059051514,
+            "mt_hyp_summary": "Myanmar's leader Aung San Suu Kyi has been suspended from the UN General Assembly because of the growing international criticism of the bloody Rohingya Muslim violence.",
+            "rouge1": 0.26865671641791045
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Nobel Peace Prize was awarded to a political leader who spent 15 years in prison for democratic activism, amid ongoing violence and persecution of Rohingya Muslims in Myanmar.",
+            "bart_score": -3.069800615310669,
+            "rouge1": 0.22950819672131145
+        },
+        "ceil": {
+            "llama_hyp_summary": "Here is the summary:\n\nOver 379,000 Rohingyas have fled to Bangladesh since violence began in Myanmar, with the UN accusing the government of ethnic cleansing, while Myanmar's military denies targeting civilians.",
+            "bart_score": -3.55349063873291,
+            "rouge1": 0.21538461538461537
+        },
+        "ref_summary": "Myanmar's de facto leader Aung San Suu Kyi is to miss a key UN debate next week as criticism grows of her handling of a crisis involving the Rohingya Muslim minority.",
+        "ref_url": "https://www.bbc.com/news/world-asia-41250057",
+        "foreign_summary": "Мьянманын лидери Аун Сан Су Чжи Рохинжа мусулмандарынын каны төгүлгөн зордук-зомбулуктарга байланыштуу эл аралык сындар күчөп жаткандыктан БУУнун Башкы Ассамблеясынын ишине катышпай кала турган болуп жатат."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Islamic State group is withdrawing from its controlled areas in Iraq and Syria, and according to the Soufan Center for Analysis, 33 countries have reported that 5,600 extremist fighters have returned to their countries, posing a threat to their security.",
+            "bart_score": -2.9026622772216797,
+            "mt_hyp_summary": "According to a new report, 5,600 foreign fighters who joined the extremist group, which calls itself the Islamic State, have returned to their home countries as they retreat from Iraq and Syria.",
+            "rouge1": 0.4225352112676057
+        },
+        "e2e": {
+            "llama_hyp_summary": "The extremist group \"Islamic State\" is retreating from its strongholds in Iraq and Syria, with thousands of foreign fighters returning to their home countries, posing a significant threat to national security.",
+            "bart_score": -2.3841006755828857,
+            "rouge1": 0.4333333333333333
+        },
+        "ceil": {
+            "llama_hyp_summary": "At least 5,600 foreign fighters, including 400 from Russia, 760 from Saudi Arabia, and 271 from France, have returned to their home countries from joining the Islamic State (IS) in Iraq and Syria, posing a significant security challenge for years to come.",
+            "bart_score": -2.6050076484680176,
+            "rouge1": 0.5
+        },
+        "ref_summary": "At least 5,600 supporters of so-called Islamic State (IS) have returned to their home countries as it loses ground in Iraq and Syria, a new report says.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-41734069",
+        "foreign_summary": "Жаңы баяндамага ылайык, өздөрүн \"Ислам мамлекети\" деп атаган экстремисттик топ Ирак жана Сириядагы аймактардан артка чегинип жатканда, чет жерден кошулган 5600 согушкер өз мамлекетине кайтып барган."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A 19-year-old Bangladeshi woman, who was born in a Syrian refugee camp and previously joined extremist groups, wants to return to Britain despite having her British citizenship revoked.",
+            "bart_score": -3.1999683380126953,
+            "mt_hyp_summary": "Shamima Begum flew from London to Istanbul with two of her friends at the age of 15, then went to Syria, where she joined the extremists.",
+            "rouge1": 0.26666666666666666
+        },
+        "e2e": {
+            "llama_hyp_summary": "Shamima Begum, a 19-year-old British woman, was stripped of her British citizenship after joining the Islamic State group in Syria, and her case has sparked a heated debate in the UK about the treatment of former ISIS fighters and their families.",
+            "bart_score": -2.4331631660461426,
+            "rouge1": 0.3835616438356165
+        },
+        "ceil": {
+            "llama_hyp_summary": "Yago Riedijk, a 27-year-old Dutch man, is being held in a Kurdish detention center in Syria after fighting for ISIS and marrying a 15-year-old British girl, Shamima Begum, who is now 19 and has a newborn son.",
+            "bart_score": -2.850987672805786,
+            "rouge1": 0.2535211267605634
+        },
+        "ref_summary": "The Dutch husband of Shamima Begum, who joined the Islamic State group in Syria in 2015 aged 15, has said he wants her to return to the Netherlands with him.",
+        "ref_url": "https://www.bbc.com/news/uk-47431249",
+        "foreign_summary": "Шамима Бегум 15 жашында эки курбусу менен Лондондон Стамбулга учуп кеткен. Андан ары Сирияга өтүп, экстремисттерге кошулган."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Japanese government is allocating additional funds to implement a project using artificial intelligence to help single people find potential partners, amidst a severe demographic crisis characterized by a low birth rate and a high percentage of older people.",
+            "bart_score": -3.176513671875,
+            "mt_hyp_summary": "Japan hopes to improve the birth rate of children with artificial intelligence, and the government has decided to fund dating services to help single people find a partner.",
+            "rouge1": 0.3103448275862069
+        },
+        "e2e": {
+            "llama_hyp_summary": "Japan has the lowest birth rate in the world and is facing a demographic crisis, with a population expected to decline significantly by the end of the century.",
+            "bart_score": -2.251260995864868,
+            "rouge1": 0.2127659574468085
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Japanese government plans to allocate 2 billion yen to subsidize local governments using AI to pair people up in an effort to boost the birth rate, which has been declining due to a low fertility rate.",
+            "bart_score": -2.7296786308288574,
+            "rouge1": 0.21428571428571427
+        },
+        "ref_summary": "Japan plans to boost its tumbling birth rate by funding artificial intelligence matchmaking schemes to help residents find love.",
+        "ref_url": "https://www.bbc.com/news/world-asia-55226098",
+        "foreign_summary": "Жапония жасалма акылдын жардамы менен балдардын төрөлүү көрсөткүчүн жакшыртууга үмүттөнүүдө. Өлкө бийлиги жалгыз бойлорго жар табууга көмөктөшө турган таанышуу (дейтинг) кызматтарын каржылоону чечти."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The US has stopped providing security support to Pakistan, sparking concern from Pakistani politicians, but the move is not temporary and is due to Pakistan's inability to use the technology to combat terrorism.",
+            "bart_score": -3.48419189453125,
+            "mt_hyp_summary": "Pakistan's Defense Minister Hurram Dastgir Khan has announced that he has ordered the US to stop sharing intelligence with the US. How important is this?",
+            "rouge1": 0.27272727272727276
+        },
+        "e2e": {
+            "llama_hyp_summary": "The US-Pakistan relationship has deteriorated due to Pakistan's refusal to accept US President Donald Trump's criticism, with Pakistan accusing the US of breaching its sovereignty and threatening to cut off cooperation on counter-terrorism efforts.",
+            "bart_score": -2.784113883972168,
+            "rouge1": 0.2571428571428571
+        },
+        "ceil": {
+            "llama_hyp_summary": "Despite public rhetoric, the US and Pakistan are responding cautiously to the suspension of security assistance, with the US indicating that funds may still be reimbursed on a case-by-case basis and Pakistan expected to continue limited intelligence sharing.",
+            "bart_score": -3.3846824169158936,
+            "rouge1": 0.3055555555555556
+        },
+        "ref_summary": "Pakistan's defence minister Khurram Dastgir Khan has announced that he has suspended intelligence sharing with the US - the latest twist in the US-Pakistan row. But how much does it matter?",
+        "ref_url": "https://www.bbc.com/news/world-asia-42664019",
+        "foreign_summary": "Пакистандын Коргоо министри Хуррам Дастгир Хан АКШ менен чалгын маалыматтарын бөлүшүүнү токтотуу тууралуу буйрук бергенин жарыялады. Бул канчалык маанилүү?"
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Namibia gained independence in 1990, and Adolf Hitler Umuna, who was named after his father, won an election and became the country's leader.",
+            "bart_score": -2.882237672805786,
+            "mt_hyp_summary": "The name Adolf Hitler, who won the local elections in Namibia, was the subject of much media attention.",
+            "rouge1": 0.2127659574468085
+        },
+        "e2e": {
+            "llama_hyp_summary": "Namibia gained independence from South Africa in 1990 and has since maintained German names and cultural heritage, including the name of its president, Adolf Hitler, which has caused controversy.",
+            "bart_score": -3.2022576332092285,
+            "rouge1": 0.15384615384615385
+        },
+        "ceil": {
+            "llama_hyp_summary": "Adolf Hitler Uunona, a Namibian politician, was elected as a councillor despite sharing a name with the infamous Nazi leader, whom he claims to have no connection to and has no plans to change his name.",
+            "bart_score": -3.0508456230163574,
+            "rouge1": 0.3389830508474576
+        },
+        "ref_summary": "A Namibian politician named after Adolf Hitler says he has no plans for world domination after winning a sweeping victory in local elections.",
+        "ref_url": "https://www.bbc.com/news/world-africa-55173605",
+        "foreign_summary": "Намибиядагы жергиликтүү шайлоодо Адольф Гитлер ысымдуу саясатчы жеңишке жеткени көпчүлүк басылмалардын көңүлүн бурду. Толук аты-жөнү - Адольф Гитлер Уумуна."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The former Vice President of Catalonia, Oriol Junqueras, was sentenced to 13 years in prison, while 12 other politicians and activists denied charges against them, with the Catalan government's head of government calling the verdicts \"unfair\" and \"undemocratic\".",
+            "bart_score": -2.783869504928589,
+            "mt_hyp_summary": "The Spanish Supreme Court sentenced Catalan leaders to nine to 13 years in prison.",
+            "rouge1": 0.2903225806451613
+        },
+        "e2e": {
+            "llama_hyp_summary": "Oriol Junqueras, the former vice president of Catalonia, was sentenced to 13 years in prison for his role in the region's independence movement.",
+            "bart_score": -1.8571946620941162,
+            "rouge1": 0.3404255319148936
+        },
+        "ceil": {
+            "llama_hyp_summary": "Twelve Catalan separatist leaders were convicted of sedition and disobedience for their role in an illegal independence referendum in 2017, with the longest sentence being 13 years, and a new arrest warrant was issued for former Catalan President Carles Puigdemont.",
+            "bart_score": -2.4954352378845215,
+            "rouge1": 0.253968253968254
+        },
+        "ref_summary": "Protests have erupted in Barcelona after Spain's Supreme Court sentenced nine Catalan separatist leaders to between nine and 13 years in prison.",
+        "ref_url": "https://www.bbc.com/news/world-europe-49974289",
+        "foreign_summary": "Испаниянын Жогорку Соту каталондук лидерлерди тогуз жылдан он үч жылга чейин эркинен ажыратты."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The speaker has filmed 23 religious schools in Sudan, known as madrasas or halva, and has witnessed students, including some as young as five, being bullied by school principals, known as sheikhs.",
+            "bart_score": -4.159478187561035,
+            "mt_hyp_summary": "I met Ahmed in a dark room, his feet tied up, and he didn't know how old he was, and I thought he was probably ten.",
+            "rouge1": 0.08450704225352113
+        },
+        "e2e": {
+            "llama_hyp_summary": "The author, who attended a religious school in Sudan, documents the mistreatment and abuse of children in these schools, including physical and sexual abuse, and the lack of government oversight and accountability.",
+            "bart_score": -3.333784818649292,
+            "rouge1": 0.08450704225352113
+        },
+        "ceil": {
+            "llama_hyp_summary": "The author, a BBC journalist, spent two years undercover filming in 23 Islamic educational institutions in Sudan, known as khalwas, and exposed widespread abuse, including severe beatings, shackling, and imprisonment of children, with some reporting sexual abuse.",
+            "bart_score": -4.182383060455322,
+            "rouge1": 0.10526315789473684
+        },
+        "ref_summary": "When I meet Ahmed, he is shackled in a room all alone. There are marks on his body from the beatings he has been given. He doesn't know how old he is, but he's probably about 10.",
+        "ref_url": "https://www.bbc.com/news/world-africa-55213710",
+        "foreign_summary": "Ахмед караңгы бөлмөдө, буттары кишенделип отурганда жолуктум. Ал канча жашта экенин билген эмес. Көп болсо он жашта болсо керек деп ойлодум."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "President Trump claimed that he saw evidence that the coronavirus was made at the Wuhan Institute of Virology, suggesting that China may have made a mistake or intentionally spread the virus.",
+            "bart_score": -2.8007559776306152,
+            "mt_hyp_summary": "US President Donald Trump said he saw evidence that the coronavirus was made at the Wuhan Institute of Virology, and at a White House press conference, President Trump said that China may have been unable to stop the spread of the virus or that it was not necessary to stop it.",
+            "rouge1": 0.2545454545454545
+        },
+        "e2e": {
+            "llama_hyp_summary": "US President Trump stated that he believes the COVID-19 virus may have been created in a Chinese laboratory, while China denies this claim and accuses the US of hiding its own preparedness for the pandemic.",
+            "bart_score": -3.312983512878418,
+            "rouge1": 0.3
+        },
+        "ceil": {
+            "llama_hyp_summary": "US President Trump has stated that he has a high degree of confidence that the Wuhan Institute of Virology was the origin of the COVID-19 virus, while the US national intelligence director's office has determined that the virus was not manmade or genetically modified.",
+            "bart_score": -3.227271318435669,
+            "rouge1": 0.22857142857142854
+        },
+        "ref_summary": "US President Donald Trump has appeared to undercut his own intelligence agencies by suggesting he has seen evidence coronavirus originated in a Chinese laboratory.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-52496098",
+        "foreign_summary": "АКШнын президенти Дональд Трамп коронавирус Ухандагы вирусология институтунда жасалганы боюнча далилдерди көргөнүн билдирди. Ак үйдөгү басма сөз жыйында президент Трамп Кытай бийлиги вирустун жайылышын токтото албай койгон же токтотуунун зарылчылыгы жок деп чечкен болушу мүмкүн экенин айтты."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Protesters in Warsaw blocked streets and halted public transport for an hour in response to a Constitutional Court ruling limiting abortion access.",
+            "bart_score": -3.0256686210632324,
+            "mt_hyp_summary": "For the fifth consecutive day, protests against the complete ban on abortion took place in Poland.",
+            "rouge1": 0.17391304347826086
+        },
+        "e2e": {
+            "llama_hyp_summary": "In Poland, a law restricting abortion was passed, leading to widespread protests and demonstrations, with many women's rights groups and organizations opposing the law.",
+            "bart_score": -3.0829482078552246,
+            "rouge1": 0.24489795918367346
+        },
+        "ceil": {
+            "llama_hyp_summary": "Protesters in Poland blocked streets, disrupted church services, and sprayed graffiti on churches to protest a Constitutional Court ruling that makes most abortions illegal, except in cases of rape, incest, or to protect the mother's life.",
+            "bart_score": -2.876359462738037,
+            "rouge1": 0.26229508196721313
+        },
+        "ref_summary": "Thousands of people have blocked roads across Poland on the fifth consecutive day of protests against a court's near-total ban on abortion.",
+        "ref_url": "https://www.bbc.com/news/world-europe-54694968",
+        "foreign_summary": "Польшада бойдон алдырууга толук тыюу салган мыйзамга каршы бешинчи күн катарынан каршылык жүрүштөрү өттү."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "US President Donald Trump announced plans to create a new branch of the US military, the Space Force, to operate in space and to return humans to the moon and send them to Mars.",
+            "bart_score": -2.5526726245880127,
+            "mt_hyp_summary": "President Donald Trump has announced that the US Army has created a sixth division to operate in space.",
+            "rouge1": 0.4444444444444445
+        },
+        "e2e": {
+            "llama_hyp_summary": "US President Trump announced plans to establish a new branch of the US military focused on space, with the goal of ensuring American dominance in space and protecting national security.",
+            "bart_score": -2.667768955230713,
+            "rouge1": 0.43999999999999995
+        },
+        "ceil": {
+            "llama_hyp_summary": "US President Trump announced plans to establish a \"space force\" as the sixth branch of the US armed forces, aiming to achieve American dominance in space and return humans to the Moon and eventually send them to Mars.",
+            "bart_score": -2.6486544609069824,
+            "rouge1": 0.48275862068965514
+        },
+        "ref_summary": "President Donald Trump has ordered the US military to establish a sixth branch of its armed forces - a \"space force\".",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-44527672",
+        "foreign_summary": "Президент Дональд Трамп АКШ армиясы алтынчы бөлүмүн түзүп, ал космос багытында иш алып барат деп билдирди."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Musk announced that the California government has re-energized the Tesla plant, allowing it to reopen, despite the local government in Alameda, Vermont, not yet giving permission.",
+            "bart_score": -3.8312127590179443,
+            "mt_hyp_summary": "Elon Musk's Tesla, the California-based company that produces electric cars, is the only electric car manufacturer in the U.S. The state has temporarily suspended all production due to the coronavirus pandemic.",
+            "rouge1": 0.27999999999999997
+        },
+        "e2e": {
+            "llama_hyp_summary": "Elon Musk announced on Twitter that Tesla's factory in Fremont, California is still operating, despite his previous decision to shut it down, and that he is waiting for the local authorities to allow it to reopen.",
+            "bart_score": -2.5820775032043457,
+            "rouge1": 0.16666666666666666
+        },
+        "ceil": {
+            "llama_hyp_summary": "Tesla's plan to resume limited production at its Fremont factory in California has been blocked by Alameda County due to concerns it could lead to a spike in coronavirus cases.",
+            "bart_score": -2.8384008407592773,
+            "rouge1": 0.33333333333333337
+        },
+        "ref_summary": "Electric car firm Tesla has been ordered to keep its main plant in the US closed, as California grapples with a coronavirus outbreak.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-52596372",
+        "foreign_summary": "Илон Масктын Tesla компаниясы ишин жандандырды. Калифорнияда жайгашкан завод - АКШдагы электр автоунаасын чыгаруу менен алектенген жалгыз компания. Бийликтин чечими менен штатта коронавирус эпидемиясына байланыштуу бардык өндүрүш убактылуу токтогон."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Police have been searching for Radik Tagirov, a 38-year-old man who worked on door locks and was in prison, suspected of robbing and killing elderly people along the Volga River in central Russia.",
+            "bart_score": -3.3522112369537354,
+            "mt_hyp_summary": "Russian investigators have arrested a criminal who kidnapped and murdered 26 elderly women between 2011 and 2012.",
+            "rouge1": 0.3103448275862069
+        },
+        "e2e": {
+            "llama_hyp_summary": "Police have identified Radik Tagirov, a 38-year-old man, as the \"Volga Maniac\" who has been terrorizing elderly people living along the Volga River in Russia, and have arrested him after a lengthy investigation.",
+            "bart_score": -3.28714919090271,
+            "rouge1": 0.24137931034482762
+        },
+        "ceil": {
+            "llama_hyp_summary": "Radik Tagirov, a 38-year-old locksmith with a previous conviction for theft, has been arrested and is suspected of being the \"Volga maniac\", a serial killer linked to numerous crimes and killings in Russia's Volga River region.",
+            "bart_score": -3.5338857173919678,
+            "rouge1": 0.1935483870967742
+        },
+        "ref_summary": "Russian investigators have arrested a man they suspect of having robbed and murdered 26 elderly women across central Russia between 2011 and 2012.",
+        "ref_url": "https://www.bbc.com/news/world-europe-55153407",
+        "foreign_summary": "Орусиянын тергөөчүлөрү 2011-2012 жылдары 26 улгайган аялды тоноп өлтүргөн кылмышкерди камакка алганын маалымдады."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "To stop the spread of false information, think before sharing it and verify the source of the information to avoid contributing to the fight against it.",
+            "bart_score": -3.9233360290527344,
+            "mt_hyp_summary": "The coronavirus has spread around the internet with misinformation about Covid-19, and experts are urging users to keep their information hygienic.",
+            "rouge1": 0.0
+        },
+        "e2e": {
+            "llama_hyp_summary": "To prevent the spread of false information, it is essential to verify the credibility of sources, be cautious of fake news, and not share unverified information.",
+            "bart_score": -3.6722235679626465,
+            "rouge1": 0.0
+        },
+        "ceil": {
+            "llama_hyp_summary": "Here is the summary:\n\nThe Department of Health in Northern Ireland reported 12 new Covid-19 deaths and 670 new cases, with 810 people in hospital and 66 in intensive care, as doctors struggle to cope with the surge in patients.",
+            "bart_score": -3.912898540496826,
+            "rouge1": 0.21875
+        },
+        "ref_summary": "Senior medics have issued a stark Covid-19 warning as health staff brace themselves for a predicted surge in coronavirus cases this weekend.",
+        "ref_url": "https://www.bbc.com/news/uk-northern-ireland-55759346",
+        "foreign_summary": "Коронавирус Covid-19 тууралуу бурмаланган маалыматтар интернетти каптап кетти. Эксперттер колдонуучуларды маалыматтык гигиенаны сактоого чакырууда."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Scientists are working to develop a new food system to feed the growing global population, while also ensuring the planet's sustainability.",
+            "bart_score": -2.5797629356384277,
+            "mt_hyp_summary": "And the team of scientists says they've developed a diet that will improve the health of the population and provide for 10 billion people.",
+            "rouge1": 0.2666666666666666
+        },
+        "e2e": {
+            "llama_hyp_summary": "Scientists have developed a new food system that aims to feed 10 billion people by 2050 while reducing greenhouse gas emissions and improving public health.",
+            "bart_score": -2.1674294471740723,
+            "rouge1": 0.37499999999999994
+        },
+        "ceil": {
+            "llama_hyp_summary": "Scientists have developed a \"planetary health diet\" that recommends getting most protein from nuts and legumes, reducing red meat consumption, and increasing plant-based foods, in order to feed a projected 10 billion people by 2050 while reducing environmental impact and preventing 11 million deaths annually.",
+            "bart_score": -3.275167942047119,
+            "rouge1": 0.2898550724637681
+        },
+        "ref_summary": "A diet has been developed that promises to save lives, feed 10 billion people and all without causing catastrophic damage to the planet.",
+        "ref_url": "https://www.bbc.com/news/health-46865204",
+        "foreign_summary": "Окумуштуулар тобу калктын саламаттыгын бекемдеп, ошондой эле 10 млрд кишини камсыздай турган диетаны иштеп чыкканын айтууда."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The US plans to withdraw its troops from northern Syria in October, except for 500 troops that will remain to control the oil fields, which the US claims are in the interests of American oil producers and not terrorist groups.",
+            "bart_score": -3.1839663982391357,
+            "mt_hyp_summary": "President Trump said that the country would earn millions of dollars a month while American troops controlled oil fields in Syria.",
+            "rouge1": 0.3188405797101449
+        },
+        "e2e": {
+            "llama_hyp_summary": "The US and Russia are at odds over control of Syria's oil production, with the US accusing Russia of trying to steal Syria's oil and Russia calling the US's actions a \"state-sponsored crime\".",
+            "bart_score": -2.8787174224853516,
+            "rouge1": 0.24242424242424243
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Syrian government has lost control of most of the country's oil fields, with the Kurdish-led Syrian Democratic Forces (SDF) currently benefiting from oil production and revenues, while the US has retained around 500 troops to guard oil facilities and prevent Russian and Syrian government forces from taking control.",
+            "bart_score": -2.943873643875122,
+            "rouge1": 0.3
+        },
+        "ref_summary": "President Donald Trump says he expects the United States to benefit by millions of dollars per month from Syria's oil revenues while US troops remain in the country.",
+        "ref_url": "https://www.bbc.com/news/50464561",
+        "foreign_summary": "АКШнын президенти Трамп америкалык аскерлер Сириянын мунай чыккан аймактарын көзөмөлдөп турганда, өлкө ай сайын миллиондогон доллар киреше табарын айтты."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Joaquin Phoenix, René Zellweger, Brad Pitt, and Laura Dern won the Oscars for Best Actor, Best Actress, Best Supporting Actor, and Best Supporting Actress, respectively, at the Academy Awards.",
+            "bart_score": -2.4189226627349854,
+            "mt_hyp_summary": "South Korean film \"Mite\" won the Best Picture category and became the first foreign art film to be honored in that category in the 92-year history of the Academy Awards.",
+            "rouge1": 0.18181818181818185
+        },
+        "e2e": {
+            "llama_hyp_summary": "Here is the summary:\n\nThe 92nd Academy Awards honored the best in film, with Joaquin Phoenix winning Best Actor for \"Joker\", Renee Zellweger winning Best Actress for \"Judy\", and Sam Mendes' \"1917\" winning four Oscars.",
+            "bart_score": -3.7227611541748047,
+            "rouge1": 0.16393442622950818
+        },
+        "ceil": {
+            "llama_hyp_summary": "Renee Zellweger won best actress for playing Judy Garland in Judy, while Joaquin Phoenix won best actor for Joker, and Parasite won four awards, including best picture, becoming the first non-English language film to do so.",
+            "bart_score": -2.965045928955078,
+            "rouge1": 0.34920634920634924
+        },
+        "ref_summary": "South Korean film Parasite has been named best picture at this year's Oscars, becoming the first non-English language film to take the top prize.",
+        "ref_url": "https://www.bbc.com/news/entertainment-arts-51440241",
+        "foreign_summary": "Түштүк Кореянын \"Мите\" аттуу тасмасы эң мыкты картина категориясында жеңишке жетип, \"Оскар\" сыйлыгынын 92 жылдык тарыхында бул категорияда сыйланган биринчи чет өлкөлүк көркөм тасма болду."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The \"Energy Island\" project, a 120,000 square meter artificial island in the North Sea, would be the largest construction project in Denmark's history, featuring 200 wind turbines and producing electricity from wind power.",
+            "bart_score": -2.9020419120788574,
+            "mt_hyp_summary": "Danish officials have approved the construction of a man-made island that will provide enough electricity to power three million homes.",
+            "rouge1": 0.23728813559322035
+        },
+        "e2e": {
+            "llama_hyp_summary": "Denmark is building the world's first \"energy island\" in the North Sea, which will generate electricity from wind power and sell it to neighboring countries, aiming to reduce carbon emissions and meet global energy demands.",
+            "bart_score": -2.8122849464416504,
+            "rouge1": 0.2
+        },
+        "ceil": {
+            "llama_hyp_summary": "The world's first energy island, a massive artificial island off the coast of Denmark, will serve as a hub for 200 giant offshore wind turbines and supply electricity not only to Denmark but also to neighboring countries, including the UK, Germany, and the Netherlands.",
+            "bart_score": -2.7692861557006836,
+            "rouge1": 0.2898550724637681
+        },
+        "ref_summary": "A project to build a giant island providing enough energy for three million households has been given the green light by Denmark's politicians.",
+        "ref_url": "https://www.bbc.com/news/world-europe-55931873",
+        "foreign_summary": "Даниянын расмийлери үч миллион турак-жайга жетиштүү электр энергия жеткирген жасалма арал курууга уруксат берди."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Archaeologists have been studying the construction of the Sarsen stones at Stonehenge, which were brought from a location 25 km away, but the method used to transport the massive stones weighing up to 30 tons remains unclear.",
+            "bart_score": -3.7154200077056885,
+            "mt_hyp_summary": "English archaeologists have identified the origin of the stone carvings in Stoneheath.",
+            "rouge1": 0.17857142857142858
+        },
+        "e2e": {
+            "llama_hyp_summary": "Archaeologists have discovered that the large stones at Stonehenge were brought from a quarry 25 kilometers away, and the exact origin of the stones remains a mystery despite various theories.",
+            "bart_score": -3.2444822788238525,
+            "rouge1": 0.2857142857142857
+        },
+        "ceil": {
+            "llama_hyp_summary": "Archaeologists have discovered a massive prehistoric structure, comprising 20 or more shafts, near Stonehenge, which they believe was excavated by Neolithic people over 4,500 years ago and may have served as a boundary to a sacred area.",
+            "bart_score": -2.8458027839660645,
+            "rouge1": 0.2807017543859649
+        },
+        "ref_summary": "A ring of large shafts discovered near Stonehenge form the largest prehistoric monument ever discovered in Britain, archaeologists believe.",
+        "ref_url": "https://www.bbc.com/news/uk-england-wiltshire-53132567",
+        "foreign_summary": "Англиянын археологдору Стоунхендждеги айланта тизилген килейген таштардын кайдан келип чыкканын аныкташты."
+    }
+]

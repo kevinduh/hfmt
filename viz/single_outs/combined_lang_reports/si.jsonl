@@ -1,0 +1,1220 @@
+[
+    {
+        "nllb": {
+            "llama_hyp_summary": "The passage describes the career and achievements of a senior military officer who was also a senior law officer in the army, and was subject to international condemnation and sanctions for his role in attacks on ethnic minorities.",
+            "bart_score": -3.71527099609375,
+            "mt_hyp_summary": "Min Aung Hlaing, who rose to become the official of Myanmar's powerful military, known as the Tatmado, had a considerable political influence as a military executive in Myanmar before the plot was launched on 1 February.",
+            "rouge1": 0.21917808219178084
+        },
+        "e2e": {
+            "llama_hyp_summary": "Min Aung Hlaing, the 64-year-old commander-in-chief of Myanmar's military, has seized power and assumed all state authority, effectively ending the country's transition to democracy and cementing his own power.",
+            "bart_score": -2.55513334274292,
+            "rouge1": 0.34285714285714286
+        },
+        "ceil": {
+            "llama_hyp_summary": "Min Aung Hlaing, the 64-year-old commander-in-chief of Myanmar's military, has seized power and is now set to extend his rule and shape the country's future after the military detained the government and declared a state of emergency.",
+            "bart_score": -2.3038828372955322,
+            "rouge1": 0.35897435897435903
+        },
+        "ref_summary": "Min Aung Hlaing rose steadily through the ranks of the Tatmadaw, Myanmar's powerful military, but as commander-in-chief for the past decade he also wielded significant political influence before the 1 February coup.",
+        "ref_url": "https://www.bbc.com/news/world-asia-55892489",
+        "foreign_summary": "'ටට්මඩෝ' නමින් හැඳින්වෙන මියන්මාරයේ බලසම්පන්න හමුදාව තුළ නිල ලබමින් ක්‍රමයෙන් ඉහළට ගිය මින් අවුං හ්ලේයින්ග්, පෙබරවාරි 1 වෙනිදා දියත් කෙරුණු කුමන්ත්‍රණයට පෙර, මියන්මාරයේ සේනා විධායක ලෙස සැලකිය යුතු දේශපාලන බලපෑමකට හිමිකම් කී අයකු විය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "President Trump emphasized the importance of maintaining American dominance in space due to national security threats and stated that he is working to develop a plan to achieve this.",
+            "bart_score": -3.095759153366089,
+            "mt_hyp_summary": "The newest military to be dedicated to space warfare was officially launched by US President Donald Trump, known as the Space Force.",
+            "rouge1": 0.2553191489361702
+        },
+        "e2e": {
+            "llama_hyp_summary": "The US has launched a new military service, the Space Force, under the US Air Force, with an initial budget of $40m, to protect US assets in space and counter advancements by China and Russia in the military final frontier.",
+            "bart_score": -2.827287435531616,
+            "rouge1": 0.3103448275862069
+        },
+        "ceil": {
+            "llama_hyp_summary": "The US has launched a new military service, the Space Force, under the US Air Force, with an initial budget of $40m, aimed at protecting US assets in space from threats posed by China and Russia.",
+            "bart_score": -2.5385820865631104,
+            "rouge1": 0.3333333333333333
+        },
+        "ref_summary": "President Donald Trump has officially funded a Pentagon force focused on warfare in space - the US Space Force.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-50876429",
+        "foreign_summary": "අභ්‍යවකාශ යුද ක්‍රියාදාම සඳහා වෙන්වූ නවතම හමුදාවක් ඇමෙරිකානු ජනාධිපති ඩොනල්ඩ් ට්‍රම්ප් නිල වශයෙන් ආරම්භ කළේය. එය හැඳින්වෙන්නේ අභ්‍යවකාශ හමුදාව (Space Force) නමිනි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Japan is withdrawing from the International Whaling Commission, citing cultural significance and a perceived \"discriminatory measure\" against its whaling practices.",
+            "bart_score": -3.192594289779663,
+            "mt_hyp_summary": "Japan's preparations to resume whaling from July next year are under intense international criticism.",
+            "rouge1": 0.25
+        },
+        "e2e": {
+            "llama_hyp_summary": "Japan has announced its withdrawal from the International Whaling Commission (IWC) and plans to resume commercial whaling in its territorial waters and economic zones.",
+            "bart_score": -2.5404958724975586,
+            "rouge1": 0.2727272727272727
+        },
+        "ceil": {
+            "llama_hyp_summary": "Japan has announced its withdrawal from the International Whaling Commission (IWC), allowing it to resume commercial whaling in its territorial waters and economic zones.",
+            "bart_score": -2.5660815238952637,
+            "rouge1": 0.31818181818181823
+        },
+        "ref_summary": "Japan says it is to restart commercial whaling in July in a move that is likely to draw international criticism.",
+        "ref_url": "https://www.bbc.com/news/world-asia-46682976",
+        "foreign_summary": "ලබන වසරේ ජූලි මස සිට තල්මසුන් දඩයම නැවත ආරම්භ කිරීමට ජපානය සූදානම් වීම ගැන ජාත්‍යන්තරයෙන් දැඩි විවේචන එල්ල වෙමින් පවතී."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Scientists in the US and South Korea have created a cloud of DNA editing that could potentially prevent up to 10,000 inherited disorders, marking a significant step forward in medical research.",
+            "bart_score": -3.3546109199523926,
+            "mt_hyp_summary": "For the first time, scientists have removed DNA from a human cell that can cause a fatal, hereditary heart disease.",
+            "rouge1": 0.32142857142857145
+        },
+        "e2e": {
+            "llama_hyp_summary": "Scientists have successfully used Crispr technology to correct a genetic disorder in human embryos, potentially opening the door to preventing 10,000 disorders passed down through generations.",
+            "bart_score": -3.1926584243774414,
+            "rouge1": 0.3137254901960785
+        },
+        "ceil": {
+            "llama_hyp_summary": "Scientists have successfully used Crispr technology to correct a genetic disorder in human embryos, potentially opening the door to preventing 10,000 disorders passed down through generations.",
+            "bart_score": -3.1926584243774414,
+            "rouge1": 0.3137254901960785
+        },
+        "ref_summary": "Scientists have, for the first time, successfully freed embryos of a piece of faulty DNA that causes deadly heart disease to run in families.",
+        "ref_url": "https://www.bbc.com/news/health-40802147",
+        "foreign_summary": "පරම්පරාගතව ඉදිරියට යා හැකි (ප්‍රවේණිගත) මාරාන්තික හෘද රෝගවලට තුඩු දෙන ඩීඑන්ඒ (DNA) මිනිස් කළලයකින් ඉවත් කිරීමට විද්‍යාඥයින් පිරිසක් මුල්වරට සමත්වී ඇත."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A Bangladeshi woman, who was recruited by an Islamic organization and later lived in a Syrian refugee camp, has been stripped of her British citizenship.",
+            "bart_score": -2.9427051544189453,
+            "mt_hyp_summary": "Shamima Begum, 19, who fled London to Syria in 2015 to join the Islamic State, said she could be \"capable of death by complicity in terrorism\" if she arrives in Bangladesh.",
+            "rouge1": 0.041666666666666664
+        },
+        "e2e": {
+            "llama_hyp_summary": "Bangladeshi Foreign Minister Abdul Momen has rejected claims that Shamima Begum, a 19-year-old who was stripped of her British citizenship, has any connection to Bangladesh and will not be granted citizenship or allowed to enter the country.",
+            "bart_score": -2.6804487705230713,
+            "rouge1": 0.2903225806451613
+        },
+        "ceil": {
+            "llama_hyp_summary": "Bangladeshi Foreign Minister Abdul Momen has stated that the country will not grant citizenship to Shamima Begum, a 19-year-old who was stripped of her British citizenship, and will not allow her to enter the country.",
+            "bart_score": -2.33310604095459,
+            "rouge1": 0.30000000000000004
+        },
+        "ref_summary": "IS bride Shamima Begum would \"face the death penalty\" for terrorism if she came to Bangladesh, the country's foreign minister has said.",
+        "ref_url": "https://www.bbc.com/news/world-asia-48154781",
+        "foreign_summary": "ඉස්ලාමීය රාජ්‍යය සංවිධානයට එක්වීම සඳහා 2015 දී ලන්ඩන් නුවර සිට සිරියාවට පලා ගිය 19 හැවිදිරි ශමීමා බෙගම්, බංග්ලාදේශයට පැමිණියහොත් \"ත්‍රස්තවාදයට හවුල් වීම යටතේ මරණ දණ්ඩනයට යටත් කළ හැකි\" බව එරට විදේශ ඇමතිවරයා පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The court ordered Gloria Arroyo to be declared guilty of financial misconduct while in office after she refused to testify.",
+            "bart_score": -2.9275600910186768,
+            "mt_hyp_summary": "Former Philippine President Gloria Arroyo was tried in court for allegedly misappropriating nearly $19 million of government lottery funds.",
+            "rouge1": 0.3333333333333333
+        },
+        "e2e": {
+            "llama_hyp_summary": "Mrs. Arroyo, a former Philippine president, pleaded not guilty to corruption charges and was released on bail, despite being accused of diverting $8.8 million and facing a maximum penalty of life in prison if found guilty.",
+            "bart_score": -2.3541300296783447,
+            "rouge1": 0.27118644067796616
+        },
+        "ceil": {
+            "llama_hyp_summary": "Former Philippine President Gloria Arroyo pleaded not guilty to corruption charges, which include diverting $8.8 million, and is currently facing a maximum penalty of life in prison if found guilty.",
+            "bart_score": -2.1342031955718994,
+            "rouge1": 0.3018867924528302
+        },
+        "ref_summary": "Former Philippine President Gloria Arroyo has appeared in court on charges of misusing millions in state lottery charity funds while in office.",
+        "ref_url": "https://www.bbc.com/news/world-asia-20119623",
+        "foreign_summary": "ආණ්ඩුවේ ලොතරැයි මුදල්වලින් ඩොලර් අනූ ලක්ෂයකට ආසන්න මුදලක් අනිසි ලෙස පාවිච්චි කර ඇති බවට චෝදනා ලබන පිලිපීනයේ හිටපු ජනාධිපතිනි ග්ලෝරියා අරෝයෝ උසාවිය ඉදිරියේ පෙනී සිටියාය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The death penalty for Lisa Montgomery was suspended by a Supreme Court ruling after a preliminary injunction was issued by Justice James Hanlon.",
+            "bart_score": -4.548494338989258,
+            "mt_hyp_summary": "For the first time in 68 years, a woman was sentenced to death in the history of the United States.",
+            "rouge1": 0.1818181818181818
+        },
+        "e2e": {
+            "llama_hyp_summary": "Lisa Montgomery, a woman who strangled a pregnant woman and kidnapped her baby in 2004, is scheduled to be executed by lethal injection in Indiana on January 12.",
+            "bart_score": -3.0193076133728027,
+            "rouge1": 0.16326530612244897
+        },
+        "ceil": {
+            "llama_hyp_summary": "Lisa Montgomery, a woman who strangled a pregnant woman and kidnapped her baby in 2004, is scheduled to be executed by lethal injection in Indiana on January 12.",
+            "bart_score": -3.0193076133728027,
+            "rouge1": 0.16326530612244897
+        },
+        "ref_summary": "The US is to execute a female federal inmate for the first time in almost 70 years, the Justice Department said.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-54587863",
+        "foreign_summary": "ඇමෙරිකානු අධිකරණ ඉතිහාසයේ වසර 68කට පසු පළමුවරට කාන්තාවකට එරෙහිව මරණීය දණ්ඩනය ක්‍රියාවට නංවනු ලැබුණි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A women's cycling competition was held in Jeddah, Saudi Arabia, with 47 women participating in a 10-kilometer race.",
+            "bart_score": -2.26005220413208,
+            "mt_hyp_summary": "The first women's cycling race in Saudi Arabia is being discussed on social media.",
+            "rouge1": 0.35555555555555557
+        },
+        "e2e": {
+            "llama_hyp_summary": "Saudi women cyclists competed in a 10-kilometer race in Jeddah, a first for the country, despite some controversy and criticism from social media users.",
+            "bart_score": -2.5708961486816406,
+            "rouge1": 0.4000000000000001
+        },
+        "ceil": {
+            "llama_hyp_summary": "Saudi women cyclists competed in a 10-kilometer race in Jeddah, a first for the country, despite some controversy and criticism from social media users who raised concerns about modesty and gender segregation.",
+            "bart_score": -2.8996853828430176,
+            "rouge1": 0.3448275862068965
+        },
+        "ref_summary": "Female riders have taken part in Saudi Arabia's first women's cycling race, surprising many people in the conservative nation and across social media.",
+        "ref_url": "https://www.bbc.com/news/blogs-trending-43740203",
+        "foreign_summary": "සෞදිඅරාබියේ කාන්තාවන් සහභාගී වූ ප්‍රථම බයිසිකල් තරඟය පිළිබද සමාජ මාධ්‍ය තුළ මහත් කතා බහක් ආරම්භව පවතී."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Scientists have detected an unexplained gas in Venus' atmosphere, which they believe may be composed of three molecules of phosphorus and hydrogen.",
+            "bart_score": -2.8156399726867676,
+            "mt_hyp_summary": "The idea that living things float in the caves of Venus is a very unusual phenomenon.",
+            "rouge1": 0.19999999999999998
+        },
+        "e2e": {
+            "llama_hyp_summary": "Astronomers have detected a gas, phosphine, in the atmosphere of Venus that they cannot explain, leading them to consider the possibility of life on the planet.",
+            "bart_score": -2.5874781608581543,
+            "rouge1": 0.3636363636363637
+        },
+        "ceil": {
+            "llama_hyp_summary": "Astronomers have detected a gas, phosphine, in the atmosphere of Venus that cannot be explained by natural, non-biological processes, leading to speculation that it may be a sign of life on the planet.",
+            "bart_score": -2.638298988342285,
+            "rouge1": 0.30769230769230765
+        },
+        "ref_summary": "It's an extraordinary possibility - the idea that living organisms are floating in the clouds of Planet Venus.",
+        "ref_url": "https://www.bbc.com/news/science-environment-54133538",
+        "foreign_summary": "සප්‍රාණික ජීවීන් සිකුරු ග්‍රහයාගේ වළා අතර පාවෙමින් සිටින්නේය යන අදහස ඉතා අසාමාන්‍ය තත්ත්වයකි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A refugee died in a Brisbane hospital after being held in custody in a small Australian city, with the government attributing his death to a political protest.",
+            "bart_score": -3.1541073322296143,
+            "mt_hyp_summary": "A 23-year-old Iranian refugee from an Australian refugee camp on the island of Nauru has been burned to death.",
+            "rouge1": 0.11764705882352941
+        },
+        "e2e": {
+            "llama_hyp_summary": "A man, known as Omid, who set himself on fire at a Nauru detention centre, has died in a Brisbane hospital, sparking concerns about Australia's offshore processing of asylum seekers.",
+            "bart_score": -2.1453652381896973,
+            "rouge1": 0.5818181818181819
+        },
+        "ceil": {
+            "llama_hyp_summary": "A man, known as Omid, who set himself on fire at a Nauru detention centre, has died in a Brisbane hospital, sparking concerns about Australia's offshore processing of asylum seekers.",
+            "bart_score": -2.1453657150268555,
+            "rouge1": 0.5818181818181819
+        },
+        "ref_summary": "A 23-year-old Iranian asylum seeker who set himself on fire at Australia's detention centre on the island of Nauru has died.",
+        "ref_url": "https://www.bbc.com/news/world-australia-36166803",
+        "foreign_summary": "නාවුරු දූපතේ පිහිටි ඕස්ට්‍රේලියානු සරණාගත කඳවුරේ සිටි 23 හැවිරිදි ඉරාන ජාතික සරණාගතයෙකු සිරුරට ගිනි තබාගෙන මියගොස් තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Arab Barometer survey found that the percentage of men and women without a religious affiliation in the Palestinian territories and Arab region decreased from 8% to 13% over the years.",
+            "bart_score": -3.318439483642578,
+            "mt_hyp_summary": "The largest survey ever conducted in the Middle East and North Africa region has revealed a sharp decline in the number of people living religious life in Arab countries.",
+            "rouge1": 0.3157894736842105
+        },
+        "e2e": {
+            "llama_hyp_summary": "Here is a summary of the passage in one sentence:\n\nA survey of over 25,000 people across 10 countries and the Palestinian territories found that Arabs hold varying views on issues such as religion, women's rights, sexuality, and security, with some countries showing significant changes in attitudes over the past few years.",
+            "bart_score": -3.5989818572998047,
+            "rouge1": 0.2
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Arab Barometer survey of over 25,000 people across 10 countries and the Palestinian territories found that Arabs hold diverse views on various issues, including religion, women's rights, and sexuality, with some notable trends and exceptions.",
+            "bart_score": -3.5410382747650146,
+            "rouge1": 0.21875
+        },
+        "ref_summary": "Arabs are increasingly saying they are no longer religious, according to the largest and most in-depth survey undertaken of the Middle East and North Africa.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-48703377",
+        "foreign_summary": "මැද පෙරදිග සහ උතුරු අප්‍රිකානු කලාපයන් තුළ මෙතෙක් සිදු කළ විශාලතම සමීක්ෂණයෙන් හෙළි වී ඇත්තේ අරාබි රටවල් තුළ ආගමානුකූල දිවි පෙවතක් ගත කරන පුද්ගලයන්ගේ විශාල අඩු වීමක් දක්නට ලැබෙන බවය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The government has asked evacuees to return home, pending security clearance from President Mahinda Rajapaksa, after Sunday's clashes left four dead, four injured, and thousands homeless.",
+            "bart_score": -3.3093414306640625,
+            "mt_hyp_summary": "The authorities have lifted the curfew in several parts of the southern province of Sri Lanka following clashes between hardline Buddhists and Muslim minorities.",
+            "rouge1": 0.16326530612244897
+        },
+        "e2e": {
+            "llama_hyp_summary": "Violence broke out in Sri Lanka after a Buddhist rally, resulting in injuries, property damage, and reports of Muslims being beaten and homes and a mosque being stoned.",
+            "bart_score": -3.2301173210144043,
+            "rouge1": 0.23999999999999996
+        },
+        "ceil": {
+            "llama_hyp_summary": "Violence broke out in Sri Lanka after a Buddhist rally, resulting in injuries, property damage, and reports of Muslims being beaten and homes and a mosque being stoned.",
+            "bart_score": -3.2301175594329834,
+            "rouge1": 0.23999999999999996
+        },
+        "ref_summary": "The Sri Lankan authorities have imposed a curfew on two southern towns to quell clashes between a hardline Buddhist group and Muslims.",
+        "ref_url": "https://www.bbc.com/news/world-asia-27860156",
+        "foreign_summary": "දැඩි මතධාරී බෞද්ධයන් සහ සුළු ජාතික මුස්ලිම් ජාතිකයන් අතර ඇතිවුණු ගැටුම් වලින් පසු ශ්‍රී ලංකාවේ දකුණු පළාතේ ප්‍රදේශ කිහිපයක බලපැවැත්වුණු ඇඳිරි නීතිය බලධාරීන් විසින් ඉවත්කොට ඇත."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Mexico has banned the use of fishing nets to locate endangered vaquita porpoises and is instead using dolphins to attract them to protected areas.",
+            "bart_score": -2.537039041519165,
+            "mt_hyp_summary": "The Mexican government says it plans to use US Navy-trained dolphins to protect the world's most endangered species.",
+            "rouge1": 0.3461538461538462
+        },
+        "e2e": {
+            "llama_hyp_summary": "Mexico is deploying trained dolphins to locate and herd vaquitas into a marine refuge, and has permanently banned fishing nets blamed for the vaquita's decline, in an effort to save the critically endangered species.",
+            "bart_score": -3.3115172386169434,
+            "rouge1": 0.41269841269841273
+        },
+        "ceil": {
+            "llama_hyp_summary": "Mexico's Environment Minister announced a plan to deploy trained dolphins to locate and herd vaquitas into a marine refuge, while also permanently banning fishing nets blamed for the vaquitas' decline.",
+            "bart_score": -3.713082790374756,
+            "rouge1": 0.2711864406779661
+        },
+        "ref_summary": "Mexico's government says it plans to use dolphins trained by the US Navy to try to save the world's most endangered marine species, the vaquita porpoise.",
+        "ref_url": "https://www.bbc.com/news/science-environment-40466607",
+        "foreign_summary": "ලොව වඳවී යාමේ වැඩිම තර්ජනයට මුහුණ දී සිටින මත්ස්‍යයන් විශේෂයක් ආරක්ෂා කරගැනීම පිණිස ඇමෙරිකානු නාවික හමුදාව විසින් විශේෂයෙන් පුහුණු කරන ලද ඩොල්ෆින් මත්ස්‍යයන් යොදාගැනීමට සැලසුම් කරන බව මෙක්සිකෝවේ ආණ්ඩුව පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A report by Cites found 40 tons of smuggled elephant bones and 111,000 African elephants were hunted in the past decade, with the rate of hunting reaching a uniform level in many regions.",
+            "bart_score": -4.2820634841918945,
+            "mt_hyp_summary": "African elephant hunting has fallen for the fifth consecutive year, and the global gross capture of elephants has reached a record high in the past year, according to a report.",
+            "rouge1": 0.23333333333333334
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Convention on International Trade in Endangered Species (Cites) reports that 40 tonnes of trafficked ivory was recovered, and while poaching levels are still high, they appear to be levelling off in most places, with a decline in Eastern Africa and a need for continued conservation efforts.",
+            "bart_score": -3.0760791301727295,
+            "rouge1": 0.273972602739726
+        },
+        "ceil": {
+            "llama_hyp_summary": "About 40 tonnes of trafficked ivory was recovered, and while poaching has killed 111,000 African elephants over the last decade, the rate of killing appears to be levelling off in most places.",
+            "bart_score": -3.4705817699432373,
+            "rouge1": 0.2033898305084746
+        },
+        "ref_summary": "A record amount of ivory was seized last year, even though elephant poaching in Africa declined for a fifth year in a row, a report says.",
+        "ref_url": "https://www.bbc.com/news/world-africa-41727132",
+        "foreign_summary": "අප්‍රිකාවේ අලි ඇතුන් දඩයම අඛණ්ඩව පස්වෙනි වසරටත් පහළ ගොස් ඇති අතර ලොව පුරා ඇත් දළ තොග අල්ලා ගැනීම් පසුගිය වසර තුළ වාර්තාගත මට්ටමකට ළඟා වී ඇති බව වාර්තාවක් පෙන්වා දෙයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Bob Dylan, a 75-year-old singer-songwriter, was offered the Nobel Prize but had not yet received it due to his failure to deliver a required speech and attend a ceremony.",
+            "bart_score": -2.833155632019043,
+            "mt_hyp_summary": "The Nobel Prize committee announced that the Nobel Prize winner, popular singer Bob Dylan, will be presented with the prize later this week.",
+            "rouge1": 0.24000000000000005
+        },
+        "e2e": {
+            "llama_hyp_summary": "Bob Dylan, the American singer-songwriter, will meet with the Swedish Academy in private to receive his Nobel Prize in Literature and diploma, and will send a taped lecture instead of delivering it in person.",
+            "bart_score": -3.2294182777404785,
+            "rouge1": 0.3773584905660377
+        },
+        "ceil": {
+            "llama_hyp_summary": "Bob Dylan, the American singer-songwriter, will meet with the Swedish Academy in private to receive his Nobel Prize in Literature and diploma, and will send a taped lecture instead of delivering it in person.",
+            "bart_score": -3.2294180393218994,
+            "rouge1": 0.3773584905660377
+        },
+        "ref_summary": "Bob Dylan will finally accept his Nobel Prize for Literature in Stockholm this weekend, the academy has announced.",
+        "ref_url": "https://www.bbc.com/news/world-europe-39429032",
+        "foreign_summary": "පසුගිය වසරේ නොබෙල් සාහිත්‍ය සම්මානයෙන් පිදුම් ලැබූ ජනප්‍රිය ගායක බොබ් ඩිලන් මේ සතිය අගදී සිය සම්මානය පිළිගැනීමට නියමිත බව නොබෙල් ත්‍යාග කමිටුව නිවේදනය කළේය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The person in custody denies involvement in the attack, which is believed to be an Islamic terrorist act, and the government is unsure of his responsibility.",
+            "bart_score": -3.12251877784729,
+            "mt_hyp_summary": "The German police said it was unclear whether the suspect was the real attacker, who was arrested for driving a truck into a Christmas market in Berlin.",
+            "rouge1": 0.1851851851851852
+        },
+        "e2e": {
+            "llama_hyp_summary": "A lorry ploughed through a popular Christmas market in Berlin, killing 12 people and injuring 49, with the suspect, a 23-year-old Pakistani asylum seeker, detained and denying involvement.",
+            "bart_score": -2.7454631328582764,
+            "rouge1": 0.3448275862068965
+        },
+        "ceil": {
+            "llama_hyp_summary": "A lorry ploughed through a popular Christmas market in Berlin, killing 12 people and injuring 49, with the suspect, a 23-year-old Pakistani asylum seeker, detained and denying involvement.",
+            "bart_score": -2.745462417602539,
+            "rouge1": 0.3448275862068965
+        },
+        "ref_summary": "The German authorities say they cannot be sure if a man in custody was behind Monday's lorry attack on a Berlin Christmas market that killed 12 people.",
+        "ref_url": "https://www.bbc.com/news/world-europe-38379157",
+        "foreign_summary": "බර්ලින් අගනුවර නත්තල් වෙළඳපොළක් තුළට ට්‍රක් රථයක් පදවමින් ත්‍රස්ත ප්‍රහාරයක් එල්ල කිරීම සම්බන්ධයෙන් අත්අඩංගුවේ පසුවන සැකකරු සැබෑ ප්‍රහාරකයා දැයි ස්ථිරව කිව නොහැකි බව ජර්මනියේ පොලිසිය පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Pakistani government has ordered a senior diplomat to protest at the Indian Foreign Ministry in Delhi over the postponement of an anti-terrorist court trial in Islamabad.",
+            "bart_score": -3.2283267974853516,
+            "mt_hyp_summary": "India has accused Pakistan of continuing to postpone the trial of seven Pakistanis suspected of planning and carrying out the Mumbai attack.",
+            "rouge1": 0.23529411764705882
+        },
+        "e2e": {
+            "llama_hyp_summary": "The US has charged four individuals, including a Pakistani intelligence officer, with aiding and abetting the 2008 Mumbai attacks that killed 165 people.",
+            "bart_score": -2.120645761489868,
+            "rouge1": 0.43478260869565216
+        },
+        "ceil": {
+            "llama_hyp_summary": "Four men, including one alleged Pakistani intelligence officer, have been charged with aiding and abetting the 2008 Mumbai attacks that killed 165 people.",
+            "bart_score": -2.0661654472351074,
+            "rouge1": 0.4782608695652174
+        },
+        "ref_summary": "Four Pakistani men have been charged by US prosecutors in connection with the November 2008 attacks on the Indian city of Mumbai (Bombay).",
+        "ref_url": "https://www.bbc.com/news/world-south-asia-13194861",
+        "foreign_summary": "මුම්බායි නගරයට එල්ල කෙරුන ප්‍රහාරය සැලසුම් කොට ක්‍රියාත්මක කළ බවට සැක කරන පකිස්තානුවන් හත් දෙනාට එරෙහිව පණවා තිබෙන නඩුවේ විභාග කටයුතු දිගින් දිගටම කල් දමන බවට ඉන්දියාව පකිස්තානයට චෝදනා කරනු ලබයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The report reveals that the death penalty has been carried out in North Korea for various crimes, including minor ones, in public places such as prisons, courthouses, shopping malls, and places of worship.",
+            "bart_score": -2.5170369148254395,
+            "mt_hyp_summary": "According to a South Korean NGO, 318 places where the death penalty is publicly carried out have been identified by the North Korean government.",
+            "rouge1": 0.3103448275862069
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Transitional Justice Working Group's report, based on interviews with 610 North Korean defectors, documents decades of public executions, including killings of people for minor offenses, with crowds of over 1,000 people gathering to watch, and the regime using executions to instill fear and deter citizens from engaging in undesirable activities.",
+            "bart_score": -3.409114122390747,
+            "rouge1": 0.1794871794871795
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Transitional Justice Working Group's report, based on interviews with 610 North Korean defectors, documents decades of public executions, including killings of people for minor offenses, with crowds of over 1,000 people gathering to watch, and family members, including children, sometimes forced to witness the events.",
+            "bart_score": -3.3661038875579834,
+            "rouge1": 0.1643835616438356
+        },
+        "ref_summary": "A South Korean NGO says it has identified 318 sites in North Korea that have been used by the government to carry out public executions.",
+        "ref_url": "https://www.bbc.com/news/world-asia-48590691",
+        "foreign_summary": "උතුරු කොරියානු රජයට අයත් ප්‍රසිද්ධියේ මරණීය දණ්ඩනය ක්‍රියාවට නංවනු ලබන ස්ථාන 318 ක් හඳුනාගැනීමට හැකි වූ බව දකුණු කොරියානු රාජ්‍ය නොවන සංවිධානයක් පවසයි ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Prince Vajiralongkorn's coronation is being delayed by a year due to his need to mourn the death of his father and the departure of former Prime Minister Prabhal Tinsultan Nazarbayev.",
+            "bart_score": -3.192678689956665,
+            "mt_hyp_summary": "The crown prince has requested a year of delay in his coronation to mourn the death of King Pat.",
+            "rouge1": 0.28
+        },
+        "e2e": {
+            "llama_hyp_summary": "Crown Prince Vajiralongkorn has asked the Thai people to wait until the mourning period for his father, King Bhumibol Adulyadej, is over before discussing the succession and administration of the country.",
+            "bart_score": -2.264719247817993,
+            "rouge1": 0.19999999999999998
+        },
+        "ceil": {
+            "llama_hyp_summary": "Crown Prince Vajiralongkorn has asked the Thai people to wait until the mourning period for his father, King Bhumibol Adulyadej, is over before discussing the succession and administration of the country.",
+            "bart_score": -2.264718770980835,
+            "rouge1": 0.19999999999999998
+        },
+        "ref_summary": "Thailand's Crown Prince Maha Vajiralongkorn wants his coronation held off for at least a year, government officials say.",
+        "ref_url": "https://www.bbc.com/news/world-asia-37670834",
+        "foreign_summary": "පිය රජතුමාගේ අභාවය සම්බන්ධයෙන් ශෝකවීම පිණිස සිය රාජාභිෂේකය වසරකින් පමා කරන ලෙස ඔටුන්න හිමි කුමරු ඉල්ලීමක් කළ බව තායිලන්තයේ ආණ්ඩුව පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Aung San Suu Kyi was charged with two new crimes after being arrested, while protests against the military coup in Myanmar resulted in 18 deaths, with protesters fleeing during a shooting attack.",
+            "bart_score": -3.4697132110595703,
+            "mt_hyp_summary": "Aung San Suu Kyi, who was in court on video, was first seen after the military took over the country.",
+            "rouge1": 0.4262295081967213
+        },
+        "e2e": {
+            "llama_hyp_summary": "Ousted leader Aung San Suu Kyi appeared in a court hearing via video link, asking to see her legal team, after two new charges were announced against her, while protests continued across Myanmar despite the deadliest day yet with 18 killed.",
+            "bart_score": -3.4894142150878906,
+            "rouge1": 0.4000000000000001
+        },
+        "ceil": {
+            "llama_hyp_summary": "Ousted leader Aung San Suu Kyi appeared in a court hearing via video link, asking to see her legal team, after being charged with two new crimes and held in detention for a month.",
+            "bart_score": -2.6923067569732666,
+            "rouge1": 0.4444444444444445
+        },
+        "ref_summary": "Myanmar's Aung San Suu Kyi has been seen for the first time since she was detained in a military coup, after she appeared in court via video link.",
+        "ref_url": "https://www.bbc.com/news/world-asia-56235405",
+        "foreign_summary": "මියන්මාරයේ අවුං සාන් සූ චී, වීඩියෝ තාක්ෂණය ඔස්සේ අධිකරණය ඉදිරියේ පෙනී සිටි අතර එරට පාලනය හමුදාව අතට පත්වීමෙන් අනතුරුව ඇය දැකගන්නට ලැබුණේ ප්‍රථම වතාවටය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The passage describes a woman's life of hardship and tragedy, including being taken from her father at a young age, losing her mother, and eventually living in a village for over a century.",
+            "bart_score": -3.554553508758545,
+            "mt_hyp_summary": "The BBC's Africa Eye in Nairobi, Kenya, revealed last month that a trafficking ring was being carried out. Seven people were arrested by police in Kenya on suspicion of the trafficking. But what about the women on the other side of the ring? Why is a mother being forced to sell her baby for £70?",
+            "rouge1": 0.16470588235294117
+        },
+        "e2e": {
+            "llama_hyp_summary": "Adama, a 29-year-old woman from rural western Kenya, was forced to sell her baby to a trafficker due to poverty and lack of support, but later changed her mind and left the baby at a government-run children's home.",
+            "bart_score": -2.4801440238952637,
+            "rouge1": 0.1935483870967742
+        },
+        "ceil": {
+            "llama_hyp_summary": "Adama, a 29-year-old woman from rural western Kenya, was forced to sell her baby to a trafficker due to poverty and lack of support, but later changed her mind and left the baby at a government-run children's home.",
+            "bart_score": -2.4801440238952637,
+            "rouge1": 0.1935483870967742
+        },
+        "ref_summary": "Last month, BBC Africa Eye exposed a thriving black-market trade in babies in the Kenyan capital, Nairobi. Police arrested seven people on trafficking charges in response to the story, but what about the women on the other side of these illegal deals? What drives a mother to sell her child?",
+        "ref_url": "https://www.bbc.com/news/world-africa-55250431",
+        "foreign_summary": "කෙන්යාවේ නෛරෝබි නුවර ළදරුවන් විකිණීමේ ජාවාරමක් පිළිබඳව බීබීසී 'Africa Eye' ඔස්සේ පසුගිය මාසයේ දී හෙළිදරව් කෙරුණි. මෙම හෙළිදරව්වෙන් පසුව එරට පොලිසිය පුද්ගලයන් හත් දෙනෙකු සැක පිට අත්අඩංගුවට ගෙන තිබුණි. නමුත් මෙම ජාවාරමේ අනෙක් පස සිටිනා කාන්තාවන් ගේ තත්වය කෙසේද? තමන්ගේ දරුවා බ්‍රිතාන්‍ය පවුම් 70ක් වැනි මුදලකට විකුණා දැමීමට මවක පෙළඹෙන්නේ ඇයි? මෙය ශ්‍රී ලංකාවේ මුදලින් රුපියල් පහළොස් දාහකට මඳක් වැඩි මුදලකි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The passage describes a school in Dhaka, Bangladesh that is supported by private financial aid and is influenced by socialist ideology, which is recognized by law and has a transgender community with voting and electoral rights.",
+            "bart_score": -4.127874374389648,
+            "mt_hyp_summary": "The first religious school dedicated to the transitional socialist community of Bangladesh opened in Dhaka.",
+            "rouge1": 0.25
+        },
+        "e2e": {
+            "llama_hyp_summary": "A privately-funded madrassa in Bangladesh is offering free Islamic and vocational education to over 150 transgender students, aiming to provide them with a chance to access jobs and education and walk with dignity.",
+            "bart_score": -3.5661275386810303,
+            "rouge1": 0.13043478260869565
+        },
+        "ceil": {
+            "llama_hyp_summary": "A privately-funded madrassa in Dhaka, Bangladesh, has opened its doors to over 150 students from the transgender community, offering free Islamic and vocational education to help them access better job opportunities and walk with dignity.",
+            "bart_score": -3.2062008380889893,
+            "rouge1": 0.25
+        },
+        "ref_summary": "Bangladesh's first religious school for transgender people has opened in Dhaka.",
+        "ref_url": "https://www.bbc.com/news/world-asia-54838305",
+        "foreign_summary": "බංග්ලාදේශයේ සංක්‍රාන්ති සමාජභාවී ප්‍රජාව සඳහා වෙන්වූ පළමු ආගමික පාසල ඩකා අගනුවර දී විවෘත විය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "George Michael, a member of the 1980s group Wham!, died, with Elton John expressing sadness and mentioning Michael's chart-topping hits.",
+            "bart_score": -3.0506134033203125,
+            "mt_hyp_summary": "Artists from around the world, including music lovers, are mourning the death of the late singer George Michael.",
+            "rouge1": 0.22222222222222224
+        },
+        "e2e": {
+            "llama_hyp_summary": "George Michael, the British pop star and former Wham! bandmate, has died peacefully at his home in Oxfordshire on Christmas Day at the age of 53.",
+            "bart_score": -1.9710983037948608,
+            "rouge1": 0.5714285714285715
+        },
+        "ceil": {
+            "llama_hyp_summary": "George Michael, the British pop star and former Wham! bandmate, has died peacefully at his home in Oxfordshire on Christmas Day at the age of 53.",
+            "bart_score": -1.9710983037948608,
+            "rouge1": 0.5714285714285715
+        },
+        "ref_summary": "Tributes have poured in from across the world for singer George Michael, who has died at his home at the age of 53.",
+        "ref_url": "https://www.bbc.com/news/uk-38438080",
+        "foreign_summary": "දිවියෙන් සමුගත් ගායන ශිල්පී ජෝර්ජ් මයිකල් වෙනුවෙන් ලොව පුරා සංගීත ලෝලීහු ඇතුළු කලාකරුවෝ ශෝකය පළ කරමින් සිටිති."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "S.P. Balsubramanian, a 74-year-old Indian singer, died in 1981 after suffering from COVID-19 and a heart attack.",
+            "bart_score": -3.820375680923462,
+            "mt_hyp_summary": "S.P. Balasubramanian, a famous Indian singer who set a world record by singing over 40,000 songs in more than half a century, has died.",
+            "rouge1": 0.22222222222222224
+        },
+        "e2e": {
+            "llama_hyp_summary": "Singer S.P. Balasubrahmanyam, known for his iconic Bollywood and Indian film songs, died after a Covid-19 diagnosis and cardio-respiratory arrest, with tributes pouring in from celebrities and fans.",
+            "bart_score": -3.1979563236236572,
+            "rouge1": 0.29090909090909095
+        },
+        "ceil": {
+            "llama_hyp_summary": "Singer S.P. Balasubrahmanyam, known for his iconic Indian film songs, died after a Covid-19 diagnosis, with tributes pouring in from celebrities and fans.",
+            "bart_score": -3.3399062156677246,
+            "rouge1": 0.32653061224489793
+        },
+        "ref_summary": "Renowned Indian singer SP Balasubrahmanyam, a Guinness world record holder for his more than 40,000 songs over 50 years, has died aged 74.",
+        "ref_url": "https://www.bbc.com/news/world-asia-india-53789574",
+        "foreign_summary": "අඩ සියවසකට වැඩි කලක් ඇතුළත 40,000 කට වැඩි ගීත සංඛ්‍යාවක් ගායනා කරමින් ලෝක වාර්තාවක් බිහි කළ ජනප්‍රිය ඉන්දීය ගායක එස්පී බාලසුබ්‍රමනියම් දිවි සැරිය හැර ගියේය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "In India, owning a horse is a symbol of power and wealth, and three members of a standardised clan are being questioned by police about a murder.",
+            "bart_score": -3.697262763977051,
+            "mt_hyp_summary": "A young Indian farmer of the Dalit ethnic group was attacked and killed for possessing a horse and riding it.",
+            "rouge1": 0.25925925925925924
+        },
+        "e2e": {
+            "llama_hyp_summary": "A 21-year-old Dalit man, Pradeep Rathod, was found dead near a village in Gujarat state, with his horse also found dead nearby, and police are investigating possible caste-related motives, including a warning from an upper-caste man not to ride the horse.",
+            "bart_score": -2.8254294395446777,
+            "rouge1": 0.25
+        },
+        "ceil": {
+            "llama_hyp_summary": "A 21-year-old Dalit man, Pradeep Rathod, was found dead near a village in Gujarat state, with his horse also found dead nearby, after his father reported that upper-caste men had warned them not to ride the horse, citing it as a privilege reserved for the upper caste.",
+            "bart_score": -3.257598400115967,
+            "rouge1": 0.23376623376623376
+        },
+        "ref_summary": "A young farmer from the lowest rung of India's caste hierarchy - the Dalit community - has been beaten to death, apparently for owning and riding a horse.",
+        "ref_url": "https://www.bbc.com/news/world-asia-india-43605550",
+        "foreign_summary": "අශ්වයෙකු හිමි කරගැනීමේ සහ ඒ අසු පිට යාමේ 'වරද' හේතුවෙන් ඉන්දියාවේ දලිත් පීඩිත කුලයට අයත් තරුණ ගොවියෙකුට පහර දී මරා දමා තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Australian Human Rights Commission conducted a survey to investigate the well-being and health of over a thousand children held in political asylum camps in Australia.",
+            "bart_score": -2.871448278427124,
+            "mt_hyp_summary": "The Australian Human Rights Commission announced that it has launched an investigation into children in refugee camps in Australia.",
+            "rouge1": 0.3636363636363636
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Australian Human Rights Commission is conducting an inquiry into the well-being, health, and development of over 1,000 detained children, including those in Nauru's offshore centre, which has been criticized for poor conditions.",
+            "bart_score": -2.909451723098755,
+            "rouge1": 0.41509433962264153
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Australian Human Rights Commission is conducting an inquiry into the well-being, health, and development of over 1,000 detained children, including those in poor conditions in Nauru, to assess whether their detention is consistent with Australia's human rights obligations.",
+            "bart_score": -2.6845703125,
+            "rouge1": 0.4067796610169491
+        },
+        "ref_summary": "Australia's Human Rights Commission has announced an inquiry into the mandatory detention of children seeking asylum.",
+        "ref_url": "https://www.bbc.com/news/world-asia-26012468",
+        "foreign_summary": "ඔස්ට්‍රේලියාවේ සරණාගත කඳවුරු තුළ සිටින ළමුන් පිළිබඳව සොයා බැලෙන පරීක්ෂණයක් ආරම්භ කළ බව ඔස්ට්‍රේලියානු මානව හිමිකම් කොමිසම නිවේදනය කළේය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Prince Mohammed bin Salman warned that inaction would encourage Iran to wage war and harm the global economy, while also blaming Iran for attacks on Saudi oil refineries and a media outlet for the killing of two people.",
+            "bart_score": -3.5250236988067627,
+            "mt_hyp_summary": "Saudi Arabia's crown prince has warned that oil prices could rise sharply if the world community does not intervene to stop Iran.",
+            "rouge1": 0.3666666666666667
+        },
+        "e2e": {
+            "llama_hyp_summary": "Mohammed bin Salman, the de facto ruler of Saudi Arabia, warned that failure to act against Iran could lead to war, which would ruin the global economy, while also accepting some responsibility for the killing of journalist Jamal Khashoggi.",
+            "bart_score": -2.834329128265381,
+            "rouge1": 0.3278688524590163
+        },
+        "ceil": {
+            "llama_hyp_summary": "Mohammed bin Salman, the de facto ruler of Saudi Arabia, warned that failure to act against Iran could lead to war, which would ruin the global economy, while also accepting some responsibility for the killing of journalist Jamal Khashoggi.",
+            "bart_score": -2.8343286514282227,
+            "rouge1": 0.3278688524590163
+        },
+        "ref_summary": "Saudi Crown Prince Mohammed bin Salman has warned that oil prices may soar if the world does not act to deter Iran.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-49874807",
+        "foreign_summary": "ඉරානයට බාධා කිරීමට ලෝක ප්‍රජාව පියවර නොගන්නේනම් තෙල් මිළ සීග්‍රයෙන් ඉහළ යාමට ඉඩ ඇතැයි සෞදි අරාබියේ ඔටුන්න හිමි කුමරු අනතුරු අඟවා තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The US Navy announced that a major naval strike group, including the USS Carl Vinson, was sailing into the region in response to rising tensions on the Korean Peninsula.",
+            "bart_score": -2.2479031085968018,
+            "mt_hyp_summary": "Other warships, including the US fighter aircraft carrier, reportedly sailed in the opposite direction without heading for North Korea.",
+            "rouge1": 0.1568627450980392
+        },
+        "e2e": {
+            "llama_hyp_summary": "The US Navy's Carl Vinson strike group, which was initially reported to be heading to the Korean peninsula, was actually traveling through the Indian Ocean and has now proceeded to the Western Pacific as ordered.",
+            "bart_score": -2.7509613037109375,
+            "rouge1": 0.13793103448275862
+        },
+        "ceil": {
+            "llama_hyp_summary": "The US Navy's Carl Vinson strike group was initially reported to be heading to the Korean peninsula, but was actually farther away in the Indian Ocean, with its true location and purpose remaining unclear.",
+            "bart_score": -2.9619734287261963,
+            "rouge1": 0.17543859649122806
+        },
+        "ref_summary": "A US aircraft carrier and other warships did not sail towards North Korea - but went in the opposite direction, it has emerged.",
+        "ref_url": "https://www.bbc.com/news/world-asia-39638012",
+        "foreign_summary": "ඇමරිකානු ප්‍රහාරක ගුවන් යානා ප්‍රවාහන නෞකාව ඇතුළු සෙසු යුද නෞකා උතුරු කොරියාව දෙසට නොගොස් ප්‍රතිවිරුද්ධ දිශාවට යාත්‍රා කොට ඇතැයි වාර්තා වේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Sultan of Brunei emphasized the importance of following Islamic teachings strongly and expressed a desire to see them become more powerful in the country.",
+            "bart_score": -3.1620309352874756,
+            "mt_hyp_summary": "The state of Brunei has introduced strict Islamic laws that make homosexual acts a 'crime' punishable by death by stoning.",
+            "rouge1": 0.1818181818181818
+        },
+        "e2e": {
+            "llama_hyp_summary": "Brunei has introduced new laws that punish certain crimes, including theft by amputation and homosexuality, with punishments such as stoning and whipping, sparking international condemnation and calls for a boycott of luxury hotels owned by the country's ruling family.",
+            "bart_score": -3.170344352722168,
+            "rouge1": 0.23728813559322032
+        },
+        "ceil": {
+            "llama_hyp_summary": "Brunei has introduced new laws that punish certain crimes, including theft by amputation and homosexuality, with punishments such as stoning and whipping, sparking international condemnation and calls for a boycott of luxury hotels owned by the Brunei Investment Agency.",
+            "bart_score": -3.3387911319732666,
+            "rouge1": 0.2413793103448276
+        },
+        "ref_summary": "Brunei is introducing strict new Islamic laws that make anal sex and adultery offences punishable by stoning to death.",
+        "ref_url": "https://www.bbc.com/news/world-asia-47769964",
+        "foreign_summary": "සමලිංගික පුරුෂයන් ලිංගිකව එක්වීම ගල් ගසා මරණයට පත් කළ හැකි 'වරදක්' බවට පත්කරමින් දැඩි ඉස්ලාමීය නීති හඳුන්වාදීමට බෘනායි රාජ්‍යය ක්‍රියා කර තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The speaker feels empathy and sympathy for women suffering from stomach ulcers and believes they should have the opportunity to take a vacation to alleviate their pain.",
+            "bart_score": -3.463587760925293,
+            "mt_hyp_summary": "In many provinces in China, women who experience unbearable pain with the onset of menopause are legally allowed to take a day or two of leave a month.",
+            "rouge1": 0.27397260273972607
+        },
+        "e2e": {
+            "llama_hyp_summary": "The author, who suffers from severe period pain, appreciates her company's policy of providing one paid day's leave every month for female employees to manage their menstrual health, which has not resulted in significant financial losses and has created a more positive work environment.",
+            "bart_score": -3.334604024887085,
+            "rouge1": 0.30434782608695654
+        },
+        "ceil": {
+            "llama_hyp_summary": "The author, who suffers from severe period pain, appreciates her company's policy of providing one paid day's leave every month for female employees to manage their menstrual health, which has not resulted in significant financial losses and has created a more positive work environment.",
+            "bart_score": -3.334604024887085,
+            "rouge1": 0.30434782608695654
+        },
+        "ref_summary": "Several provinces in China now have laws in place to ensure women can take a day or two a month off work if they suffer from period pain. Events organiser Churan Zheng regularly takes menstrual leave, and says it is an essential option for every woman.",
+        "ref_url": "https://www.bbc.com/news/magazine-37606726",
+        "foreign_summary": "ඔසප් වීම ආරම්භයත් සමග දරාගත නොහැකි වේදනාවක් දැනෙන්නේ නම් එවැනි කාන්තාවන්ට මසකට දිනක් හෝ දෙකක් නිවාඩු ලබා ගැනීමට චීනයේ පළාත් ගණනාවක් තුළ නීතියෙන් අවස්ථාව හිමි වේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Australian Consumer Commission accused Samsung of advertising misleading information about the phone's water resistance capabilities.",
+            "bart_score": -2.2354955673217773,
+            "mt_hyp_summary": "The Australian Consumer Commission has filed a lawsuit against Samsung for its advertising that misleads consumers, claiming that its company's phones contain waterproof devices.",
+            "rouge1": 0.41025641025641024
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Australian Competition and Consumer Commission (ACCC) is suing Samsung for allegedly making false claims about the water resistance of its phones, claiming the company's adverts misrepresented the devices' ability to withstand seawater and swimming pool water.",
+            "bart_score": -2.2441306114196777,
+            "rouge1": 0.4666666666666667
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Australian Competition and Consumer Commission (ACCC) is suing Samsung for allegedly making false claims about the water resistance of its phones, claiming the company's adverts misrepresented the devices' ability to withstand seawater and swimming pool water.",
+            "bart_score": -2.2441306114196777,
+            "rouge1": 0.4666666666666667
+        },
+        "ref_summary": "Samsung is being sued by Australia's consumer watchdog for allegedly making misleading claims about the water-resistant properties of its phones.",
+        "ref_url": "https://www.bbc.com/news/technology-48866148",
+        "foreign_summary": "සිය සමාගමේ නිෂ්පාදිත ජංගම දුරකතනවල ජල ප්‍රතිරෝධී උපාංග ඇතුළත් බව සඳහන් කරමින් පාරිභෝගිකයන් නොමග යවන ආකාරයේ වෙළෙඳ දැන්වීම් ප්‍රචාරණයට එරෙහිව සැම්සුන් සමාගමට එරෙහිව නඩු පැවරීමට ඔස්ට්‍රේලියාවේ පාරිභෝගික කොමිසම ක්‍රියා කර තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The World Health Organization warns that gonorrhea is becoming increasingly resistant to antibiotics, making it \"unsatisfactory\" and sometimes \"untreatable\".",
+            "bart_score": -3.0108494758605957,
+            "mt_hyp_summary": "The World Health Organization says that oral contraception has created an uncontrollable and dangerous condition in gonorrhea bacteria, and that a lack of condom use has been a deterrent to its spread.",
+            "rouge1": 0.380952380952381
+        },
+        "e2e": {
+            "llama_hyp_summary": "Gonorrhoea is rapidly developing resistance to antibiotics, making it harder to treat and in some cases impossible, with the World Health Organization warning that the situation is \"fairly grim\" and few new drugs are on the horizon.",
+            "bart_score": -2.8360724449157715,
+            "rouge1": 0.3666666666666667
+        },
+        "ceil": {
+            "llama_hyp_summary": "Gonorrhoea is rapidly developing resistance to antibiotics, making it harder to treat and in some cases impossible, with the World Health Organization warning that the situation is \"fairly grim\" and few new drugs are on the horizon.",
+            "bart_score": -2.8360724449157715,
+            "rouge1": 0.3666666666666667
+        },
+        "ref_summary": "Oral sex is producing dangerous gonorrhoea and a decline in condom use is helping it to spread, the World Health Organization has said.",
+        "ref_url": "https://www.bbc.com/news/health-40520125",
+        "foreign_summary": "ගොනෝරියා බැක්ටීරියාවේ පාලනය කළ නොහැකි භයානක තත්ත්වයක් මුඛ සංසර්ගය හේතුවෙන් මතුවී ඇති අතර උපත් පාලන කොපු (condom) භාවිතයේ අඩුවක් පෙන්වීම එය පැතිර යාමට රුකුලක් වී ඇති බව ලෝක සෞඛ්‍ය සංවිධානය පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Nokia 3310 model, released in 2000, is considered a trusted and resilient phone among consumers, who were impressed with its news and often regard it as their first mobile phone.",
+            "bart_score": -3.466623067855835,
+            "mt_hyp_summary": "Nokia is reportedly planning to re-launch the 3310 smartphone, which has gained popularity among mobile phone users.",
+            "rouge1": 0.18181818181818182
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Nokia 3310, a 17-year-old phone, is rumored to be making a comeback, with experts believing it could still have a place in the market due to its durability, long battery life, and affordability.",
+            "bart_score": -2.454335927963257,
+            "rouge1": 0.163265306122449
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Nokia 3310, a 17-year-old phone, is rumored to be making a comeback, with experts believing it could still have a place in the market due to its durability, long battery life, and affordability.",
+            "bart_score": -2.454335927963257,
+            "rouge1": 0.163265306122449
+        },
+        "ref_summary": "Rumours suggest that Nokia are planning to bring back their iconic 3310 phone.",
+        "ref_url": "https://www.bbc.com/news/newsbeat-38980782",
+        "foreign_summary": "ජංගම දුරකතන පාවිච්චි කරන්නන් අතර නමක් දිනා සිටි 3310 දුරකතන මාදිලිය යළි වෙළඳපොළට ඉදිරිපත් කිරීමට 'නොකියා' (Nokia) සමාගම සැලසුම් කරමින් ඇතිබවට වාර්තා වෙයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A Spanish fleet of 11 ships sank off the coast of Florida in a storm, and it is believed that 350 gold coins may have been lost at the bottom of the Atlantic Ocean.",
+            "bart_score": -2.8549845218658447,
+            "mt_hyp_summary": "According to a team of American prospectors, they have found a stockpile of Spanish gold coins dating back to the 18th century worth more than two million pounds.",
+            "rouge1": 0.33333333333333337
+        },
+        "e2e": {
+            "llama_hyp_summary": "Treasure hunters have discovered 350 coins from a 17th-century Spanish galleon fleet that sank off the coast of Florida, including nine rare \"royal eight escudos\" coins, worth millions of dollars.",
+            "bart_score": -3.348759651184082,
+            "rouge1": 0.45614035087719296
+        },
+        "ceil": {
+            "llama_hyp_summary": "Treasure hunters have discovered 350 coins from a 17th-century Spanish galleon fleet that sank off the coast of Florida, including nine rare \"royal eight escudos\" coins, worth millions of dollars.",
+            "bart_score": -3.348759651184082,
+            "rouge1": 0.45614035087719296
+        },
+        "ref_summary": "Treasure hunters in the US say they have discovered a haul of Spanish gold coins from the 18th century that are worth $4.5m (£2.9m).",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-33998010",
+        "foreign_summary": "දහ අට වන සියවසට අයත් පවුම් මිලියන දෙකකට වඩා වැඩි වටිනාකමකින් යුතු ස්පාඤ්ඤ රත්තරන් කාසි තොගයක් සොයා ගත් බව ඇමරිකානු නිදන් වස්තු ගවේෂකයන් කණ්ඩායමක් පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Japanese government gave President Putin an Akita puppy named 'Ume' in 2012, but he rejected it, and Japan is planning to give him another puppy to introduce a partner.",
+            "bart_score": -3.687124729156494,
+            "mt_hyp_summary": "A Japanese parliamentarian said that the Japanese government had rejected the proposal, despite its willingness to give Russian President Vladimir Putin a dog as a gift.",
+            "rouge1": 0.2592592592592593
+        },
+        "e2e": {
+            "llama_hyp_summary": "Japan's gift of a female Akita dog named Yume to Russian President Vladimir Putin was rejected without explanation.",
+            "bart_score": -3.4114208221435547,
+            "rouge1": 0.4186046511627907
+        },
+        "ceil": {
+            "llama_hyp_summary": "Japan's gift of a female Akita dog named Yume to Russian President Vladimir Putin was rejected without explanation.",
+            "bart_score": -3.4114208221435547,
+            "rouge1": 0.4186046511627907
+        },
+        "ref_summary": "Russian President Vladimir Putin has turned down the offer of a dog as a gift from the Japanese government, according to a Japanese MP.",
+        "ref_url": "https://www.bbc.com/news/world-europe-38276629",
+        "foreign_summary": "රුසියාවේ ජනාධිපති ව්ලදිමීර් පූතින් වෙත සුනඛයකු තෑගි කිරීමට ජපාන ආණ්ඩුව සුදානම් වුවත් ඔහු එම යෝජනාව ප්‍රතික්ෂේප කර ඇති බව ජපාන පාර්ලිමේන්තු මන්ත්‍රීවරයෙක් පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Former Israeli Prime Minister Ehud Olmert was sentenced to six years in prison for corruption charges related to a housing project during his tenure as Jerusalem's mayor.",
+            "bart_score": -2.173330068588257,
+            "mt_hyp_summary": "Former Israeli Prime Minister Ehud Olmert was sentenced to six years in prison by a court for bribery.",
+            "rouge1": 0.39999999999999997
+        },
+        "e2e": {
+            "llama_hyp_summary": "Former Israeli Prime Minister Ehud Olmert will begin serving a prison sentence on February 15, after the Supreme Court upheld a conviction for illicitly taking a payment from a company, despite acquitting him of a bribery charge.",
+            "bart_score": -2.58699107170105,
+            "rouge1": 0.29629629629629634
+        },
+        "ceil": {
+            "llama_hyp_summary": "Former Israeli Prime Minister Ehud Olmert will become the first former head of government to go to prison, serving a sentence of six years for corruption, after his conviction was upheld by the Supreme Court.",
+            "bart_score": -2.112794876098633,
+            "rouge1": 0.3076923076923077
+        },
+        "ref_summary": "Former Israeli Prime Minister Ehud Olmert has been ordered to serve 18 months in jail for bribery.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-35192519",
+        "foreign_summary": "අල්ලස් ගැනීමේ චෝදනාවකට වරදකරු වූ ඊශ්‍රායලයේ හිටපු අගමැති යෙහුද් ඔල්මර්ට් හට අධිකරණය විසින් වසර හයක සිර දඬුවමක් නියම කරනු ලැබිණි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A soldier reportedly shot himself twice with the same gun at Fort Hood, a large US military base, in an incident with similarities to a 2009 shooting at the same location.",
+            "bart_score": -3.2149085998535156,
+            "mt_hyp_summary": "Three people were killed and thousands injured in a mass shooting at Fort Hood military base in Texas, USA.",
+            "rouge1": 0.45614035087719296
+        },
+        "e2e": {
+            "llama_hyp_summary": "A gunman, identified as Ivan Lopez, 34, opened fire at Fort Hood in Texas, killing and wounding multiple people before shooting himself, in an attack that is not believed to be related to terrorism.",
+            "bart_score": -2.4275646209716797,
+            "rouge1": 0.33333333333333337
+        },
+        "ceil": {
+            "llama_hyp_summary": "A gunman, identified as Ivan Lopez, 34, opened fire at Fort Hood military base in Texas, killing and wounding multiple people before shooting himself, in an attack that is not believed to be related to terrorism.",
+            "bart_score": -2.508042812347412,
+            "rouge1": 0.3870967741935484
+        },
+        "ref_summary": "A soldier shot dead three colleagues and injured 16 others at the US Army's Fort Hood base in Texas before killing himself, the military says.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-26863033",
+        "foreign_summary": "ඇමෙරිකා එක්සත් ජනපද ටෙක්සාස් ප්‍රාන්තයේ ෆෝට් හුඩ් යුධ හමුදා කඳවුර තුළ හමුදා සොල්දාදුවෙකු සිදු කළ විවෘත වෙඩි තැබීමකින් තිදෙනෙකු මියගොස් තවත් දහසය දෙනෙකු තුවාල ලබා තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Saudi Arabian government claims that the rebels have destroyed missile attack facilities and warplanes in Sana'a, while the Yemeni Ministry of Health reports civilian injuries and the rebels vow to continue fighting against the Taliban.",
+            "bart_score": -3.864633560180664,
+            "mt_hyp_summary": "Saudi-led Allied aircraft attacked the strongholds of the Shiite Islamic Houthis (Houthis), who were forced to oust President Abd Rabbuh Mansour Hadi of Yemen.",
+            "rouge1": 0.24615384615384617
+        },
+        "e2e": {
+            "llama_hyp_summary": "Saudi jets launched airstrikes on Houthi positions in Yemen's capital Sanaa, as well as missile batteries and warplanes, in an operation called \"Operation Storm of Resolve\" aimed at protecting the country's legitimate government.",
+            "bart_score": -2.626131057739258,
+            "rouge1": 0.2857142857142857
+        },
+        "ceil": {
+            "llama_hyp_summary": "Saudi jets launched airstrikes on Houthi positions in Yemen's capital Sanaa, prompting a warning from Iran and a surge in global oil prices.",
+            "bart_score": -3.0238354206085205,
+            "rouge1": 0.23076923076923075
+        },
+        "ref_summary": "A coalition led by Saudi Arabia has launched air strikes against Shia Houthi rebels in Yemen, saying it is \"defending the legitimate government\" of President Abdrabbuh Mansour Hadi.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-32061632",
+        "foreign_summary": "සෞදි අරාබියේ නායකත්වයෙන් සැදුම් ලත් අරාබි රාජ්‍ය සන්ධානයේ යුද ගුවන් යානා යේමනයේ ජනාධිපති අබ්ද් රාබුහ් මන්සූර් හාඩි (Abd Rabbuh Mansour Hadi) පදවියෙන් නෙරපා හැරීමට මුල් වූ ෂියා ඉස්ලාමීය ‘හූති ’ (Houthi)කැරලිකරුවන්ගේ බල කඳවුරුවලට පහර දුන්හ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Dr. Donna Strickland became the third woman to win the award, following Mary Curie and Mary Goeppert-Mayer, who were also honored for their work.",
+            "bart_score": -2.8764588832855225,
+            "mt_hyp_summary": "After 55 years, a woman has been awarded the Nobel Prize in Physics.",
+            "rouge1": 0.23255813953488372
+        },
+        "e2e": {
+            "llama_hyp_summary": "Donna Strickland, a Canadian physicist, has won the Nobel Prize in Physics, along with Arthur Ashkin and Gerard Mourou, for their discoveries in the field of laser physics.",
+            "bart_score": -2.712566375732422,
+            "rouge1": 0.43478260869565216
+        },
+        "ceil": {
+            "llama_hyp_summary": "Donna Strickland, a Canadian physicist, has won the Nobel Prize in Physics, along with Arthur Ashkin and Gerard Mourou, for their discoveries in the field of laser physics.",
+            "bart_score": -2.712566375732422,
+            "rouge1": 0.43478260869565216
+        },
+        "ref_summary": "The Nobel Prize in Physics has been awarded to a woman for the first time in 55 years.",
+        "ref_url": "https://www.bbc.com/news/science-environment-45655151",
+        "foreign_summary": "වසර 55කට පසු භෞතික විද්‍යාව සඳහා නොබෙල් ත්‍යාගය කාන්තාවකට හිමි වී තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "China has revoked the BBC's broadcasting licence in response to the UK's revocation of China Global Television Network's licence due to violations of British media law.",
+            "bart_score": -3.097902774810791,
+            "mt_hyp_summary": "The Chinese Television and Radio Regulatory Authority announced on 11 February that the broadcast of BBC World Service in China was banned.",
+            "rouge1": 0.2916666666666667
+        },
+        "e2e": {
+            "llama_hyp_summary": "China has revoked the BBC's licence to broadcast in the country, citing violations of broadcast guidelines, and also suspended the relaying of BBC World Service programming in Hong Kong, prompting condemnation from the BBC and international criticism.",
+            "bart_score": -3.0654406547546387,
+            "rouge1": 0.3157894736842105
+        },
+        "ceil": {
+            "llama_hyp_summary": "China has revoked the BBC's licence to broadcast in the country, citing violations of broadcast guidelines, and also suspended the relaying of BBC World Service programming in Hong Kong, prompting condemnation from the BBC and international criticism.",
+            "bart_score": -3.0654406547546387,
+            "rouge1": 0.3157894736842105
+        },
+        "ref_summary": "China has banned BBC World News from broadcasting in the country, its television and radio regulator announced on Thursday.",
+        "ref_url": "https://www.bbc.com/news/world-asia-china-56030340",
+        "foreign_summary": "චීනය තුළ බීබීසී ලෝක සේවය විකාශනය කිරීම තහනම් කළ බව චීනයේ රුපවාහිනී සහ ගුවන් විදුලි නියාමන අධිකාරිය ඊයේ (පෙබරවාරි 11) නිවේදනය කළේය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The police arrested over 2,500 followers of a leader after violent clashes, but the situation is now under control, according to the regional police chief.",
+            "bart_score": -3.4485998153686523,
+            "mt_hyp_summary": "Gurmeet Ram Rahim Singh, a popular priest in northern India, has been convicted of rape charges and 23 of the violence has been killed.",
+            "rouge1": 0.16666666666666669
+        },
+        "e2e": {
+            "llama_hyp_summary": "The passage describes the controversial life of \"Rockstar Baba\" Gurmeet Ram Rahim Singh, a 50-year-old Indian spiritual leader with a large following, who has been accused of various crimes and has been involved in numerous controversies throughout his career.",
+            "bart_score": -2.8118467330932617,
+            "rouge1": 0.34920634920634924
+        },
+        "ceil": {
+            "llama_hyp_summary": "The passage describes the life and controversies of Gurmeet Ram Rahim Singh, a 50-year-old Indian spiritual leader with a large following, who has been accused of various crimes and has been involved in numerous controversies throughout his career.",
+            "bart_score": -2.7357404232025146,
+            "rouge1": 0.3548387096774194
+        },
+        "ref_summary": "The flamboyant chief of the Dera Sacha Sauda sect, Gurmeet Ram Rahim Singh, has been convicted of rape by an Indian court.",
+        "ref_url": "https://www.bbc.com/news/world-asia-india-41047531",
+        "foreign_summary": "උතුරු ඉන්දියාවේ ඉතා ජනප්‍රිය පූජකයෙකු වන ගුර්මීත් රාම් රහීම් සිං (Gurmeet Ram Rahim Singh) ස්ත්‍රී දූෂණ චෝදනාවලට වැරදිකරු බව අධිකරණය තීන්දු කිරීමෙන් අනතුරුව හටගත් ප්‍රචණ්ඩ ක්‍රියාවලින් 23 දෙනෙකුවත් මරුමුවට පත් වී තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A child has been born using the DNA of three people, believed to be the second such case, with the first attempt occurring in Kiev and the second in Mexico City.",
+            "bart_score": -3.4240989685058594,
+            "mt_hyp_summary": "A new technique using the DNA of three individuals has resulted in a successful fetal delivery in Ukraine.",
+            "rouge1": 0.3529411764705882
+        },
+        "e2e": {
+            "llama_hyp_summary": "Doctors in Kiev have used a method called pronuclear transfer to create a baby girl with DNA from three parents, the world's second \"modern three-parent baby\", in a procedure aimed at helping women with genetic disorders.",
+            "bart_score": -3.6450839042663574,
+            "rouge1": 0.24137931034482757
+        },
+        "ceil": {
+            "llama_hyp_summary": "Doctors in Kiev have used a world-first method called pronuclear transfer to create a baby girl with DNA from three parents, the second such case globally, in an attempt to help infertile couples conceive.",
+            "bart_score": -3.4341583251953125,
+            "rouge1": 0.2545454545454545
+        },
+        "ref_summary": "A baby has been born to a previously infertile couple in Ukraine using a new type of \"three-person IVF\".",
+        "ref_url": "https://www.bbc.com/news/health-38648981",
+        "foreign_summary": "පුද්ගලයන් තිදෙනෙකුගේ ඩීඑන්ඒ අණු යොදා ගනිමින් නව ක්‍රමවේදයක් ඔස්සේ යුක්‍රේනයේ සිදු කරන ලද නල දරු උපතක් සාර්ථක වී ඇත."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The passage describes a 228 million-year-old fossilized carcass, the oldest and most complete of its kind, found in China's Guizhou province.",
+            "bart_score": -3.194348096847534,
+            "mt_hyp_summary": "Scientists have found evidence that in the past, crab cats did not have a backbone.",
+            "rouge1": 0.05555555555555555
+        },
+        "e2e": {
+            "llama_hyp_summary": "The almost-complete fossil of a 228-million-year-old reptile, named Eorhynchochelys sinensis, has been discovered in China, providing insights into the evolution of the turtle shell.",
+            "bart_score": -3.1677744388580322,
+            "rouge1": 0.0
+        },
+        "ceil": {
+            "llama_hyp_summary": "The almost-complete fossil of a 228-million-year-old reptile, named Eorhynchochelys sinensis, has been discovered in China, providing insights into the evolution of the turtle shell.",
+            "bart_score": -3.1677744388580322,
+            "rouge1": 0.0
+        },
+        "ref_summary": "Scientists have found new evidence confirming that turtles once lived without shells.",
+        "ref_url": "https://www.bbc.com/news/science-environment-45261121",
+        "foreign_summary": "අතීතයේදී කැස්බෑවන්ගේ පිටේ කටුවක් නොතිබූ බවට විද්‍යාඥයන්ට සාක්ෂි හමුවී තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Google's Gmail service allowed a third-party company to access users' email accounts without their explicit consent, sparking controversy and concerns over privacy.",
+            "bart_score": -2.843857765197754,
+            "mt_hyp_summary": "Google confirms that private emails via Gmail can be read not only by transaction devices but also by third parties who create apps in some cases.",
+            "rouge1": 0.25
+        },
+        "e2e": {
+            "llama_hyp_summary": "People who have connected third-party apps to their Gmail accounts may have unwittingly given human staff permission to read their messages, a practice that is considered a \"dirty secret\" and has been allowed by Google despite not being explicitly mentioned in user agreements.",
+            "bart_score": -3.5785248279571533,
+            "rouge1": 0.29411764705882354
+        },
+        "ceil": {
+            "llama_hyp_summary": "People who have connected third-party apps to their Gmail accounts may have unwittingly given human staff permission to read their messages, a practice that is considered a \"dirty secret\" and has been allowed by Google despite not being explicitly mentioned in user agreements.",
+            "bart_score": -3.5785248279571533,
+            "rouge1": 0.29411764705882354
+        },
+        "ref_summary": "Google has confirmed that private emails sent and received by Gmail users can sometimes be read by third-party app developers, not just machines.",
+        "ref_url": "https://www.bbc.co.uk/news/technology-44699263",
+        "foreign_summary": "Gmail හරහා කෙරෙන පෞද්ගලික විද්‍යුත් තැපැල් (email) ගනුදෙනු උපකරණවලට පමණක් නොව, ඇතැම් අවස්ථාවලදී app (ඇප්) නිර්මාණය කරන තුන්වෙනි පාර්ශවීය පුද්ගලයින්ට ද කියවිය හැකි බව ගූගල් සමාගම තහවුරු කර සිටී."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Einstein left notes in a hotel after winning the Nobel Prize in Physics in 1921 and later shared the news with a messenger in Tokyo in 1922.",
+            "bart_score": -3.406554698944092,
+            "mt_hyp_summary": "A note by world-renowned physicist Albert Einstein containing a guide to happiness was sold at an auction in Jerusalem for $1.56 million.",
+            "rouge1": 0.11764705882352941
+        },
+        "e2e": {
+            "llama_hyp_summary": "Einstein gave a signed note to a courier in Tokyo in 1922, which reads \"A calm and humble life will bring more happiness than the pursuit of success and the constant restlessness that comes with it,\" and sold for $240,000 at auction.",
+            "bart_score": -3.833728790283203,
+            "rouge1": 0.2388059701492537
+        },
+        "ceil": {
+            "llama_hyp_summary": "Einstein gave a signed note to a courier in Tokyo in 1922, which reads \"A calm and humble life will bring more happiness than the pursuit of success and the constant restlessness that comes with it\", and it sold for $240,000 at auction.",
+            "bart_score": -3.728454113006592,
+            "rouge1": 0.23529411764705885
+        },
+        "ref_summary": "A note written by Albert Einstein containing advice on happy living has sold at an auction house in Jerusalem for $1.56m (£1.19m).",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-41742785",
+        "foreign_summary": "ලෝක පූජිත භෞතික විද්‍යාඥයෙකු වූ ඇල්බට් අයින්ස්ටයින් විසින් ලියන ලද සතුටින් ජීවත් වීමේ උපදේශයක් අඩංගු සටහනක් ජෙරුසෙලමේ පැවති වෙන්දේසියක දී ඩොලර් මිලියන 1.56 මුදලකට අලෙවි විය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The #MeToo campaign, sparked by allegations against Harvey Weinstein, was not a single event but rather the culmination of a decades-long process of women advocating for their rights in media.",
+            "bart_score": -3.1180670261383057,
+            "mt_hyp_summary": "A group of women who have been called \"Silence Breachers\" for their opposition to sexual assault and harassment have been named \"Person of the Year\" by Time magazine, an American publication.",
+            "rouge1": 0.1818181818181818
+        },
+        "e2e": {
+            "llama_hyp_summary": "The #MeToo movement is a global social change phenomenon that has seen millions of people come forward with their stories of sexual harassment and assault, without a single leader or unifying tenet, but with a collective impact of turning shame into outrage and fear into fury.",
+            "bart_score": -3.731999635696411,
+            "rouge1": 0.2
+        },
+        "ceil": {
+            "llama_hyp_summary": "The #MeToo movement is a global social change phenomenon that has seen millions of people come forward with their stories of sexual harassment and assault, with no single leader or unifying tenet, but rather a collective effort to turn shame into outrage and fear into fury.",
+            "bart_score": -3.5043368339538574,
+            "rouge1": 0.2
+        },
+        "ref_summary": "Time magazine has named \"the Silence Breakers\" - women and men who spoke out against sexual abuse and harassment - as its \"Person of the Year\".",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-42254219",
+        "foreign_summary": "ලිංගික අතවර සහ හිරිහැරවලට එරෙහිව නැගී සිටි \"නිහඬ බව බිඳින්නෝ\" නමින් හඳුන්වන කාන්තාවන් පිරිසක් \"වසරේ පුද්ගලයා\" ලෙසින් ඇමෙරිකාවේ ප්‍රකාශයට පත් කෙරෙන ටයිම් සඟරාව විසින් නම් කරනු ලැබ තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "General Pryatch Chan Ocha has been nominated as a candidate for the Thai Parliament, promising to introduce comprehensive political reforms to prevent future instability.",
+            "bart_score": -4.088696479797363,
+            "mt_hyp_summary": "General Praut Chan Ocha, who was sworn in as Thailand's prime minister by a military junta.",
+            "rouge1": 0.23255813953488372
+        },
+        "e2e": {
+            "llama_hyp_summary": "General Prayuth Chan-ocha was nominated as Thailand's new Prime Minister by the legislature, a move expected to be approved by the King, after a 15-minute vote with no opposition.",
+            "bart_score": -2.6180460453033447,
+            "rouge1": 0.39215686274509803
+        },
+        "ceil": {
+            "llama_hyp_summary": "General Prayuth Chan-ocha was nominated as Thailand's 29th Prime Minister by the junta-controlled National Assembly, with a vote of 191-0, and is expected to be approved by the King, marking the end of the country's political crisis.",
+            "bart_score": -2.425623655319214,
+            "rouge1": 0.3606557377049181
+        },
+        "ref_summary": "Thailand's junta leader Prayuth Chan-ocha has been named the new prime minister of the southeast Asian nation.",
+        "ref_url": "https://www.bbc.com/news/world-asia-28876154",
+        "foreign_summary": "තායිලන්තයේ මිලිටරි ජුන්ඩාවක් මගින් බලයට පැමිණි ජෙනරාල් ප්‍රයුත් චෑන් ඕචා තායිලන්ත අගමැති ලෙස දිව්රුම් දී තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The Fatwa Decree, issued by Islamic clergy, sets the minimum age of marriage at 18 years, making it a significant step towards addressing child marriage in Islamic countries.",
+            "bart_score": -3.1291487216949463,
+            "mt_hyp_summary": "In Indonesia, Islamic clergy have issued an unprecedented Fatwa against child marriage.",
+            "rouge1": 0.2926829268292683
+        },
+        "e2e": {
+            "llama_hyp_summary": "A fatwa issued by a congress of female clerics in Indonesia urges the government to raise the minimum legal age for women to marry to 18 from the current 16, citing the harmful effects of child marriage on women's education and well-being.",
+            "bart_score": -2.5329577922821045,
+            "rouge1": 0.2807017543859649
+        },
+        "ceil": {
+            "llama_hyp_summary": "A fatwa issued by a congress of female clerics in Indonesia urges the government to raise the minimum legal age for women to marry to 18, citing the harmful effects of child marriage and the need for women to be protected.",
+            "bart_score": -2.430347204208374,
+            "rouge1": 0.29629629629629634
+        },
+        "ref_summary": "Female Islamic clerics in Indonesia have issued an unprecedented fatwa against child marriage.",
+        "ref_url": "https://www.bbc.com/news/world-asia-39741891",
+        "foreign_summary": "ඉන්දුනීසියාවේ ඉස්ලාම් පූජකවරියන් විසින් ළමා විවාහවලට එරෙහිව පෙර නොවූවිරූ ෆට්වා නියෝගයක් නිකුත් කරනු ලැබීය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The former prime minister is accused of misusing $252,000 in international aid from a children's charity and has been sentenced to four years in jail.",
+            "bart_score": -2.815809726715088,
+            "mt_hyp_summary": "Clashes between police and thousands of opposition supporters erupted after former Bangladeshi Prime Minister Kalada Shi was sentenced to five years in prison on corruption charges.",
+            "rouge1": 0.0851063829787234
+        },
+        "e2e": {
+            "llama_hyp_summary": "Former Bangladeshi Prime Minister Khaleda Zia was sentenced to jail for embezzling $252,000 intended for an orphanage trust, which may bar her from participating in upcoming parliamentary polls.",
+            "bart_score": -3.0552332401275635,
+            "rouge1": 0.24489795918367346
+        },
+        "ceil": {
+            "llama_hyp_summary": "Khaleda Zia, a former prime minister, was sentenced to jail for embezzling $252,000 intended for an orphanage trust, which may bar her from participating in upcoming parliamentary polls.",
+            "bart_score": -3.0263144969940186,
+            "rouge1": 0.20408163265306123
+        },
+        "ref_summary": "Bangladeshi police have clashed with thousands of protesters, as opposition leader Khaleda Zia was jailed for five years for corruption.",
+        "ref_url": "https://www.bbc.com/news/world-asia-42987765",
+        "foreign_summary": "දූෂණ චෝදනා ලබා සිටි බංග්ලාදේශ හිටපු අගමැතිනි කලදා ෂියාට අවුරුදු පහක සිර දඬුවමක් නියම කරනු ලැබීමෙන් අනතුරුව පොලිසිය සහ දහස් ගණන් විපක්ෂ ආධාරකරුවන් අතර ගැටුම් හටගත්තේය."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Prisoners in a detention camp near the Malaysian border attempted to escape by jumping from the walls, but were unsuccessful.",
+            "bart_score": -3.1721370220184326,
+            "mt_hyp_summary": "Authorities say they are looking for 20 Chinese Uighur prisoners who escaped from a Thai detention camp.",
+            "rouge1": 0.20512820512820512
+        },
+        "e2e": {
+            "llama_hyp_summary": "More than 200 Uighur inmates, including 20 who are still at large, escaped from a Thai detention center by digging holes in their cell walls and climbing over the barbed wire near the Malaysia border.",
+            "bart_score": -2.8601479530334473,
+            "rouge1": 0.25925925925925924
+        },
+        "ceil": {
+            "llama_hyp_summary": "More than 200 Uighur inmates, including 20 who are still at large, escaped from a Thai detention center by digging holes in their cell walls and climbing over the barbed wire border with Malaysia.",
+            "bart_score": -2.8124918937683105,
+            "rouge1": 0.2641509433962264
+        },
+        "ref_summary": "Some 20 ethnic Uighurs from China are on the run after escaping from a Thai detention centre, officials say.",
+        "ref_url": "https://www.bbc.com/news/world-asia-42049550",
+        "foreign_summary": "තායි රැඳවුම් කඳවුරකින් පලා ගිය චීනයේ උයිගර් ජාතික සිරකරුවන් 20 දෙනෙකු සොයමින් සිටින බව බලධාරීහු පවසති."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The passage describes the major changes in the size, accessories, and prices of Apple's iPhone models from the iPhone 2G to the iPhone X, highlighting key features and releases over the years.",
+            "bart_score": -3.567192792892456,
+            "mt_hyp_summary": "Apple's head Tim Cook has suggested that the iPhone could be priced down because of the decline in sales worldwide.",
+            "rouge1": 0.18518518518518517
+        },
+        "e2e": {
+            "llama_hyp_summary": "Apple's revenue fell 5% to $84.3 billion in its latest quarter, with a 15% decline in iPhone sales, due to a slowdown in China and high prices, but the company's services business saw a 19% increase in revenue.",
+            "bart_score": -2.539444923400879,
+            "rouge1": 0.22580645161290325
+        },
+        "ceil": {
+            "llama_hyp_summary": "Apple's revenue fell 5% to $84.3 billion in its latest quarter, with a 15% decline in iPhone sales, due to a slowdown in China and high prices, but the company's services business saw a 19% increase in revenue.",
+            "bart_score": -2.539444923400879,
+            "rouge1": 0.22580645161290325
+        },
+        "ref_summary": "Apple boss Tim Cook has hinted it could lower iPhone prices in some places in an attempt to boost falling sales.",
+        "ref_url": "https://www.bbc.com/news/business-47047297",
+        "foreign_summary": "ලොව පුරා ඇපල් ජංගම දුරකථනවල අලෙවිය අඩු වීම හේතුවෙන්, iPhoneවල මිල අඩු කිරීමේ අදහසක් ඇති බව එම ආයතනයේ ප්‍රධානියා වන ටිම් කුක් ඇඟවීමක් සිදු කර තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Kim Kardashian was robbed of billions of dollars worth of gold jewelry while staying in Paris, but was not physically harmed during the incident.",
+            "bart_score": -2.5226786136627197,
+            "mt_hyp_summary": "Kim Kardashian, a television star in the American modeling industry, was being robbed by gunmen while on a tour of Paris, France, and is being discussed on social media.",
+            "rouge1": 0.17857142857142858
+        },
+        "e2e": {
+            "llama_hyp_summary": "Kim Kardashian West was robbed at gunpoint in her Paris apartment by five masked men who stole jewelry worth up to €6m and tied her up in the bathroom.",
+            "bart_score": -2.5926990509033203,
+            "rouge1": 0.3934426229508197
+        },
+        "ceil": {
+            "llama_hyp_summary": "Kim Kardashian West was robbed at gunpoint in her Paris apartment, where thieves stole jewelry worth up to €6m and tied her up in the bathroom, leaving her \"badly shaken but physically unharmed\".",
+            "bart_score": -3.1179308891296387,
+            "rouge1": 0.3076923076923077
+        },
+        "ref_summary": "US reality TV star Kim Kardashian West has been robbed at gunpoint at a luxury residence in Paris by at least two men dressed as police officers, her publicist and police say.",
+        "ref_url": "https://www.bbc.com/news/world-europe-37538453",
+        "foreign_summary": "ඇමෙරිකානු නිරූපන ක්ෂේත්‍රයේ රූපවාහිනී තාරකාවක් වන කිම් කාඩේෂියන් (Kim Kardashian) ප්‍රංශයේ පැරිස් අගනුවර සංචාරයක නිරත වෙමින් සිටියදී තුවක්කුකරුවන් විසින් කොල්ල කණු ලැබීම සමාජ මාධ්‍ය ජාලය තුළ සාකච්ඡාවට ලක් වෙමින් පවතී."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A railway operator apologized to passengers for a 20-second early departure that resulted in a 7pm delay, calling it an \"unforgivable crime\" that made customers uncomfortable.",
+            "bart_score": -3.205324172973633,
+            "mt_hyp_summary": "A Japanese railway company has issued an apology for the inconvenience caused by the departure of the train 25 seconds ahead of schedule.",
+            "rouge1": 0.18604651162790697
+        },
+        "e2e": {
+            "llama_hyp_summary": "The Tsukuba Express line apologized for a train departing 20 seconds early due to staff not checking the timetable, with many social media users reacting with surprise.",
+            "bart_score": -3.754371404647827,
+            "rouge1": 0.18604651162790697
+        },
+        "ceil": {
+            "llama_hyp_summary": "The Tsukuba Express line apologized for a train departing 20 seconds early due to staff not checking the timetable, with many social media users reacting with surprise.",
+            "bart_score": -3.754371166229248,
+            "rouge1": 0.18604651162790697
+        },
+        "ref_summary": "A rail company in Japan has apologised after one of its trains departed 20 seconds early.",
+        "ref_url": "https://www.bbc.com/news/world-asia-42009839",
+        "foreign_summary": "නියමිත වේලාවට වඩා තත්පර විසිපහකට පෙර දුම්රිය පිටත් වීමෙන් මගීන්ට ඇති වූ අපහසුතාව වෙනුවෙන් සමාව ඉල්ලා සිටීමට ජපාන දුම්රිය සමාගමක් ක්‍රියා කර තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Crown Prince Mohammed bin Salman is linked to the attempted assassination of intelligence officer Saad al-Jabri, who was a former associate of journalist Jamal Khashoggi.",
+            "bart_score": -2.228104829788208,
+            "mt_hyp_summary": "Crown Prince Mohammed bin Salman has been accused of sending a group of assassins to Canada to kill a former Saudi intelligence officer.",
+            "rouge1": 0.3773584905660377
+        },
+        "e2e": {
+            "llama_hyp_summary": "A 106-page unproven complaint filed in the US alleges that Saudi Crown Prince Mohammed bin Salman attempted to murder Saad al-Jabri, a former Saudi government official, in Canada in 2018 to silence him about alleged corruption and his knowledge of the murder of journalist Jamal Khashoggi.",
+            "bart_score": -2.9399707317352295,
+            "rouge1": 0.4266666666666667
+        },
+        "ceil": {
+            "llama_hyp_summary": "A failed plot to kill Saad al-Jabri, a former Saudi government official, was allegedly orchestrated by Crown Prince Mohammed bin Salman in 2018, shortly after the murder of journalist Jamal Khashoggi, in an attempt to silence him due to his possession of \"damning information\" about the crown prince's corruption and human rights abuses.",
+            "bart_score": -2.8071913719177246,
+            "rouge1": 0.39024390243902435
+        },
+        "ref_summary": "Saudi Arabia's Crown Prince Mohammed bin Salman has been accused of sending a hit-squad to Canada in order to kill a former Saudi intelligence official.",
+        "ref_url": "https://www.bbc.com/news/world-middle-east-53677869",
+        "foreign_summary": "සෞදි අරාබි හිටපු බුද්ධි අංශ නිලධාරියෙකු මරා දැමීම සඳහා කැනඩාව වෙත ඝාතකයන් කණ්ඩායමක් යැවූ බවට සෞදි ඔටුන්න හිමි කුමරු මොහොමඩ් බින් සල්මාන් වෙත චෝදනා එල්ල වී තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "The 2016 Holey Artisan restaurant attack in Dhaka, Bangladesh, resulted in the deaths of five people and the capture of 20 hostages, with eight civilians later charged with planning and providing weapons for the attack.",
+            "bart_score": -3.1776373386383057,
+            "mt_hyp_summary": "Seven Islamic men responsible for the 2016 attack on a restaurant in the capital of Bangladesh were sentenced to death by a court today (27 November).",
+            "rouge1": 0.22950819672131148
+        },
+        "e2e": {
+            "llama_hyp_summary": "Seven men were sentenced to death for planning and carrying out the 2016 Holey Artisan cafe attack in Dhaka, Bangladesh, which killed 20 people and was claimed by the Islamic State group.",
+            "bart_score": -2.1967296600341797,
+            "rouge1": 0.4827586206896552
+        },
+        "ceil": {
+            "llama_hyp_summary": "Seven men were sentenced to death for planning and carrying out the 2016 Holey Artisan cafe attack in Dhaka, Bangladesh, which killed 20 people, mostly foreigners.",
+            "bart_score": -2.0382635593414307,
+            "rouge1": 0.6153846153846154
+        },
+        "ref_summary": "Seven Islamists have been sentenced to death for a 2016 attack on a cafe in the Bangladeshi capital in which 22 people, mostly foreigners, were killed.",
+        "ref_url": "https://www.bbc.com/news/world-asia-50570243",
+        "foreign_summary": "2016 වර්ෂයේ දී බංගලාදේශ අගනුවර ඇති ආපන ශාලාවකට එල්ල කරන ලද ප්‍රහාරයකට වගකිව යුතු ඉස්ලාමීය පුද්ගලයින් හත් දෙනෙකුට අද දින (නොවැම්බර් 27) එරට අධිකරණයෙන් මරණ දණ්ඩනය නියම කෙරිණි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A truck driven by a suspected driver from a refugee camp in Afghanistan or a jobless job post office in Pakistan crashed into a market, killing 12 people and injuring 48 others.",
+            "bart_score": -3.5545637607574463,
+            "mt_hyp_summary": "The police in Berlin are investigating the alleged terrorist attack of a truck driving into a Christmas market in the German capital.",
+            "rouge1": 0.4262295081967213
+        },
+        "e2e": {
+            "llama_hyp_summary": "A truck attack in Berlin's Christmas market has killed and injured many people, with German Chancellor Angela Merkel saying it was a \"terrorist attack\" and the suspect, a 23-year-old Pakistani asylum seeker, being questioned.",
+            "bart_score": -2.614439010620117,
+            "rouge1": 0.393939393939394
+        },
+        "ceil": {
+            "llama_hyp_summary": "A truck attack in Berlin's Christmas market has killed and injured many people, with the suspect, a 23-year-old Pakistani asylum seeker, being questioned by police.",
+            "bart_score": -2.46932315826416,
+            "rouge1": 0.3859649122807017
+        },
+        "ref_summary": "German police are investigating a \"probable terrorist attack\" after a man ploughed a lorry into a Christmas market in the heart of Berlin, killing 12 people and injuring 48.",
+        "ref_url": "https://www.bbc.com/news/world-europe-38375555",
+        "foreign_summary": "ජර්මනියේ බර්ලින් අගනුවර නත්තල් වෙළඳපොළක් තුළට ට්‍රක් රථයක් පදවනු ලැබීම ත්‍රස්ත ප්‍රහාරයක් ලෙස සැක කොට පරීක්ෂණ පවත්වන බව එරට පොලිසිය පවසයි."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "A woman was unknowingly married to her husband during a fake wedding ceremony in China, and later discovered she was legally married after signing a real wedding certificate.",
+            "bart_score": -3.381420135498047,
+            "mt_hyp_summary": "A 21-year-old woman in Hong Kong has been tricked into marrying a stranger by arranging for her to attend a \"fake\" wedding.",
+            "rouge1": 0.2909090909090909
+        },
+        "e2e": {
+            "llama_hyp_summary": "A 21-year-old woman was tricked into participating in a simulated wedding in Fujian, China, and was told it was a mock ceremony, but later discovered she was actually married and may have to apply for a divorce.",
+            "bart_score": -2.420820713043213,
+            "rouge1": 0.42424242424242425
+        },
+        "ceil": {
+            "llama_hyp_summary": "A 21-year-old woman was tricked into participating in a simulated wedding in Fujian, China, and was told it was a mock ceremony, but she later discovered that she was actually married and may have to apply for a divorce.",
+            "bart_score": -2.3800408840179443,
+            "rouge1": 0.411764705882353
+        },
+        "ref_summary": "A 21-year-old Hong Kong woman has said she was tricked into marrying a complete stranger on the mainland while taking part in a \"mock\" wedding.",
+        "ref_url": "https://www.bbc.com/news/world-asia-china-45338985",
+        "foreign_summary": "හොංකොංහි ජීවත් වන 21 හැවිදිරි කාන්තාවකට \"ව්‍යාජ\" විවාහ උත්සවයකට සහභාගී වීමට සැලැස්වීමෙන් ඇය රවටා නාඳුනන තැනැත්තෙකුට විවාහ කර දී තිබේ."
+    },
+    {
+        "nllb": {
+            "llama_hyp_summary": "Kylie Jenner, Kim Kardashian's sister, is a social media star and fashion model who is on track to become the world's youngest self-made billionaire.",
+            "bart_score": -2.2120466232299805,
+            "mt_hyp_summary": "According to Forbes, Kylie Jenner, sister of American model Kim Kardashian, claimed $900 million at the age of 20.",
+            "rouge1": 0.2127659574468085
+        },
+        "e2e": {
+            "llama_hyp_summary": "Kylie Jenner, the 20-year-old social media star and founder of Kylie Cosmetics, is on track to become the youngest-ever self-made billionaire with a net worth of $800 million.",
+            "bart_score": -1.8318841457366943,
+            "rouge1": 0.34615384615384615
+        },
+        "ceil": {
+            "llama_hyp_summary": "Kylie Jenner, the youngest of the Kardashian clan, is on track to become the youngest-ever self-made billionaire at the age of 21, with a net worth of $800 million from her cosmetics company, Kylie Cosmetics.",
+            "bart_score": -1.9367477893829346,
+            "rouge1": 0.3157894736842105
+        },
+        "ref_summary": "Keeping Up with the Kardashians star Kylie Jenner is worth $900m (£680m) at just 20 years of age, says Forbes.",
+        "ref_url": "https://www.bbc.com/news/world-us-canada-44802123",
+        "foreign_summary": "ඇමෙරිකානු නිරූපන ක්ෂේත්‍රයේ තාරකාවක් වන කිම් කාඩේෂියන්ගේ සොහොයුරියක වන කයිලි ජෙනර් විසි වෙනි විය තරම් අඩු වයසකදී ඇමරිකානු ඩොලර් මිලියන 900 කට හිමිකම් කියන බව ෆෝබ්ස් සඟරාව පවසයි."
+    }
+]

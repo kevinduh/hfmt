@@ -20,7 +20,7 @@
 | E2E  | 20.1  | 7.5  | 0.8  | -2.99  | 0.199  | NA  |
 | Ceiling | 21.2  | 8.7  | 0.803  | -2.99  | 0.257  | NA  |
 
-## Japanese (`Llama-3.0`)
+## [Japanese](../single_outs/combined_lang_reports/ja.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -30,7 +30,7 @@
 | E2E  | 23.8  | 11.2  | 0.809  | -2.86  | 0.238  | NA  |
 | Ceiling | 21.2  | 9.5  | 0.802  | -3.01  | 0.276  | NA  |
 
-## Russian (`Llama-3.0`)
+## [Russian](../single_outs/combined_lang_reports/ru.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -40,7 +40,7 @@
 | E2E  | 20.2  | 8.4  | 0.799  | -2.91  | 0.208  | NA  |
 | Ceiling | 21.5  | 9.6  | 0.805  | -2.94  | 0.256  | NA  |
 
-## Swahili (`Llama-3.0`)
+## [Swahili](../single_outs/combined_lang_reports/sw.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -50,7 +50,7 @@
 | E2E  | 20.6  | 8.0  | 0.798  | -2.84  | 0.235  | NA  |
 | Ceiling | 21.5  | 8.9  | 0.802  | -2.97  | 0.273  | NA  |
 
-## Tamil (`Llama-3.0`)
+## [Tamil](../single_outs/combined_lang_reports/ta.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -60,7 +60,7 @@
 | E2E  | 15.5  | 6.4  | 0.637  | -3.43  | 0.175  | NA  |
 | Ceiling | 20.6  | 8.7  | 0.8  | -3.01  | 0.279  | NA  |
 
-## Chinese (`Llama-3.0`)
+## [Chinese](../single_outs/combined_lang_reports/zh.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -70,7 +70,7 @@
 | E2E  | 21.2  | 9.0  | 0.803  | -2.94  | 0.214  | NA  |
 | Ceiling | 21.2  | 9.0  | 0.802  | -2.93  | 0.26  | NA  |
 
-## Amharic (`Llama-3.0`)
+## [Amharic](../single_outs/combined_lang_reports/am.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -78,7 +78,7 @@
 | E2E        | 11.3  | 2.2  | 0.675  | -3.4  | 0.064  | NA  |
 | Ceiling | 23.1  | 10.7  | 0.808  | -2.96  | 0.285  | NA  |
 
-## Kyrgyz (`Llama-3.0`)
+## [Kyrgyz](../single_outs/combined_lang_reports/ky.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -86,7 +86,7 @@
 | E2E        | 17.5  | 5.8  | 0.779  | -2.99  | 0.167  | NA  |
 | Ceiling | 20.5  | 9.7  | 0.801  | -3.06  | 0.273  | NA  |
 
-## Kirundi (`Llama-3.0`)
+## [Kirundi](../single_outs/combined_lang_reports/rn.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -94,7 +94,7 @@
 | E2E        | 22.8  | 10.2  | 0.806  | -2.97  | 0.293  | NA  |
 | Ceiling | 22.6  | 10.4  | 0.807  | -2.94  | 0.29  | NA  |
 
-## Sinhala (`Llama-3.0`)
+## [Sinhala](../single_outs/combined_lang_reports/si.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |
@@ -102,7 +102,7 @@
 | E2E        | 22.5  | 9.1  | 0.809  | -2.87  | 0.25  | NA  |
 | Ceiling | 22.3  | 9.4  | 0.811  | -2.85  | 0.237  | NA  |
 
-## Pidgin (`Llama-3.0`)
+## [Pidgin](../single_outs/combined_lang_reports/pcm.jsonl) (`Llama-3.0`)
 
 | System                   | RougeL | Rouge2 | BERTScoreF1 | BARTScore | NerF1 | BLEU(CrossSum) |
 | :----------------        | ------: | ------: | -----------: | --------: | -----: | --------------: |

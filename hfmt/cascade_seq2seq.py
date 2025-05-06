@@ -88,7 +88,7 @@ def prep_summarize_tokens3(
     return tokenizer(
         new_doc_batch,
         return_tensors="pt",
-                padding=True,
+                padding=not bool(max_len),
                 truncation=bool(max_len),
                 max_length=max_len
 		).to(device)
@@ -101,7 +101,7 @@ def prep_summarize_tokens5(
         max_len=131072
     ):
     """
-    Adding a suffix (helps a lot, actually)
+    Adding a suffix (for HELMET sanity check)
     """
     new_doc_batch = [
         prefix + sent.strip() + HELMET_CODA for sent in doc_batch
@@ -144,6 +144,7 @@ def prep_summarize_tokens2(
 		tokenizer, 
 		device,
 		prefix="",
+		suffix="",
 		max_len=None
 	):
     """
@@ -151,20 +152,31 @@ def prep_summarize_tokens2(
 	prior approach
 	"""
     doc_batch = [
-	    prefix + sent.strip() for sent in doc_batch
+	    prefix + sent.strip() + suffix for sent in doc_batch
 	]
     new_doc_batch = [
         [{'role': 'user', 'content': doc}] for doc in doc_batch
     ]
+    #print("++++++++++THESE ARE THE INPUTS:")
+    #print(new_doc_batch)
+    #pdb.set_trace()
     input_ids = tokenizer.apply_chat_template(
         new_doc_batch,
         add_generation_prompt=True,
         return_tensors="pt",
-        padding=True,
+        padding=not bool(max_len),
 		truncation=bool(max_len),
 		max_length=max_len
     ).to(device)
     return {"input_ids": input_ids}
+
+def prep_summarize_tokens6(*args, **kwargs):
+    """Basically prep_summarize_tokens2 but with the 
+	suffix of prep_summarize_tokens3"""
+    kwargs['suffix'] = ENG_CODA
+    #pdb.set_trace()
+    print("KWARGS:", kwargs, flush=True)
+    return prep_summarize_tokens2(*args, **kwargs)
 
 def prep_summarize_tokens4(
         doc_batch,
@@ -205,7 +217,8 @@ PROMPTING_STRATEGIES = [
 	prep_summarize_tokens2, 
 	prep_summarize_tokens3, 
 	prep_summarize_tokens4,
-    prep_summarize_tokens5
+    prep_summarize_tokens5,
+	prep_summarize_tokens6
 ]
 
 def run_basic_eval(checkpoint, srcs, language):
@@ -215,7 +228,7 @@ def run_basic_eval(checkpoint, srcs, language):
     tokenizer = AutoTokenizer.from_pretrained(checkpoint) 
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
-    if "nllb" in checkpoint.lower():
+    if "facebook" in checkpoint.lower():
         tokenizer.src_lang = LANG2FLORES_CODE[language]
         tokenizer.tgt_lang = "eng_Latn"
     model = AutoMod.from_pretrained(
@@ -232,7 +245,7 @@ def run_basic_eval(checkpoint, srcs, language):
             tokenizer.eos_token_id,
             # tokenizer.convert_tokens_to_ids("<|eot_id|>")
         ]
-        if "nllb" in checkpoint.lower():
+        if "facebook" in checkpoint.lower():
             generate_kwargs = {
             	"forced_bos_token_id": tokenizer.convert_tokens_to_ids("eng_Latn"),
                 "max_length": 128
@@ -265,7 +278,7 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
     tokenizer = AutoTokenizer.from_pretrained(checkpoint) 
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
-    if "nllb" in checkpoint.lower():
+    if "facebook" in checkpoint.lower():
         tokenizer.src_lang = flores_code
         tokenizer.tgt_lang = "eng_Latn"
     model = AutoMod.from_pretrained(
@@ -292,7 +305,7 @@ def run_flores_eval(checkpoint, flores_code, outs_file):
                 tokenizer.eos_token_id,
                 # tokenizer.convert_tokens_to_ids("<|eot_id|>")
             ]
-            if "nllb" in checkpoint.lower():
+            if "facebook" in checkpoint.lower():
                 generate_kwargs = {
 					"forced_bos_token_id": tokenizer.convert_tokens_to_ids("eng_Latn"),
 					"max_length": 128
@@ -339,7 +352,7 @@ def main(
 		language: str="english",
 		verbose: bool=False,
 		mt_model_dim: int=512,
-		prompting_strategy=1 # corresponding to prep_summarize_tokens2 
+		prompting_strategy=5 # corresponding to prep_summarize_tokens5 (FIXME: switch between 1 and 5, or 2 for BLOOM)  
 	):
 
     ###################################
@@ -393,7 +406,7 @@ def main(
         tokenizer.pad_token = tokenizer.bos_token if summarization else tokenizer.eos_token
     if summarization:
         tokenizer.padding_side = 'left'
-    if "nllb" in checkpoint.lower():
+    if "facebook" in checkpoint.lower():
         tokenizer.src_lang = LANG2FLORES_CODE[language]
         tokenizer.tgt_lang = "eng_Latn"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -414,6 +427,7 @@ def main(
 			torch_dtype=torch_dtype,
 			pad_token_id=tokenizer.eos_token_id
 		).to(device)
+        print(f"(*) Successfully loaded model for {language}!", flush=True)
     else:
         if verbose:
             logging.info("Training from scratch with pretrained model's config only")
@@ -434,7 +448,7 @@ def main(
     #eval_data = eval_data.select(range(3))
     start_time = time.time()
     outputs = []
-    valid_input_sizes = [1]
+    valid_input_sizes = [4096]
     input_texts = [eval_datum["text"] for eval_datum in eval_data]
     #print(input_texts, flush=True)
     for doc_batch in tqdm(batch_list(input_texts, bs=SUMMARIZE_BATCHSIZE)): # komya
@@ -464,10 +478,12 @@ def main(
                 #print("*" * 8, 'success!', flush=True)
                 valid_input_sizes.append(test_input_size)
             except RuntimeError: # Now just reduce size of tensor for inputs 
-                #print("WARNING: OutOfMemoryError")
+                print("WARNING: OutOfMemoryError", flush=True)
                 torch.cuda.empty_cache()
                 valid_input_size = int(max(valid_input_sizes) * 0.8)
+                print("VALID_INP_SIZE:", valid_input_size, valid_input_sizes)
                 #print('*' * 8, f'valid input size: {valid_input_size}')
+                #pdb.set_trace()
                 test_inputs = prep_summarize_tokens(
 					doc_batch, 
 					tokenizer, 
@@ -488,6 +504,12 @@ def main(
     	            skip_special_tokens=True
 	            ).strip() for output in decode_outs
 	        ]
+            #print("++++++++++THESE ARE THE INPUTS:")
+            #print(doc_batch)
+            #print("++++++++++AND OUTPUTS:")
+            #print(decoded_sents)
+            #print("++++++++++DUNZO", flush=True)
+            #raise KeyboardInterrupt
             #print("~~" * 10)
             #print("INPUT:")
             #print(tokenizer.decode(test_inputs['input_ids']))

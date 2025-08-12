@@ -5,9 +5,10 @@
 source ${HFMT_ROOT}/install/path.sh
 
 evalset=${HFMT_ROOT}/egs/data/summarization.en-en.jsonl
-checkpoint=meta-llama/Llama-3.2-3B-Instruct
-#checkpoint=CohereForAI/aya-23-8B
-outprefix=egs/summarization/example.Llama-3.2-3B-Instruct
+#checkpoint=meta-llama/Llama-3.2-3B-Instruct
+checkpoint=CohereLabs/aya-23-8B
+#outprefix=egs/summarization/example.Llama-3.2-3B-Instruct
+outprefix=egs/summarization/example.aya-23-8B
 batch_size=1
 prompt_choice=1
 

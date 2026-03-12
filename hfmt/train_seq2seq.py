@@ -101,6 +101,37 @@ def main():
         preds, labels = eval_preds
         if isinstance(preds, tuple):
             preds = preds[0]
+        preds = np.asarray(preds)
+        # If predictions are logits, convert to token ids.
+        if preds.ndim == 3:
+            preds = np.argmax(preds, axis=-1)
+        # Ensure integer token ids and guard against out-of-range values.
+        if not np.issubdtype(preds.dtype, np.integer):
+            preds = np.rint(preds).astype(np.int64)
+        pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+        if pad_id is None:
+            pad_id = 0
+        vocab_size = getattr(tokenizer, "vocab_size", None)
+        try:
+            pred_min = int(np.min(preds))
+            pred_max = int(np.max(preds))
+        except ValueError:
+            pred_min = None
+            pred_max = None
+        invalid_count = None
+        if vocab_size is not None:
+            invalid_count = int(np.sum((preds < 0) | (preds >= vocab_size)))
+        logging.info(
+            "compute_metrics preds: dtype=%s min=%s max=%s vocab_size=%s invalid_count=%s",
+            preds.dtype,
+            pred_min,
+            pred_max,
+            vocab_size,
+            invalid_count,
+        )
+        if vocab_size is not None:
+            preds = np.where(preds < 0, pad_id, preds)
+            preds = np.where(preds >= vocab_size, pad_id, preds)
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -213,6 +244,7 @@ def main():
                 logging.info(f"{i}:")
                 logging.info(f"original_inputs: {orig_inputs}")
                 logging.info(f"inputs: {test_inputs}")
+                logging.info(f"inputlen: {test_inputs['input_ids'][0].shape} {test_inputs['input_ids'][1].shape}")
                 logging.info(f"outputs: {test_outputs}")
                 logging.info(f"detokenized outputs w/ special token: {tokenizer.batch_decode(test_outputs)}")
 

@@ -65,7 +65,7 @@ pwd
 venv=$ENV_NAME # set your virtual enviroment name
 if [[ "$FORCE_NEW_ENV" == true || ! -d $CONDA_HOME/$ENV_NAME ]]; then
   errcho "Creating new Conda env : $ENV_NAME"
-  conda create -y -n $venv python=3.9
+  conda create -y -n $venv python=3.13
 fi
 
 source activate $venv
@@ -74,8 +74,9 @@ export PYTHONNOUSERSITE=1
 # 2. install Huggingface Transformers
 cd $TRANSFORMERS
 pip install -e .
-pip install torch datasets evaluate torchaudio sacrebleu ipywidgets accelerate sentencepiece wandb trl
-conda install -c conda-forge ipykernel
+pip install torch datasets evaluate torchaudio sacrebleu ipywidgets accelerate sentencepiece wandb
+pip install trl peft bitsandbytes
+conda install -c conda-forge ipykernel -y
 
 # 3. install other tools
 pip install sacremoses nltk rouge_score

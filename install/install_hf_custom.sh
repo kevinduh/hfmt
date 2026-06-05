@@ -74,7 +74,8 @@ export PYTHONNOUSERSITE=1
 # 2. install Huggingface Transformers
 cd $TRANSFORMERS
 pip install -e .
-pip install torch datasets evaluate torchaudio sacrebleu ipywidgets accelerate sentencepiece wandb
+pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+pip install datasets evaluate sacrebleu ipywidgets accelerate sentencepiece wandb
 pip install trl peft bitsandbytes
 conda install -c conda-forge ipykernel -y
 

@@ -282,6 +282,7 @@ def main():
         run_name=args.outdir.replace(os.sep,'_').replace('models_','').replace('egs_wmt25_ja-zh_','',1),
         logging_steps=args.logging_steps,
         eval_steps=args.eval_steps,
+        save_steps=args.eval_steps, # sync save checkpoint to every eval_step (may be expensive?)
         seed=args.seed,
         label_smoothing_factor=args.label_smoothing_factor,
         lr_scheduler_type=args.lr_scheduler_type,
@@ -324,7 +325,7 @@ def main():
 
     trainer.add_callback(EarlyStopping_MT_Callback(early_stopping_patience=100,
                                                    early_stopping_threshold=0.05, 
-                                                   data=D['dev'].select(range(64)),
+                                                   data=D['dev'], #.select(range(64)),
                                                    model=model,
                                                    tokenizer=tokenizer,
                                                    outdir=args.outdir,
@@ -355,6 +356,8 @@ def main():
     eval_data = load_dataset("text", data_files=args.eval, streaming=False, split="train")
     #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(args.outdir,"eval.pred.trg"), device)
     inference_on_eval_data(tokenizer, model, eval_data, os.path.join(args.outdir,"eval.pred.trg"), device)
+
+    model.save_pretrained(args.outdir + "_b")
 
 if __name__ == "__main__":
     main()

@@ -13,7 +13,7 @@ from datasets import load_dataset, concatenate_datasets, DatasetDict
 from transformers import AutoTokenizer, AutoConfig, DataCollatorForLanguageModeling
 from transformers import AutoModelForCausalLM, Trainer, BitsAndBytesConfig, EarlyStoppingCallback
 from torch.utils.data import DataLoader
-from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training, PeftModel
 from trl import SFTConfig, SFTTrainer
 from pprint import pprint, pformat
 from sacrebleu.metrics import BLEU, TER, CHRF
@@ -24,6 +24,11 @@ experiment_id=""
 
 def format_input_prompt(instruction_prefix, content):
     return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
+
+
+def format_input_prompt2(instruction_prefix, content):
+    return instruction_prefix + "\n" + content + "\n"
+
 
 def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, text_field='text'):
     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
@@ -40,10 +45,15 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
     with open(predictions_file, "w") as O:
         for i, eval_batch in enumerate(eval_dataloader):
             # TODO: extract this into helper function so it can also be called in compute_metrics
-            prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
-            test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, 
-                                                        max_length=128, truncation=True, padding=True,
-                                                        return_tensors="pt", return_dict=True).to(device)
+            if tokenizer.chat_template:
+                prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
+                test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, 
+                                                            max_length=128, truncation=True, padding=True,
+                                                            return_tensors="pt", return_dict=True).to(device)
+            else:
+                prompts = [format_input_prompt2(instruction_prefix, s) for s in eval_batch[text_field]]
+                print(f"prompts: {prompts}")
+                test_inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, max_length=128).to(device)
 
             boundary = test_inputs["input_ids"].shape[1]
             test_outputs = model.generate(**test_inputs, max_new_tokens=128, do_sample=False)[:, boundary:]
@@ -55,15 +65,15 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
                 all_testout.append(testout)
 
             # todo: change this to be more configurable
-            # if i <= 2:
-            #     print_n = 2
-            #     torch.set_printoptions(profile="full")
-            #     logging.info(f"----- debug eval_batch {i}: (show {print_n} samples) -----")
-            #     logging.info(f"{test_inputs['input_ids'].shape = } {test_inputs['input_ids'][:print_n] = }")
-            #     logging.info(f"{test_outputs.shape = } {test_outputs[:print_n] = }")
-            #     logging.info(f"detokenized input w/ special token: {pformat(test_inputs_detok[:print_n])}")
-            #     logging.info(f"detokenized outputs w/ special token: {pformat(tokenizer.batch_decode(test_outputs[:print_n]))}")
-            #     torch.set_printoptions(profile="default")
+            if i <= 2:
+                print_n = 2
+                torch.set_printoptions(profile="full")
+                logging.info(f"----- debug eval_batch {i}: (show {print_n} samples) -----")
+                logging.info(f"{test_inputs['input_ids'].shape = } {test_inputs['input_ids'][:print_n] = }")
+                logging.info(f"{test_outputs.shape = } {test_outputs[:print_n] = }")
+                logging.info(f"detokenized input w/ special token: {pformat(test_inputs_detok[:print_n])}")
+                logging.info(f"detokenized outputs w/ special token: {pformat(tokenizer.batch_decode(test_outputs[:print_n]))}")
+                torch.set_printoptions(profile="default")
 
     end_time = time.time()
     logging.info(f"Testing - Elapsed time for {len(eval_data)} sentences in {i+1} batches: {end_time-start_time:.1f}s")
@@ -85,8 +95,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
     parser.add_argument("-e", "--eval", help="Eval source text")
     parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
-    parser.add_argument("-p", "--pretrain", action='store_true', 
-                        help="If specified, use Pretrain; Else, Train From Scratch")
+    parser.add_argument("-p", "--peft", type=str, default="", help="If specified, use PEFT adaptor")
     parser.add_argument("-o", "--outdir", required=True, help="Output directory")
     parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
     parser.add_argument("--max_steps", type=int, default=10000, help="Max number of train steps")
@@ -143,17 +152,25 @@ def main():
     ###################################
     ## Model Configuration
     logging.info(f"======== Model Configuration ========")
-    config = AutoConfig.from_pretrained(args.checkpoint)
-    
-    if args.pretrain == True:
-        logging.info("Fine-tuning a pretrained model")
-        model = AutoModelForCausalLM.from_pretrained(args.checkpoint).to(device)
+        
+    if args.peft:
+        logging.info("Loading PEFT model")
+        config = AutoConfig.from_pretrained(args.checkpoint)
+        
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+
+        base_model = AutoModelForCausalLM.from_pretrained(args.checkpoint, quantization_config=bnb_config).to(device)
+        model = PeftModel.from_pretrained(base_model, args.peft)
     else:
-        logging.info("Training from scratch with CausalLM is not supported")
-        exit(1)
+        logging.info("Loading base model")
+        model = AutoModelForCausalLM.from_pretrained(args.checkpoint).to(device)
 
-
-
+    print(model)
 
 
 
@@ -161,8 +178,8 @@ def main():
     ## Inference on Eval set
     logging.info(f"======== Testing ========")
     eval_data = load_dataset("text", data_files=args.eval, streaming=False, split="train")
-    #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(args.outdir,"eval.pred.trg"), device)
-    inference_on_eval_data(tokenizer, model, eval_data, os.path.join(args.outdir,"eval.orig_pretrain.trg"), device)
+    #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(args.outdir,"tmp.eval.pred.trg"), device)
+    inference_on_eval_data(tokenizer, model, eval_data, os.path.join(args.outdir,"eval.inf.trg"), device)
 
 
 if __name__ == "__main__":

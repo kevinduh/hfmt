@@ -8,8 +8,8 @@ src=zh
 trg=en
 evalset=/exp/kduh/data/mt/mmtc/test.${src}-${trg}.${src}
 
-#checkpoint="Qwen/Qwen2.5-1.5B-Instruct"
 checkpoint="CohereLabs/tiny-aya-global"
+peft_ckpt="egs/mmtc/zh-en/aya-qlora/checkpoint-5000"
 instruction="Translate Chinese to English"
 
 ###########################
@@ -19,17 +19,16 @@ instruction="Translate Chinese to English"
 # weight_decay: 0.01
 # batch_size: 16, 32, 64
 # seed 42, 37
-pretrain=1
-#outdir=egs/mmtc/zh-en/tv.qwen-1.5.1
-outdir=egs/mmtc/zh-en/tv.aya.1
+peft=1
+outdir=$peft_ckpt
 cmdarg="--max_steps 50000 --logging_steps 500 --eval_steps 500 --warmup_steps 0 \
         --lr_scheduler_type reduce_lr_on_plateau --learning_rate 2e-4 --weight_decay 0.01 \
         --label_smoothing_factor 0.0 --seed 37 --batch_size 16"
 ###########################
 
 mkdir -p $outdir
-if [[ $pretrain -eq 1 ]]; then
-    cmdarg="$cmdarg -p"
+if [[ $peft -eq 1 ]]; then
+    cmdarg="$cmdarg -p $peft_ckpt"
 fi
 
 python ${HFMT_ROOT}/hfmt/inf_translation.py -e $evalset -c $checkpoint -o $outdir $cmdarg -i "$instruction"

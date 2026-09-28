@@ -160,6 +160,10 @@ def main():
     parser.add_argument("--warmup_steps", type=int, default=0)
     parser.add_argument("--label_smoothing_factor", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--qlora_r", type=int, default=8)
+    parser.add_argument("--qlora_alpha", type=float, default=32)
+    parser.add_argument("--qlora_target", type=str, default="qv", choices=["qv", "all-linear"])
+
     
     args = parser.parse_args()
 
@@ -242,13 +246,26 @@ def main():
         logging.info("Training from scratch with CausalLM is not supported")
         exit(1)
 
+    # TODO: fix, this is brittle
+    if args.qlora_target == "qv":
+        target_modules = ["q_proj", "v_proj"]
+    elif args.qlora_target == "all-linear":
+        target_modules = "all-linear"
+    elif args.qlora_target == "attention":
+        target_modules = ["q_proj", "v_proj", "k_proj", "out_proj"]
+    elif args.qlora_target == "mlp":
+        target_modules = ["up_proj", "down_proj"]
+    else:
+        logging.error(f"Invalid qlora_target: {args.qlora_target}. Must be 'attention' or 'all'.")
+        exit(1)
+    
     lora_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM, # type of task to train on
         inference_mode=False, # set to False for training
-        r=8, # dimension of the smaller matrices
-        lora_alpha=32, # scaling factor
+        r=args.qlora_r, # dimension of the smaller matrices
+        lora_alpha=args.qlora_alpha, # scaling factor
         lora_dropout=0.1, # dropout of LoRA layers,
-        target_modules=["q_proj", "v_proj"],
+        target_modules=target_modules,
         #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
         #bias="none"
     )

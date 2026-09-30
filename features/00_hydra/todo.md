@@ -89,17 +89,22 @@ Check items off as completed.
 ## E. Slurm launcher (submitit) (D3)
 *Depends on B/C. Cannot run real jobs here; validate config + dry run only.*
 
-- [ ] `conf/hydra/launcher/slurm.yaml` — submitit_slurm params mirroring `sft1.sh`:
+- [x] `conf/hydra/launcher/slurm.yaml` — submitit_slurm params mirroring `sft1.sh`:
       partition `gpu`, `--gres=gpu:a100:1`, time, mem, cpus-per-task, job name.
-- [ ] `conf/hydra/launcher/local.yaml` — local launcher for dev/CPU validation.
-- [ ] Add `setup:` commands to the Slurm launcher that bootstrap the node env
+- [x] `conf/hydra/launcher/local.yaml` — local launcher for dev/CPU validation.
+- [x] Add `setup:` commands to the Slurm launcher that bootstrap the node env
       (`source install/path.sh`: `conda activate hfmt` + `module load cuda/...`) — **Risk R2**.
-- [ ] Set `hydra.job.chdir` deliberately and make the code robust to CWD (absolute paths or
+      → confirmed the `source $HFMT_ROOT/install/path.sh` line lands in the rendered sbatch body.
+- [x] Set `hydra.job.chdir` deliberately and make the code robust to CWD (absolute paths or
       `hydra.runtime.output_dir`) so relative `HFMT_ROOT`/`egs/...` paths don't break — **Risk R3**.
-- [ ] Ensure run dirs resolve to `outputs/${experiment}/${run_id}/` and are unique across
+      → `chdir=false` (Stage B); code uses absolute `HydraConfig` output dir + HFMT_ROOT paths.
+- [x] Ensure run dirs resolve to `outputs/${experiment}/${run_id}/` and are unique across
       Slurm requeues (stable id) — **Risk R6**.
-- [ ] Dry-run the job graph locally (`-m ... --cfg hydra`, launcher plugin loads, sbatch
+      → sweep subdir bakes `${now}` + `job.num`; `run_id` derived from the dir → requeue-stable.
+- [x] Dry-run the job graph locally (`-m ... --cfg hydra`, launcher plugin loads, sbatch
       script renders) without submitting.
+      → `SlurmLauncher` target resolves; rendered sbatch shows correct
+      `--partition/--gres/--time/--cpus-per-task/--mem/--job-name` + setup. Real submission → G.
 
 ## F. Recipe migration & wiring
 *Depends on C–E.*

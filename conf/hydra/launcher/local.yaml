@@ -1,0 +1,11 @@
+# Local submitit launcher (dev / small local multirun):
+#   python hfmt/sft_translation.py -m +experiment=mmtc_fr-en_sft1 hydra/launcher=local
+#
+# For a single in-process run just omit -m (Hydra's default 'basic' launcher). This
+# launcher spawns the job as a local subprocess, so it still needs the training deps.
+defaults:
+  - submitit_local          # plugin base (provides _target_ + full schema)
+
+timeout_min: 2880
+tasks_per_node: 1
+nodes: 1

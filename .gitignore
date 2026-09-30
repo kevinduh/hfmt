@@ -4,3 +4,4 @@ wandb/
 *~
 sync.sh
 __pycache__
+run_logs

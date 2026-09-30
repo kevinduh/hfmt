@@ -6,6 +6,23 @@ layer over 🤗 Transformers, `trl`, `peft`, and `bitsandbytes`, targeting an ac
 GPU-cluster workflow (SGE/`qsub`, SLURM/`sbatch`) with experiments organized as reproducible
 recipes. Upstream: `kevinduh/hfmt`. See `overview.md` for the full architecture writeup.
 
+## Data confidentiality (must read)
+
+**The dataset is proprietary. Dataset content MUST NOT be pushed to Weights & Biases.**
+This applies to source/target sentences, prompts built from them, and model
+hypotheses/translations — anything derived from the data.
+
+- **W&B is the hard boundary.** It uploads to an external service, so only
+  **aggregate, non-reversible metrics** (BLEU/CHRF/TER/ROUGE scores, loss, step counts)
+  may be logged there. Never send sample text, tables, or artifacts containing examples
+  to W&B.
+- **Local files and logs are fine.** Writing example text to disk (prediction dumps like
+  `*.pred`, `eval.pred.trg`) or to local `logging`/`print` output (e.g. "Decoded
+  predictions…", batch-inspection dumps) is allowed — those stay on the machine. Keep
+  them out of version control.
+- When adding or changing code, check every W&B call against this rule before running it,
+  and make sure nothing data-bearing is routed to W&B (directly or via `report_to`).
+
 ## Project structure
 
 ```

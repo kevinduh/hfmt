@@ -81,3 +81,7 @@ conda install -c conda-forge ipykernel -y
 
 # 3. install other tools
 pip install sacremoses nltk rouge_score
+
+# 4. experiment configuration / launcher (Hydra)
+# hydra-submitit-launcher pulls in submitit for Slurm submission.
+pip install hydra-core hydra-submitit-launcher hydra-colorlog

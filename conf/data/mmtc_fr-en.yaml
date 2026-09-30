@@ -1,0 +1,8 @@
+# MMTC French -> English parallel data.
+# Paths only (never data content). Anchored to HFMT_ROOT, the repo-wide path
+# convention, so runs are independent of the current working directory.
+src_lang: fr
+trg_lang: en
+train_yaml: ${oc.env:HFMT_ROOT}/egs/mmtc/fr-en/train.yaml
+evalset: ${oc.env:HFMT_ROOT}/egs/mmtc/fr-en/test.fr-en.fr
+instruction: "Translate French to English"

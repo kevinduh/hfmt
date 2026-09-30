@@ -25,26 +25,29 @@ Check items off as completed.
 ## B. Config schema & `conf/` skeleton (D2, D4)
 *Depends on A. Structured/dataclass configs give validation; groups hold every knob.*
 
-- [ ] Create `conf/config.yaml` with the defaults list + `hydra` block (output dir, chdir —
-      see group E).
-- [ ] Define structured-config dataclasses (typed schema) and register them with Hydra's
-      `ConfigStore` for validation.
-- [ ] `conf/model/qwen2.5-1.5b.yaml` — checkpoint id, quantization (4-bit nf4, double-quant,
+- [x] Create `conf/config.yaml` with the defaults list + `hydra` block (output dir, chdir —
+      see group E). `hydra.job.chdir=false`; run dir `${output_root}/${experiment}/${now}`.
+- [x] Define structured-config dataclasses (typed schema) and register them with Hydra's
+      `ConfigStore` for validation. → `hfmt/hydra_config.py` (`register_configs()`).
+- [x] `conf/model/qwen2.5-1.5b.yaml` — checkpoint id, quantization (4-bit nf4, double-quant,
       bf16 compute), LoRA `target`/`r`/`alpha`/`dropout` (D4: `lora_dropout` no longer hardcoded).
-- [ ] `conf/data/mmtc_fr-en.yaml` — train/dev/test manifest paths + instruction prefix
-      (paths only, never data content — CLAUDE.md).
-- [ ] `conf/train/qlora_default.yaml` — lr, `lr_scheduler_type`, `max_steps`, `warmup_steps`,
+- [x] `conf/data/mmtc_fr-en.yaml` — train/dev/test manifest paths + instruction prefix
+      (paths only, never data content — CLAUDE.md). Paths anchored to `${oc.env:HFMT_ROOT}`.
+- [x] `conf/train/qlora_default.yaml` — lr, `lr_scheduler_type`, `max_steps`, `warmup_steps`,
       `batch_size`, `grad_accumulation`, `weight_decay`, `label_smoothing_factor`, `seed`,
       `eval_steps`, `logging_steps`, `save_total_limit`, early-stopping patience/threshold,
       `metric_for_best_model`.
-- [ ] `conf/decode/default.yaml` — `max_length`, `max_new_tokens`, `num_beams`, eval
+- [x] `conf/decode/default.yaml` — `max_length`, `max_new_tokens`, `num_beams`, eval
       `batch_size` (D4: surface these previously-hardcoded magic numbers).
-- [ ] `conf/wandb/default.yaml` — project, entity, `group`, `tags` (absorbs the stubbed
+- [x] `conf/wandb/default.yaml` — project, entity, `group`, `tags` (absorbs the stubbed
       `--wandb_group`/`--wandb_tags`), run-naming template, enable/disable flag.
-- [ ] `conf/experiment/mmtc_fr-en_sft1.yaml` (`# @package _global_`) — a preset composing
-      the above that reproduces today's `egs/mmtc/fr-en/sft1.sh` values exactly.
-- [ ] Validate composition on CPU: `python -m ... --cfg job` and
-      `-m ... hydra/launcher=local --cfg hydra` print the expected merged config with no errors.
+- [x] `conf/experiment/mmtc_fr-en_sft1.yaml` (`# @package _global_`) — a preset composing
+      the above that reproduces today's `egs/mmtc/fr-en/sft1.sh` values exactly
+      (select with `+experiment=mmtc_fr-en_sft1`).
+- [x] Validate composition on CPU (via the compose API in env `hfmt-hydra`, since the
+      `@hydra.main` entry point lands in Stage C): base + `+experiment` compose and resolve
+      correctly; interpolations (`save_steps`, HFMT_ROOT paths) resolve; struct schema
+      rejects unknown keys and wrong types.
 
 ## C. Port `sft_translation.py` to `@hydra.main` (D1, D2)
 *Depends on B. Replace argparse; body logic unchanged, values read from `cfg`.*

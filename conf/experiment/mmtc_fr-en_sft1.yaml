@@ -1,0 +1,21 @@
+# @package _global_
+# Experiment preset reproducing egs/mmtc/fr-en/sft1.sh exactly.
+# Select with:  +experiment=mmtc_fr-en_sft1
+# (Hydra "experiment" pattern: this file overrides group choices + values.)
+defaults:
+  - override /model: qwen2.5-1.5b
+  - override /data: mmtc_fr-en
+  - override /train: qlora_default
+  - override /decode: default
+
+experiment: mmtc_fr-en_sft1
+
+# sft1.sh uses seed 37; every other value already matches the group defaults
+# (lr 2e-4, reduce_lr_on_plateau, max_steps 800, warmup 30, eval_steps 50,
+#  logging 10, batch 16, weight_decay 0.01, lora r=8 target=qv).
+train:
+  seed: 37
+
+wandb:
+  group: mmtc_fr-en_sft1
+  tags: [sft, fr-en]

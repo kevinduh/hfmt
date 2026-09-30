@@ -1,0 +1,6 @@
+# Generation / eval-decoding knobs (previously hardcoded in sft_translation.py).
+max_length: 128        # prompt truncation via chat template
+max_new_tokens: 128
+num_beams: 1           # 1 = greedy (current behavior); >1 enables beam search
+do_sample: false
+batch_size: 16         # eval dataloader batch size

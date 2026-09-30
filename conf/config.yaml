@@ -1,0 +1,29 @@
+# Top-level Hydra config for HFMT SFT experiments (feature 00_hydra).
+#
+# Composes the config groups below onto the structured schema (base_config,
+# registered from hfmt/hydra_config.py) so every value is type-validated.
+# Select a ready-made experiment with:  experiment=mmtc_fr-en_sft1
+# Override any knob on the CLI, e.g.:    train.learning_rate=2e-4 model.lora_r=16
+
+defaults:
+  - base_config           # structured schema (validates everything below)
+  - model: qwen2.5-1.5b
+  - data: mmtc_fr-en
+  - train: qlora_default
+  - decode: default
+  - wandb: default
+  - _self_                # this file's values win over the groups
+
+experiment: default
+output_root: outputs
+
+hydra:
+  # Keep CWD at the launch dir (repo root) so relative paths / HFMT_ROOT still
+  # work; the code targets the run dir explicitly. Finalized in Stage E.
+  job:
+    chdir: false
+  run:
+    dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${output_root}/${experiment}
+    subdir: ${hydra.job.num}_${now:%Y-%m-%d_%H-%M-%S}

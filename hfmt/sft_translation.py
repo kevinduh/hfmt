@@ -1,32 +1,36 @@
 import time
 import os
-import torch
-import numpy as np
-import csv
-import argparse
 import logging
-import sys
-import wandb
 import yaml
-from datetime import datetime
-from datasets import load_dataset, concatenate_datasets, DatasetDict
-from transformers import AutoTokenizer, AutoConfig, DataCollatorForLanguageModeling
-from transformers import AutoModelForCausalLM, Trainer, BitsAndBytesConfig, EarlyStoppingCallback
-from torch.utils.data import DataLoader
-from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTConfig, SFTTrainer
 from pprint import pprint, pformat
-from sacrebleu.metrics import BLEU, TER, CHRF
 
-os.environ["WANDB_PROJECT"]="hfmt"
-experiment_id=""
+import hydra
+from omegaconf import OmegaConf
+
+# Sibling import: the repo invokes scripts by file path (python hfmt/sft_translation.py),
+# which puts hfmt/ on sys.path. If later run as `python -m hfmt.sft_translation`, fall
+# back to the package-qualified name.
+try:
+    from hydra_config import Config, register_configs
+except ModuleNotFoundError:
+    from hfmt.hydra_config import Config, register_configs
+
+# transformers pulls in torch; guard the import so config-only runs (--cfg job) work on
+# a CPU box without the training deps. When absent, the base class is a no-op stand-in
+# (the callback is only instantiated inside main(), never during a config-only run).
+try:
+    from transformers import EarlyStoppingCallback
+except ImportError:
+    EarlyStoppingCallback = object
 
 
 def format_input_prompt(instruction_prefix, content):
     return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
 
 
-def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, text_field='text'):
+def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, max_length=128, max_new_tokens=128, num_beams=1, do_sample=False, batch_size=16, text_field='text'):
+    import torch
+    from torch.utils.data import DataLoader
     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
     original_padding_side = tokenizer.padding_side
     original_truncation_side = tokenizer.truncation_side
@@ -35,19 +39,19 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
     logging.info(f"inference_on_eval_data: Tokenizer setting in inference {tokenizer.padding_side = } {tokenizer.truncation_side = }")
 
     logging.info(f"inference_on_eval_data: {eval_data}")
-    eval_dataloader = DataLoader(eval_data, batch_size=16, shuffle=False)
+    eval_dataloader = DataLoader(eval_data, batch_size=batch_size, shuffle=False)
     all_testout = []
     start_time = time.time()
     with open(predictions_file, "w") as O:
         for i, eval_batch in enumerate(eval_dataloader):
 
             prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
-            test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, 
-                                                        max_length=128, truncation=True, padding=True,
+            test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
+                                                        max_length=max_length, truncation=True, padding=True,
                                                         return_tensors="pt", return_dict=True).to(device)
 
             boundary = test_inputs["input_ids"].shape[1]
-            test_outputs = model.generate(**test_inputs, max_new_tokens=128, do_sample=False)[:, boundary:]
+            test_outputs = model.generate(**test_inputs, max_new_tokens=max_new_tokens, num_beams=num_beams, do_sample=do_sample)[:, boundary:]
             test_inputs_detok = tokenizer.batch_decode(test_inputs["input_ids"], skip_special_tokens=False)
             test_outputs_detok = tokenizer.batch_decode(test_outputs, skip_special_tokens=True)
             test_outputs_detok_clean = [sent.strip().replace('\n', ' ') for sent in test_outputs_detok]
@@ -74,23 +78,27 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
 
 
 class EarlyStopping_MT_Callback(EarlyStoppingCallback):
-    def __init__(self, early_stopping_patience=1, early_stopping_threshold=0.0, data=None, model=None, tokenizer=None, outdir=None, device=None, **kwargs):
+    def __init__(self, early_stopping_patience=1, early_stopping_threshold=0.0, data=None, model=None, tokenizer=None, outdir=None, device=None, instruction_prefix="", decode=None, **kwargs):
         super().__init__(early_stopping_patience=early_stopping_patience, early_stopping_threshold=early_stopping_threshold)
+        from sacrebleu.metrics import BLEU, TER, CHRF
         self.data = data
         self.model = model
         self.tokenizer = tokenizer
         self.outdir = outdir
         self.device = device
+        self.instruction_prefix = instruction_prefix
+        self.decode = decode
         self.refs = [[s.strip() for s in self.data["trg"]]]
 #        self.bleu = BLEU(smooth_method="none", max_ngram_order=4, tokenize='13a')
 #        self.bleu = BLEU(smooth_method="none", max_ngram_order=4, tokenize='char')
         self.bleu = BLEU(smooth_method="none", max_ngram_order=4, tokenize='flores200')
         self.chrf = CHRF()
         self.ter = TER()
-        
+
     def on_evaluate(self, args, state, control, **kwargs):
+        import wandb
         logging.info(f"Tokenizer setting in TrainerCallback on_evaluate {self.tokenizer.padding_side = } {self.tokenizer.truncation_side = }")
-        preds = inference_on_eval_data(self.tokenizer, self.model, self.data, os.path.join(self.outdir,f"dev.step_{state.global_step}.pred"), self.device, 'src')
+        preds = inference_on_eval_data(self.tokenizer, self.model, self.data, os.path.join(self.outdir,f"dev.step_{state.global_step}.pred"), self.device, self.instruction_prefix, max_length=self.decode.max_length, max_new_tokens=self.decode.max_new_tokens, num_beams=self.decode.num_beams, do_sample=self.decode.do_sample, batch_size=self.decode.batch_size, text_field='src')
         score_bleu = self.bleu.corpus_score(preds, self.refs)
         score_chrf = self.chrf.corpus_score(preds, self.refs)
         score_ter = self.ter.corpus_score(preds, self.refs)
@@ -98,7 +106,7 @@ class EarlyStopping_MT_Callback(EarlyStoppingCallback):
         logging.info(f"Decoded predictions at step {state.global_step}: {preds[:2]}")
         logging.info(f"Decoded labels: {self.refs[0][:2]}")
         logging.info(f"Metric scores at step {state.global_step}: BLEU={score_bleu.score:.2f}, CHRF={score_chrf.score:.2f}, TER={score_ter.score:.2f}")
-       
+
         kwargs["metrics"]["eval_bleu"] = round(score_bleu.score, 2)
         kwargs["metrics"]["eval_chrf"] = round(score_chrf.score, 2)
         kwargs["metrics"]["eval_ter"] = round(score_ter.score, 2)
@@ -107,7 +115,7 @@ class EarlyStopping_MT_Callback(EarlyStoppingCallback):
         # for i, eval_batch in enumerate(self.eval_dataloader):
         #     print(eval_batch.keys())
         #     prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch["prompt"]]
-        #     test_inputs = self.tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, 
+        #     test_inputs = self.tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
         #                                                      max_length=128, truncation=True, padding=True,
         #                                                      return_tensors="pt", return_dict=True).to(device)
 
@@ -129,61 +137,37 @@ class EarlyStopping_MT_Callback(EarlyStoppingCallback):
             logging.info(f"{control = }")
             eval_metrics = kwargs.get("metrics", {})
             logging.info(f"Evaluation metrics at step {state.global_step}: {eval_metrics}")
-            wandb.log({"eval/bleu": kwargs["metrics"]["eval_bleu"], 
-                       "eval/chrf": kwargs["metrics"]["eval_chrf"], 
+            wandb.log({"eval/bleu": kwargs["metrics"]["eval_bleu"],
+                       "eval/chrf": kwargs["metrics"]["eval_chrf"],
                        "eval/ter": kwargs["metrics"]["eval_ter"]}, step=state.global_step)
 
         super().on_evaluate(args, state, control, **kwargs)
 
 
-def main():
+@hydra.main(config_path="../conf", config_name="config", version_base=None)
+def main(cfg: Config) -> None:
+    import torch
+    import datasets
+    from datasets import load_dataset, concatenate_datasets, DatasetDict
+    from transformers import AutoTokenizer, AutoConfig
+    from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+    from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
+    from trl import SFTConfig, SFTTrainer
+    from hydra.core.hydra_config import HydraConfig
 
+    # Hydra's per-run output dir (chdir is disabled; we target it explicitly).
+    outdir = HydraConfig.get().runtime.output_dir
+    os.makedirs(outdir, exist_ok=True)
 
+    logging.info("Resolved config:\n%s", OmegaConf.to_yaml(cfg))
+    os.environ["WANDB_PROJECT"] = cfg.wandb.project
 
     ###################################
-    ## Set arguments
-    parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
-    parser.add_argument("-t", "--train", required=True, help="Training configuration YAML file")
-    parser.add_argument("-e", "--eval", help="Eval source text")
-    parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
-    parser.add_argument("-p", "--pretrain", action='store_true', 
-                        help="If specified, use Pretrain; Else, Train From Scratch")
-    parser.add_argument("-o", "--outdir", required=True, help="Output directory")
-    parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
-    parser.add_argument("--max_steps", type=int, default=10000, help="Max number of train steps")
-    parser.add_argument("--learning_rate", type=float, default=2e-5)
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--logging_steps", type=int, default=10)
-    parser.add_argument("--eval_steps", type=int, default=1000)
-    parser.add_argument("--lr_scheduler_type", type=str, default="linear")
-    parser.add_argument("--warmup_steps", type=int, default=0)
-    parser.add_argument("--label_smoothing_factor", type=float, default=0.0)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--qlora_r", type=int, default=8)
-    parser.add_argument("--qlora_alpha", type=float, default=32)
-    parser.add_argument("--qlora_target", type=str, default="qv", choices=["qv", "all-linear"])
-
-    
-    args = parser.parse_args()
-
-    logging.basicConfig(filename=os.path.join(args.outdir, "hfmt.log"), level=logging.INFO, \
-        format='%(asctime)s - %(levelname)s - %(message)s', filemode="w")
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    logging.info(args)
-
-    # wandb.init(name=args.outdir, project='hfmt', dir=os.path.join(args.outdir,'wandb'),
-    #            config=args)
-    
-    ###################################
-    ## User settings 
-    global instruction_prefix
-    instruction_prefix = args.instruction
+    ## User settings
+    instruction_prefix = cfg.data.instruction
     logging.info(f"instruction: '{instruction_prefix}'")
 
-    global experiment_id
-    experiment_id = args.outdir.replace(os.sep,'_').replace('models_','')
-    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model.checkpoint)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -191,7 +175,6 @@ def main():
     logging.info(f"Using device: {device}")
 
     # TODO - check
-    import datasets
     datasets.config.HF_DATASETS_OFFLINE = True
 
     ###################################
@@ -202,7 +185,7 @@ def main():
         prompt = [format_input_prompt(instruction_prefix, s) for s in samples["src"]]
         completion = [[{"content":t, "role":"assistant"}] for t in samples["trg"]]
         return {"prompt": prompt, "completion": completion}
-    
+
 
     def get_data(train_yamlfile):
         with open(train_yamlfile) as F:
@@ -211,7 +194,7 @@ def main():
         d_src = load_dataset("text", data_files={"train":train_yaml["train"]["src"], "dev":train_yaml["dev"]["src"]}, streaming=False).rename_column("text", "src")
         d_trg = load_dataset("text", data_files={"train":train_yaml["train"]["trg"], "dev":train_yaml["dev"]["trg"]}, streaming=False).rename_column("text", "trg")
         data = DatasetDict({"train": concatenate_datasets([d_src['train'], d_trg['train']], axis=1),
-                            "dev": concatenate_datasets([d_src['dev'], d_trg['dev']], axis=1)})                            
+                            "dev": concatenate_datasets([d_src['dev'], d_trg['dev']], axis=1)})
 
         data = data.map(preprocess_fn, batched=True)#.remove_columns(["src", "trg"])
         return data
@@ -221,7 +204,7 @@ def main():
     ## Load data
     logging.info(f"======== Loading data ========")
     start_time = time.time()
-    D = get_data(args.train)
+    D = get_data(cfg.data.train_yaml)
     logging.info(D)
     logging.info(f"Example data: {D['train'][0]}")
     end_time = time.time()
@@ -230,47 +213,48 @@ def main():
     ###################################
     ## Model Configuration
     logging.info(f"======== Model Configuration ========")
-    config = AutoConfig.from_pretrained(args.checkpoint)
-    
+    config = AutoConfig.from_pretrained(cfg.model.checkpoint)
+
     bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        load_in_4bit=cfg.model.load_in_4bit,
+        bnb_4bit_use_double_quant=cfg.model.bnb_4bit_use_double_quant,
+        bnb_4bit_quant_type=cfg.model.bnb_4bit_quant_type,
+        bnb_4bit_compute_dtype=getattr(torch, cfg.model.bnb_4bit_compute_dtype),
     )
-    
-    if args.pretrain == True:
+
+    if cfg.model.pretrain == True:
         logging.info("Fine-tuning a pretrained model")
-        model = AutoModelForCausalLM.from_pretrained(args.checkpoint, quantization_config=bnb_config).to(device)
+        model = AutoModelForCausalLM.from_pretrained(cfg.model.checkpoint, quantization_config=bnb_config).to(device)
     else:
         logging.info("Training from scratch with CausalLM is not supported")
         exit(1)
 
     # TODO: fix, this is brittle
-    if args.qlora_target == "qv":
+    if cfg.model.lora_target == "qv":
         target_modules = ["q_proj", "v_proj"]
-    elif args.qlora_target == "all-linear":
+    elif cfg.model.lora_target == "all-linear":
         target_modules = "all-linear"
-    elif args.qlora_target == "attention":
+    elif cfg.model.lora_target == "attention":
         target_modules = ["q_proj", "v_proj", "k_proj", "out_proj"]
-    elif args.qlora_target == "mlp":
+    elif cfg.model.lora_target == "mlp":
         target_modules = ["up_proj", "down_proj"]
     else:
-        logging.error(f"Invalid qlora_target: {args.qlora_target}. Must be 'attention' or 'all'.")
+        logging.error(f"Invalid qlora_target: {cfg.model.lora_target}. Must be 'attention' or 'all'.")
         exit(1)
-    
+
     lora_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM, # type of task to train on
         inference_mode=False, # set to False for training
-        r=args.qlora_r, # dimension of the smaller matrices
-        lora_alpha=args.qlora_alpha, # scaling factor
-        lora_dropout=0.1, # dropout of LoRA layers,
+        r=cfg.model.lora_r, # dimension of the smaller matrices
+        lora_alpha=cfg.model.lora_alpha, # scaling factor
+        lora_dropout=cfg.model.lora_dropout, # dropout of LoRA layers,
         target_modules=target_modules,
         #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
         #bias="none"
     )
 
-    model.gradient_checkpointing_enable()
+    if cfg.train.gradient_checkpointing:
+        model.gradient_checkpointing_enable()
     model = prepare_model_for_kbit_training(model)
     model = get_peft_model(model, lora_config)
     model.config.use_cache = False
@@ -281,33 +265,34 @@ def main():
     logging.info(f"generation.config    : {model.generation_config.pad_token_id} {model.generation_config.bos_token_id} {model.generation_config.eos_token_id}")
     logging.info(f"model: {model}")
 
+    run_name = cfg.wandb.name or cfg.experiment
     training_args = SFTConfig(
-        output_dir=args.outdir,
-        completion_only_loss=True,
-        packing=False,
+        output_dir=outdir,
+        completion_only_loss=cfg.train.completion_only_loss,
+        packing=cfg.train.packing,
         eval_strategy="steps",
-        learning_rate=args.learning_rate,
-        per_device_train_batch_size=args.batch_size, #1, 
-        per_device_eval_batch_size=args.batch_size, #1,
-        gradient_accumulation_steps=1, #args.batch_size, # todo: check
-        weight_decay=args.weight_decay,
-        save_total_limit=3,
-        max_steps=args.max_steps,
+        learning_rate=cfg.train.learning_rate,
+        per_device_train_batch_size=cfg.train.train_batch_size, #1,
+        per_device_eval_batch_size=cfg.train.eval_batch_size, #1,
+        gradient_accumulation_steps=cfg.train.gradient_accumulation_steps, # todo: check
+        weight_decay=cfg.train.weight_decay,
+        save_total_limit=cfg.train.save_total_limit,
+        max_steps=cfg.train.max_steps,
         fp16=False,
         push_to_hub=False,
-        report_to="wandb",
-        run_name=args.outdir.replace(os.sep,'_').replace('models_','').replace('egs_wmt25_ja-zh_','',1),
-        logging_steps=args.logging_steps,
-        eval_steps=args.eval_steps,
-        save_steps=args.eval_steps, # sync save checkpoint to every eval_step (may be expensive?)
-        seed=args.seed,
-        label_smoothing_factor=args.label_smoothing_factor,
-        lr_scheduler_type=args.lr_scheduler_type,
-        warmup_steps=args.warmup_steps,
-        optim="adamw_torch_fused",
-        load_best_model_at_end=True,
-        greater_is_better=False,
-        metric_for_best_model="eval_loss",
+        report_to="wandb" if cfg.wandb.enabled else "none",
+        run_name=run_name,
+        logging_steps=cfg.train.logging_steps,
+        eval_steps=cfg.train.eval_steps,
+        save_steps=cfg.train.save_steps, # sync save checkpoint to every eval_step (may be expensive?)
+        seed=cfg.train.seed,
+        label_smoothing_factor=cfg.train.label_smoothing_factor,
+        lr_scheduler_type=cfg.train.lr_scheduler_type,
+        warmup_steps=cfg.train.warmup_steps,
+        optim=cfg.train.optim,
+        load_best_model_at_end=cfg.train.load_best_model_at_end,
+        greater_is_better=cfg.train.greater_is_better,
+        metric_for_best_model=cfg.train.metric_for_best_model,
     )
         # todo set save_step = eval_step
 
@@ -340,13 +325,15 @@ def main():
     # for i in model.named_parameters():
     #     logging.info(f"{i[0]} -> {i[1].device}")
 
-    trainer.add_callback(EarlyStopping_MT_Callback(early_stopping_patience=100,
-                                                   early_stopping_threshold=0.05, 
+    trainer.add_callback(EarlyStopping_MT_Callback(early_stopping_patience=cfg.train.early_stopping_patience,
+                                                   early_stopping_threshold=cfg.train.early_stopping_threshold,
                                                    data=D['dev'], #.select(range(64)),
                                                    model=model,
                                                    tokenizer=tokenizer,
-                                                   outdir=args.outdir,
+                                                   outdir=outdir,
                                                    device=device,
+                                                   instruction_prefix=instruction_prefix,
+                                                   decode=cfg.decode,
                                                    ))
 
     ###################################
@@ -370,11 +357,14 @@ def main():
     ###################################
     ## Inference on Eval set
     logging.info(f"======== Testing ========")
-    eval_data = load_dataset("text", data_files=args.eval, streaming=False, split="train")
-    #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(args.outdir,"eval.pred.trg"), device)
-    inference_on_eval_data(tokenizer, model, eval_data, os.path.join(args.outdir,"eval.pred.trg"), device)
+    eval_data = load_dataset("text", data_files=cfg.data.evalset, streaming=False, split="train")
+    #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(outdir,"eval.pred.trg"), device)
+    inference_on_eval_data(tokenizer, model, eval_data, os.path.join(outdir,"eval.pred.trg"), device, instruction_prefix, max_length=cfg.decode.max_length, max_new_tokens=cfg.decode.max_new_tokens, num_beams=cfg.decode.num_beams, do_sample=cfg.decode.do_sample, batch_size=cfg.decode.batch_size)
 
-    model.save_pretrained(args.outdir + "_b")
+    model.save_pretrained(outdir + "_b")
+
+
+register_configs()
 
 if __name__ == "__main__":
     main()

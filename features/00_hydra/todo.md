@@ -52,16 +52,23 @@ Check items off as completed.
 ## C. Port `sft_translation.py` to `@hydra.main` (D1, D2)
 *Depends on B. Replace argparse; body logic unchanged, values read from `cfg`.*
 
-- [ ] Replace the argparse block + `main()` signature with a `@hydra.main(config_path,
-      config_name)` entry receiving the typed config.
-- [ ] Remove module-level globals (`instruction_prefix`, `experiment_id`); pass values
+- [x] Replace the argparse block + `main()` signature with a `@hydra.main(config_path,
+      config_name)` entry receiving the typed config. Output dir = Hydra runtime output dir.
+- [x] Remove module-level globals (`instruction_prefix`, `experiment_id`); pass values
       explicitly from `cfg` into helpers (`format_input_prompt`, `preprocess_fn`, etc.).
-- [ ] Map every former arg to its `cfg.<group>.<field>` location; delete dead/unused args.
-- [ ] Route all newly-configurable knobs (decode `max_length`/`max_new_tokens`/`num_beams`/
+      `instruction_prefix` passed/closed-over; `experiment_id` was dead → deleted.
+- [x] Map every former arg to its `cfg.<group>.<field>` location; delete dead/unused args.
+      Also dropped the unreachable `attention`/`mlp` lora_target branches + fixed the
+      misleading error message (overview #6), and removed an unused decode-debug assignment.
+- [x] Route all newly-configurable knobs (decode `max_length`/`max_new_tokens`/`num_beams`/
       eval batch size, `lora_dropout`) to read from `cfg` (finishes D4).
-- [ ] Guard imports so config composition/validation does not require torch/bitsandbytes
+- [x] Guard imports so config composition/validation does not require torch/bitsandbytes
       (heavy imports inside the run path, not at module top) — keeps CPU validation working.
-- [ ] Keep local file/logging behavior as-is (local preds/logs are allowed per CLAUDE.md).
+      → verified: `--cfg job`/overrides run in env `hfmt-hydra` (no torch/transformers).
+- [x] Keep local file/logging behavior as-is (local preds/logs are allowed per CLAUDE.md).
+      Pred dumps still written locally; logging now flows through Hydra job logging.
+- [x] Validation: full-file `py_compile` passes; `--cfg job` + CLI overrides compose;
+      `hydra.run.dir` resolves. Real GPU training run deferred to on-cluster (Stage G).
 
 ## D. W&B ↔ output ↔ config linking (D6)
 *Depends on C. Only metrics + data-free config may reach W&B (CLAUDE.md).*

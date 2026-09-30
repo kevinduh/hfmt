@@ -1,5 +1,6 @@
 import time
 import os
+import re
 import logging
 import yaml
 from pprint import pprint, pformat
@@ -137,11 +138,50 @@ class EarlyStopping_MT_Callback(EarlyStoppingCallback):
             logging.info(f"{control = }")
             eval_metrics = kwargs.get("metrics", {})
             logging.info(f"Evaluation metrics at step {state.global_step}: {eval_metrics}")
-            wandb.log({"eval/bleu": kwargs["metrics"]["eval_bleu"],
-                       "eval/chrf": kwargs["metrics"]["eval_chrf"],
-                       "eval/ter": kwargs["metrics"]["eval_ter"]}, step=state.global_step)
+            if wandb.run is not None:  # aggregate scores only -- never data (CLAUDE.md)
+                wandb.log({"eval/bleu": kwargs["metrics"]["eval_bleu"],
+                           "eval/chrf": kwargs["metrics"]["eval_chrf"],
+                           "eval/ter": kwargs["metrics"]["eval_ter"]}, step=state.global_step)
 
         super().on_evaluate(args, state, control, **kwargs)
+
+
+def derive_run_identity(cfg, outdir):
+    """Stable, W&B-safe (id, name, group) derived from the experiment + run dir.
+
+    The run dir is unique per launch but identical across a Slurm requeue of the same
+    job, so resume='allow' maps a requeue back onto the same W&B run (D6).
+    """
+    job = os.path.basename(os.path.normpath(outdir))
+    run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{job}")
+    run_name = cfg.wandb.name or f"{cfg.experiment}-{job}"
+    group = cfg.wandb.group or cfg.experiment
+    return run_id, run_name, group
+
+
+def init_wandb(cfg, outdir, run_id, run_name, group):
+    """Start the W&B run so it carries our group/name/id/config; the HF Trainer's
+    WandbCallback (report_to='wandb') then reuses this same run.
+
+    Confidentiality (CLAUDE.md): the resolved config holds only hyperparameters, data
+    *paths*, and the instruction string -- never data content -- so it is safe to log.
+    We log no samples/tables/dataset-bearing artifacts and disable model-artifact upload.
+    """
+    import wandb
+
+    os.environ["WANDB_LOG_MODEL"] = "false"  # never upload model artifacts to W&B
+    cfg_container = OmegaConf.to_container(cfg, resolve=True)
+    return wandb.init(
+        project=cfg.wandb.project,
+        entity=cfg.wandb.entity,
+        group=group,
+        name=run_name,
+        id=run_id,
+        tags=list(cfg.wandb.tags),
+        dir=outdir,
+        resume="allow",
+        config={"hfmt": cfg_container, "run_dir": outdir},
+    )
 
 
 @hydra.main(config_path="../conf", config_name="config", version_base=None)
@@ -161,6 +201,12 @@ def main(cfg: Config) -> None:
 
     logging.info("Resolved config:\n%s", OmegaConf.to_yaml(cfg))
     os.environ["WANDB_PROJECT"] = cfg.wandb.project
+
+    # Link W&B <-> output dir <-> config. Own the run here (main process only; single-GPU
+    # recipe) so it carries our group/name/id and data-free config; the HF Trainer reuses it.
+    run_id, run_name, group = derive_run_identity(cfg, outdir)
+    if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
+        init_wandb(cfg, outdir, run_id, run_name, group)
 
     ###################################
     ## User settings
@@ -265,7 +311,6 @@ def main(cfg: Config) -> None:
     logging.info(f"generation.config    : {model.generation_config.pad_token_id} {model.generation_config.bos_token_id} {model.generation_config.eos_token_id}")
     logging.info(f"model: {model}")
 
-    run_name = cfg.wandb.name or cfg.experiment
     training_args = SFTConfig(
         output_dir=outdir,
         completion_only_loss=cfg.train.completion_only_loss,

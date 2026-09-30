@@ -73,14 +73,18 @@ Check items off as completed.
 ## D. W&B ↔ output ↔ config linking (D6)
 *Depends on C. Only metrics + data-free config may reach W&B (CLAUDE.md).*
 
-- [ ] Compute a single `run_id`/experiment slug and use it for: output dir, `WANDB_RUN_ID`,
+- [x] Compute a single `run_id`/experiment slug and use it for: output dir, `WANDB_RUN_ID`,
       and W&B run `name`; set W&B `group=<experiment>` and `name=<experiment>-<job id>`.
-- [ ] Point training output (checkpoints, preds, logs) at the Hydra run dir.
-- [ ] Initialize W&B with project/entity/group/tags from `conf/wandb/` and the pinned run id.
-- [ ] Log the resolved config to `wandb.config` **after stripping/confirming no data
+      → `derive_run_identity()`; id = pinned `wandb.init(id=...)`, requeue-stable via run dir.
+- [x] Point training output (checkpoints, preds, logs) at the Hydra run dir. (done in Stage C)
+- [x] Initialize W&B with project/entity/group/tags from `conf/wandb/` and the pinned run id.
+      → `init_wandb()` (rank-0 guard; HF Trainer's WandbCallback reuses the run).
+- [x] Log the resolved config to `wandb.config` **after stripping/confirming no data
       content** (paths OK); add a guard/comment tying this to CLAUDE.md (Risk R7).
-- [ ] Log `run_dir` to `wandb.config` so the W&B run links back to on-disk outputs.
-- [ ] Verify only aggregate metrics + config reach W&B — no sample text / tables / artifacts.
+- [x] Log `run_dir` to `wandb.config` so the W&B run links back to on-disk outputs.
+- [x] Verify only aggregate metrics + config reach W&B — no sample text / tables / artifacts.
+      → `WANDB_LOG_MODEL=false`; callback `wandb.log` guarded; verified via an offline
+      `wandb.init` test (config holds paths only). Real online run confirmed on-cluster (G).
 
 ## E. Slurm launcher (submitit) (D3)
 *Depends on B/C. Cannot run real jobs here; validate config + dry run only.*

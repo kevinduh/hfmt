@@ -21,10 +21,64 @@ Before running the scripts, please set the `HFMT_ROOT` variable, e.g. `export HF
 
 Currently implemented: 
 * `hfmt/train_seq2seq.py`: Trains a Seq2Seq model (either by fine-tuning a pretrained model or training from scratch)
+* `hfmt/sft_translation.py`: Decoder-only MT via QLoRA SFT. **Hydra-configured** (see "Running QLoRA SFT experiments with Hydra" below)
+* `hfmt/inf_translation.py`: Inference for decoder-only MT (optionally with a LoRA adapter)
 * `hfmt/decode_summarization.py`: Runs inference on CausalLM models, with prompts for summarization
 * todo: cascading of models, ...
 
 Scripts that perform training integrate with (Weights & Biases)[https://wandb.ai/] for logging purposes, so it is recommended that you set up a free account on that service. 
+
+## Running QLoRA SFT experiments with Hydra
+
+The decoder-only QLoRA SFT workflow (`hfmt/sft_translation.py`) is configured with
+[Hydra](https://hydra.cc): every tunable parameter lives in a config file under `conf/`,
+not in the training script or a per-experiment shell script.
+
+### Config layout (`conf/`)
+
+* `conf/config.yaml` — top-level defaults + Hydra settings (output dir, launcher).
+* `conf/model/` — checkpoint, 4-bit quantization, LoRA (`r`/`alpha`/`dropout`/`target`).
+* `conf/data/` — train/dev/test paths (a YAML manifest) + instruction prefix. **Paths only, never data content.**
+* `conf/train/` — learning rate, schedule, steps, batch size, early stopping, etc.
+* `conf/decode/` — generation knobs (`max_length`, `max_new_tokens`, `num_beams`, ...).
+* `conf/wandb/` — W&B project/entity/group/tags.
+* `conf/experiment/<name>.yaml` — a preset composing the above into one named experiment (the successor to the old per-experiment `.sh` recipes).
+* `conf/hydra/launcher/{slurm,local}.yaml` — how/where to run (Slurm via submitit, or local).
+
+The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
+
+### Running an experiment
+
+Set `HFMT_ROOT`, then launch by experiment name. Run from a **login node** — the submitit launcher submits the Slurm job for you (do **not** `sbatch` this script):
+
+```bash
+export HFMT_ROOT=`pwd`
+bash egs/run.sh mmtc_fr-en_sft1
+```
+
+Override any parameter on the command line (forwarded to Hydra):
+
+```bash
+bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16 train.learning_rate=2e-5
+```
+
+Preview the fully-composed config without running anything:
+
+```bash
+python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1 --cfg job
+```
+
+Run in-process instead of submitting (e.g. when already on a GPU node):
+
+```bash
+python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
+```
+
+### Adding a new experiment
+
+Add a file `conf/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), point it at your data config and set any overrides, then `bash egs/run.sh <name>`. No new shell script needed.
+
+Outputs (checkpoints, predictions, logs) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir.
 
 ## Usage example: training seq2seq MT model
 

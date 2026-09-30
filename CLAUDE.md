@@ -20,6 +20,9 @@ hypotheses/translations — anything derived from the data.
   `*.pred`, `eval.pred.trg`) or to local `logging`/`print` output (e.g. "Decoded
   predictions…", batch-inspection dumps) is allowed — those stay on the machine. Keep
   them out of version control.
+- **Config may be logged to W&B** because it holds only hyperparameters, data *paths*, and
+  the instruction string — never data content. The Hydra SFT path logs the resolved config
+  to `wandb.config`; keep it data-free and leave `WANDB_LOG_MODEL=false` (no model artifacts).
 - When adding or changing code, check every W&B call against this rule before running it,
   and make sure nothing data-bearing is routed to W&B (directly or via `report_to`).
 
@@ -29,23 +32,31 @@ hypotheses/translations — anything derived from the data.
 hfmt/
 ├── hfmt/                    # Python entry-point scripts (not yet a package)
 │   ├── train_seq2seq.py     # encoder–decoder MT (T5, Marian) via Seq2SeqTrainer
-│   ├── sft_translation.py   # decoder-only MT via QLoRA SFT (trl.SFTTrainer, 4-bit)
+│   ├── sft_translation.py   # decoder-only MT via QLoRA SFT — Hydra-driven (@hydra.main)
+│   ├── hydra_config.py      # typed Hydra config schema (ConfigStore) for the SFT workflow
 │   ├── inf_translation.py   # inference for decoder-only MT (optional PeftModel)
 │   └── decode_summarization.py  # zero/few-shot summarization
+├── conf/                    # Hydra config for the SFT workflow (model/data/train/decode/wandb/experiment/launcher)
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
-├── egs/                     # Kaldi-style recipes, one shell script per experiment
+├── egs/                     # recipes; run.sh <experiment> launches the Hydra SFT workflow
 │   ├── data/                # example bitext, YAML/JSONL manifests
 │   ├── translation/  summarization/  mmtc/<lang-pair>/  synth_lrl/<lang>-eng/
+├── outputs/                 # Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
 ```
 
 ## Key conventions
 
-- **Recipe-driven** (`egs/<task>/<lang-pair>/`): each experiment is a shell script that
-  sources `install/path.sh`, sets checkpoint/data/hyperparameters as shell vars, and calls
-  an `hfmt/*.py` script. The script *is* the experiment log; `HFMT_ROOT` keeps paths portable.
+- **Configuration (Hydra)** — for the `sft_translation.py` QLoRA SFT workflow: all tunable
+  params live in `conf/` (typed schema in `hfmt/hydra_config.py`); an experiment is a preset
+  `conf/experiment/<name>.yaml`; launch with `bash egs/run.sh <name>` (submits to Slurm via
+  the submitit launcher; run from a login node, don't `sbatch` it). Override on the CLI, e.g.
+  `bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16`. See README and `decisions.md`.
+- **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
+  still plain shell scripts that source `install/path.sh`, set shell vars, and call an
+  `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable.
 - **Pinned Transformers submodule** for reproducibility — the HF training APIs change often.
 - **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed in a YAML manifest and
   loaded via `datasets.load_dataset("text", ...)`. Summarization uses JSONL (`text`/`summary`).

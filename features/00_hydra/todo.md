@@ -109,23 +109,29 @@ Check items off as completed.
 ## F. Recipe migration & wiring
 *Depends on C–E.*
 
-- [ ] Replace/supplement `egs/mmtc/fr-en/sft1.sh` with the Hydra invocation (single
-      `python hfmt/sft_translation.py -m experiment=mmtc_fr-en_sft1 hydra/launcher=slurm ...`),
-      keeping the old `sbatch` comment for reference.
-- [ ] Leave `sweep.yaml` / `sweep_run.sh` untouched (D5); add a one-line note that Hydra
-      sweeps arrive in the future sweep request.
-- [ ] Add `outputs/` and `multirun/` to `.gitignore`.
+- [x] Replace the per-experiment recipe with a single generic launcher (Option B, see
+      `decisions.md`): removed `egs/mmtc/fr-en/sft1.sh`, added `egs/run.sh <experiment>` →
+      `python hfmt/sft_translation.py -m +experiment=<name> hydra/launcher=slurm "$@"`.
+      Run from a login node (submitit submits); experiment YAML is the single source of truth.
+- [x] Leave `sweep.yaml` / `sweep_run.sh` untouched (D5); add a one-line note that Hydra
+      sweeps arrive in the future sweep request. → note added; also flagged that the legacy
+      sweep now targets the removed argparse CLI (non-functional until the sweep request).
+- [x] Add `outputs/` and `multirun/` to `.gitignore`. (verified via `git check-ignore`)
 
 ## G. Docs & validation handoff
 *Depends on all above.*
 
-- [ ] Update `README.md` with the Hydra run/override workflow and the Slurm launcher command.
-- [ ] Update `CLAUDE.md`: note Hydra as the config system, `conf/` layout, and the W&B
-      config-logging confidentiality guard.
-- [ ] Write an on-cluster validation checklist (the GPU smoke run the **user** executes):
+- [x] Update `README.md` with the Hydra run/override workflow and the Slurm launcher command.
+      → new "Running QLoRA SFT experiments with Hydra" section + updated entry-point list.
+- [x] Update `CLAUDE.md`: note Hydra as the config system, `conf/` layout, and the W&B
+      config-logging confidentiality guard. → added Config (Hydra) convention, `conf/`/`outputs/`
+      in the structure, and a config-logging bullet in the confidentiality section.
+- [x] Write an on-cluster validation checklist (the GPU smoke run the **user** executes):
       submit `experiment=mmtc_fr-en_sft1` via Slurm, confirm env bootstrap, one eval cycle,
       W&B run appears with correct group/name and links to the output dir, metrics only.
-- [ ] Record any notable decisions from implementation in the root `decisions.md`.
+      → `features/00_hydra/validation.md`.
+- [x] Record any notable decisions from implementation in the root `decisions.md`.
+      → run.sh/experiment convention + key Hydra technical choices.
 
 ---
 

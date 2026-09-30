@@ -5,3 +5,7 @@ wandb/
 sync.sh
 __pycache__
 run_logs
+
+# Hydra run outputs (single runs and multirun sweeps)
+outputs/
+multirun/

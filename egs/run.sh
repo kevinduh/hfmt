@@ -12,7 +12,11 @@
 #   bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16 train.learning_rate=2e-5
 #
 # Run locally/in-process instead of submitting (e.g. already on a GPU node):
-#   python ${HFMT_ROOT}/hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
+#   cd ${HFMT_ROOT} && python -m hfmt.sft_translation +experiment=mmtc_fr-en_sft1
+#
+# NOTE: we run as a module (python -m hfmt.sft_translation) with HFMT_ROOT on
+# PYTHONPATH so that submitit can re-import hfmt.* when it unpickles the job on the
+# compute node.
 
 set -e
 
@@ -26,8 +30,10 @@ experiment="$1"
 shift
 
 source ${HFMT_ROOT}/install/path.sh
+export PYTHONPATH="${HFMT_ROOT}:${PYTHONPATH}"
+cd "${HFMT_ROOT}"
 
-python ${HFMT_ROOT}/hfmt/sft_translation.py -m \
+python -m hfmt.sft_translation --multirun \
     +experiment="${experiment}" \
     hydra/launcher=slurm \
     "$@"

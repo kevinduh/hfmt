@@ -9,3 +9,7 @@ defaults:
 timeout_min: 2880
 tasks_per_node: 1
 nodes: 1
+
+# Put HFMT_ROOT on PYTHONPATH so submitit can re-import hfmt.* when it unpickles the job.
+setup:
+  - export PYTHONPATH=${oc.env:HFMT_ROOT}:$PYTHONPATH

@@ -16,7 +16,9 @@ mem_gb: 25                  # from the legacy qsub mem_free=25G
 name: ${experiment}
 
 # R2 -- bootstrap the compute-node environment before python runs: conda activate +
-# module load (install/path.sh). HFMT_ROOT must be exported at submit time; Slurm's
-# default --export=ALL (used by submitit) propagates it into the job.
+# module load (install/path.sh), and put HFMT_ROOT on PYTHONPATH so submitit can
+# re-import hfmt.* when it unpickles the job. HFMT_ROOT must be exported at submit time;
+# Slurm's default --export=ALL (used by submitit) propagates it into the job.
 setup:
   - source ${oc.env:HFMT_ROOT}/install/path.sh
+  - export PYTHONPATH=${oc.env:HFMT_ROOT}:$PYTHONPATH

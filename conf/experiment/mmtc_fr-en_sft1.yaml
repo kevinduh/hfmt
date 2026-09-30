@@ -3,7 +3,7 @@
 # Select with:  +experiment=mmtc_fr-en_sft1
 # (Hydra "experiment" pattern: this file overrides group choices + values.)
 defaults:
-  - override /model: qwen2.5-1.5b
+  - override /model: qwen2.5-7b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /decode: default

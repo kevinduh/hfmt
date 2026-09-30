@@ -1,0 +1,15 @@
+# Qwen2.5-7B-Instruct with 4-bit QLoRA adaptation.
+checkpoint: Qwen/Qwen2.5-7B-Instruct
+pretrain: true
+
+# 4-bit quantization (bitsandbytes).
+load_in_4bit: true
+bnb_4bit_use_double_quant: true
+bnb_4bit_quant_type: nf4
+bnb_4bit_compute_dtype: bfloat16
+
+# LoRA adapter.
+lora_r: 8
+lora_alpha: 32
+lora_dropout: 0.1
+lora_target: qv   # qv | all-linear

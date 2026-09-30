@@ -1,6 +1,6 @@
 egs/models
 *.sh.o*
-wandb/
+/wandb/
 *~
 sync.sh
 __pycache__

@@ -1,0 +1,9 @@
+# Weights & Biases logging.
+# CONFIDENTIALITY (CLAUDE.md): only aggregate metrics + data-free config may be
+# logged to W&B. Never log sample text, tables, or artifacts containing examples.
+enabled: true
+project: hfmt
+entity: null
+group: null          # set per experiment (e.g. the experiment name)
+tags: []
+name: null           # derived from the experiment name at runtime if null (Stage D)

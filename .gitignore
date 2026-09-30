@@ -2,3 +2,5 @@ egs/models
 *.sh.o*
 wandb/
 *~
+sync.sh
+__pycache__

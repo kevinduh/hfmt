@@ -140,3 +140,39 @@ Here is an example script that runs `hfmt/decode_summarization.py` and compute R
 qsub -S /bin/bash -V -cwd -j y -q gpu.q@@a100 -l gpu=1,h_rt=24:00:00,num_proc=8,mem_free=25G egs/summarization/decode_summarization.sh
 ```
 
+## Exporting W&B results for analysis
+
+`analysis/pull_wandb.py` exports finished runs from Weights & Biases into a single JSON file
+(`analysis/wandb_export.json`) that you can then review — e.g. by handing it to Claude Code to
+discuss what to change. It only reads metrics + config (no dataset content), and the output is
+gitignored.
+
+Run it **outside the sandbox**, on a machine with outbound access to W&B, using the project
+environment (which already includes `wandb`; see [Installation](#installation)):
+
+1. Set your W&B API key. It is read from the environment or `~/.netrc` — it is **never** passed
+   as a command-line argument (so it can't leak into shell history or logs):
+
+   ```bash
+   export WANDB_API_KEY=<your key>
+   # or run: wandb login
+   ```
+
+2. Pull the runs (defaults: project `hfmt`, latest 10 finished runs):
+
+   ```bash
+   python analysis/pull_wandb.py
+   # optional filters:
+   #   --project hfmt --entity <you> --group <group> --run-id <id> --limit 20 --out path.json
+   ```
+
+The export is written to `analysis/wandb_export.json` (override with `--out`).
+
+By default it is **reduced** to stay small enough to compare many runs at once: each run
+keeps its `config.hfmt` knobs plus per-metric `[step, value]` trajectories (`eval` and
+`train`) at the run's own logging cadence. Pass `--raw` to export the full history + full
+config for a single run you want to drill into.
+
+> Note: `analysis/pull_wandb.py` is added in a later step of this feature; this section
+> documents how it will be run.
+

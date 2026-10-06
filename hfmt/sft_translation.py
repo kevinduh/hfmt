@@ -146,20 +146,66 @@ class EarlyStopping_MT_Callback(EarlyStoppingCallback):
         super().on_evaluate(args, state, control, **kwargs)
 
 
-def derive_run_identity(cfg, outdir):
-    """Stable, W&B-safe (id, name, group) derived from the experiment + run dir.
+def _sanitize_label(text, maxlen=128):
+    """W&B-safe label: keep alnum + a few readable separators, collapse the rest."""
+    return re.sub(r"[^A-Za-z0-9_.=,+-]", "-", text)[:maxlen]
+
+
+def _sweep_param_tokens(overrides_task):
+    """Swept-hyperparameter tokens (``key=value``) for W&B labeling (feature 02_hydra_sweep).
+
+    Built from Hydra's task overrides so a sweep run's name/tags show *which* values it used.
+    Drops selectors that add no information (experiment/sweep presets, hydra-group choices)
+    and -- for confidentiality (CLAUDE.md) -- any ``data`` override or path-bearing token, so
+    data paths/content never leak into a W&B run name or tag.
+    """
+    tokens = []
+    for t in overrides_task:
+        key = t.split("=", 1)[0].lstrip("+~")
+        if key in ("experiment", "sweep") or key.startswith("hydra"):
+            continue
+        if key == "data" or key.startswith("data."):
+            continue
+        if "/" in t:  # a path value or a config-group selection -- never label with it
+            continue
+        tokens.append(t)
+    return tokens
+
+
+def derive_run_identity(cfg, outdir, is_multirun=False, overrides_task=()):
+    """Stable, W&B-safe (id, name, group, tags) derived from the experiment + run dir.
 
     The run dir is unique per launch but identical across a Slurm requeue of the same
     job, so resume='allow' maps a requeue back onto the same W&B run (D6).
+
+    For a sweep (``--multirun``, feature 02_hydra_sweep) the run dir basename is
+    ``<job.num>_<timestamp>``; the timestamp is shared by every job of one launch and unique
+    per launch, so it serves as the sweep id. Sweep runs are grouped under
+    ``<base-group>-sweep-<sweep-id>`` (so each sweep clusters together and separately from
+    other sweeps/plain runs) and named by their swept params (so they are identifiable at a
+    glance in the W&B UI); the per-job ``run_id`` stays unique so runs never clobber.
     """
     job = os.path.basename(os.path.normpath(outdir))
     run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{job}")
-    run_name = cfg.wandb.name or f"{cfg.experiment}-{job}"
-    group = cfg.wandb.group or cfg.experiment
-    return run_id, run_name, group
+    base_group = cfg.wandb.group or cfg.experiment
+    tags = list(cfg.wandb.tags)
+
+    if is_multirun:
+        job_num, _, sweep_id = job.partition("_")  # "<num>_<timestamp>"
+        sweep_id = sweep_id or job_num
+        group = f"{base_group}-sweep-{sweep_id}"
+        param_tokens = _sweep_param_tokens(overrides_task)
+        suffix = ",".join(param_tokens) if param_tokens else f"job{job_num}"
+        run_name = cfg.wandb.name or _sanitize_label(suffix)
+        tags = tags + ["sweep"] + [_sanitize_label(t) for t in param_tokens]
+    else:
+        group = base_group
+        run_name = cfg.wandb.name or f"{cfg.experiment}-{job}"
+
+    return run_id, run_name, group, tags
 
 
-def init_wandb(cfg, outdir, run_id, run_name, group):
+def init_wandb(cfg, outdir, run_id, run_name, group, tags):
     """Start the W&B run so it carries our group/name/id/config; the HF Trainer's
     WandbCallback (report_to='wandb') then reuses this same run.
 
@@ -177,7 +223,7 @@ def init_wandb(cfg, outdir, run_id, run_name, group):
         group=group,
         name=run_name,
         id=run_id,
-        tags=list(cfg.wandb.tags),
+        tags=list(tags),
         dir=outdir,
         resume="allow",
         config={"hfmt": cfg_container, "run_dir": outdir},
@@ -194,9 +240,11 @@ def main(cfg: Config) -> None:
     from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTConfig, SFTTrainer
     from hydra.core.hydra_config import HydraConfig
+    from hydra.types import RunMode
 
     # Hydra's per-run output dir (chdir is disabled; we target it explicitly).
-    outdir = HydraConfig.get().runtime.output_dir
+    hydra_cfg = HydraConfig.get()
+    outdir = hydra_cfg.runtime.output_dir
     os.makedirs(outdir, exist_ok=True)
 
     logging.info("Resolved config:\n%s", OmegaConf.to_yaml(cfg))
@@ -204,9 +252,14 @@ def main(cfg: Config) -> None:
 
     # Link W&B <-> output dir <-> config. Own the run here (main process only; single-GPU
     # recipe) so it carries our group/name/id and data-free config; the HF Trainer reuses it.
-    run_id, run_name, group = derive_run_identity(cfg, outdir)
+    # In a sweep (--multirun) the swept params shape the W&B group/name/tags (feature
+    # 02_hydra_sweep) so each run is identifiable and sweeps don't clobber or intermix.
+    is_multirun = hydra_cfg.mode == RunMode.MULTIRUN
+    run_id, run_name, group, tags = derive_run_identity(
+        cfg, outdir, is_multirun=is_multirun, overrides_task=hydra_cfg.overrides.task
+    )
     if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
-        init_wandb(cfg, outdir, run_id, run_name, group)
+        init_wandb(cfg, outdir, run_id, run_name, group, tags)
 
     ###################################
     ## User settings

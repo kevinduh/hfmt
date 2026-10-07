@@ -15,6 +15,12 @@ cpus_per_task: 8            # from the legacy qsub num_proc=8
 mem_gb: 25                  # from the legacy qsub mem_free=25G
 name: ${experiment}
 
+# Sweep concurrency cap (feature 02_hydra_sweep): submitit runs a -m sweep as a Slurm job
+# array; this limits how many array tasks run at once (matches the 4-node tier). Override on
+# the CLI for a smaller sweep, e.g. hydra.launcher.array_parallelism=2. Mind that sweeps are
+# cross-products -- the job count grows fast, so a big grid just queues behind this cap.
+array_parallelism: 4
+
 # R2 -- bootstrap the compute-node environment before python runs: conda activate +
 # module load (install/path.sh), and put HFMT_ROOT on PYTHONPATH so submitit can
 # re-import hfmt.* when it unpickles the job. HFMT_ROOT must be exported at submit time;

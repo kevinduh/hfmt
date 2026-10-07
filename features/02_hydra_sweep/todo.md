@@ -78,12 +78,12 @@ and document what already works before adding to it — avoids rebuilding it.*
 ## D. Concurrency cap + grid-size safety (D-cap)
 *Depends on C. submitit submits a Slurm job array; cap simultaneous tasks for the 4-node tier.*
 
-- [ ] Add `array_parallelism: 4` to `conf/hydra/launcher/slurm.yaml` (matches the developer's
-      4-node Slurm tier) with a comment; keep it CLI-overridable — **Risk R2**.
-- [ ] Verify the cap renders into the submitit/sbatch array spec via `--cfg hydra` /
-      dry-run (no real submission here).
-- [ ] Add docs guidance warning that grids are cross-products (the legacy space was **192**);
-      recommend starting from the coarse preset and refining — **Risk R2**.
+- [x] Added `array_parallelism: 4` to `conf/hydra/launcher/slurm.yaml` (matches the 4-node
+      tier) with a comment; CLI-overridable via `hydra.launcher.array_parallelism=<N>` — **Risk R2**.
+- [x] Verified the cap renders: `+experiment=... hydra/launcher=slurm --cfg hydra` shows
+      `hydra.launcher.array_parallelism: 4` under the `SlurmLauncher` target (schema accepts it).
+- [x] Grid-size warning (cross-products grow fast) added in the slurm.yaml comment.
+      *(Fuller README guidance + the legacy 192-combo example → group F.)*
 
 ## E. Retire legacy W&B-sweep tooling (D4)
 *Depends on C (the replacement preset must exist first so intent isn't lost — **Risk R7**).*

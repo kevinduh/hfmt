@@ -85,6 +85,15 @@ New `conf/sweep/` config group; first preset `conf/sweep/mmtc_fr-en_coarse.yaml`
   (e.g. `train.learning_rate=2e-05,model.lora_target=all-linear,model.lora_r=32,train.seed=42`).
 - **Ad-hoc CLI still works** (Group A): comma-list overrides expand without a preset.
 
+## Group D — concurrency cap
+
+Added `array_parallelism: 4` to `conf/hydra/launcher/slurm.yaml` (matches the 4-node tier;
+submitit runs a `-m` sweep as a Slurm job array and this caps simultaneous tasks). Verified
+off-cluster that `+experiment=... hydra/launcher=slurm --cfg hydra` renders
+`hydra.launcher.array_parallelism: 4` under the `SlurmLauncher` target (schema accepts it).
+A grid-size warning lives in the file's comment; CLI override is
+`hydra.launcher.array_parallelism=<N>`. Full README guidance → group F.
+
 ## Group F — on-cluster smoke test (user-run)
 
 *(To be filled in when groups B–E land.)*

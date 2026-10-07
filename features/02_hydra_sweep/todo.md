@@ -60,21 +60,20 @@ and document what already works before adding to it — avoids rebuilding it.*
 *Depends on B. Basic grid sweeper (Hydra default under `-m`); no new deps; no change to
 `main()`'s signature.*
 
-- [ ] Create the `conf/sweep/` config group. Author presets as `# @package _global_` files
-      that set `hydra.sweeper.params:` (the basic sweeper's grid), selectable with `+sweep=<name>`.
-- [ ] Add the first preset `conf/sweep/mmtc_fr-en_coarse.yaml` (D-space):
+- [x] Create the `conf/sweep/` config group. Presets are `# @package _global_` files that set
+      `hydra.sweeper.params:` (basic sweeper grid), selectable with `+sweep=<name>`.
+- [x] Add the first preset `conf/sweep/mmtc_fr-en_coarse.yaml` (D-space):
       `train.learning_rate: 2e-5,2e-4` × `model.lora_target: qv,all-linear` ×
-      `model.lora_r: 8,16,32` × `train.seed: 37,42` = **24 jobs**. Document in a header comment
-      that `model.lora_alpha` stays fixed at 32 so `alpha/r` varies (confound; constant-ratio
-      is a future refinement).
-- [ ] Confirm the structured schema accepts every swept key (all are existing fields — **Risk
-      R9**); document that `+key=...` *appends* and that group sweeps (`model=a,b`) also work.
-- [ ] Validate preset composition off-cluster: `python hfmt/sft_translation.py -m
-      +experiment=mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse --cfg hydra` expands to the 24-job
-      matrix (verify `hydra.sweeper.params` packaging actually lands — Hydra `@package` is finicky).
-- [ ] Confirm ad-hoc CLI sweeps still work unchanged
-      (`bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=8,16`); document the override grammar
-      (`choice` lists, `range(...)`, `glob(...)`).
+      `model.lora_r: 8,16,32` × `train.seed: 37,42` = **24 jobs**. Header comment notes
+      `model.lora_alpha` stays fixed at 32 (so `alpha/r` varies — confound; constant-ratio is a
+      future refinement) and the confidentiality rule.
+- [x] Confirmed the structured schema accepts every swept key (all existing fields — **Risk
+      R9**). *(Doc that `+key=...` appends + group sweeps `model=a,b` → README in group F.)*
+- [x] Validated preset composition off-cluster: `+experiment=mmtc_fr-en_sft1
+      +sweep=mmtc_fr-en_coarse --cfg hydra` lands the 4 keys under `hydra.sweeper.params`
+      (`@package _global_` works), and a no-torch probe multirun expanded to the **24-job** matrix.
+- [x] Confirmed ad-hoc CLI sweeps still work unchanged (Group A: comma-lists expand).
+      *(Override-grammar docs → README in group F.)*
 
 ## D. Concurrency cap + grid-size safety (D-cap)
 *Depends on C. submitit submits a Slurm job array; cap simultaneous tasks for the 4-node tier.*

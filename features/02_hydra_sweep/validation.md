@@ -66,6 +66,25 @@ basename**, not `sweep.dir` (Risk R3). `HydraConfig.overrides.task` gives clean
 - **Fallback (R4):** when a job has no swept-param tokens, the name falls back to `job<num>`;
   labels are sanitized + length-capped (`_sanitize_label`).
 
+## Group C — committed sweep presets
+
+New `conf/sweep/` config group; first preset `conf/sweep/mmtc_fr-en_coarse.yaml`
+(`# @package _global_`, sets `hydra.sweeper.params`). Verified off-cluster:
+
+- **Packaging works.** `+experiment=mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse --cfg hydra`
+  shows the four swept keys land under `hydra.sweeper.params` (the `# @package _global_` places
+  the `hydra:` block at the config root as intended — the finicky part, confirmed).
+- **Expansion is correct.** A no-torch probe multirun (`-m +experiment=... +sweep=...`)
+  expanded to exactly **24 jobs** with the right cross-product; each job's `overrides.task`
+  carries its swept params.
+- **Schema accepts the swept keys.** All of `train.learning_rate`, `model.lora_target`,
+  `model.lora_r`, `train.seed` are existing structured-config fields, so composition succeeds
+  (unknown keys would be rejected — Risk R9).
+- **Group B integration.** `_sweep_param_tokens` drops the `+experiment=` and `+sweep=`
+  selectors from preset-driven jobs, so a run's W&B name is just the swept params
+  (e.g. `train.learning_rate=2e-05,model.lora_target=all-linear,model.lora_r=32,train.seed=42`).
+- **Ad-hoc CLI still works** (Group A): comma-list overrides expand without a preset.
+
 ## Group F — on-cluster smoke test (user-run)
 
 *(To be filled in when groups B–E land.)*

@@ -1,0 +1,25 @@
+# @package _global_
+# Coarse QLoRA SFT hyperparameter sweep for MMTC fr-en (feature 02_hydra_sweep).
+#
+# Select it on top of an experiment (adds to the Hydra basic sweeper's grid):
+#   bash egs/run.sh mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse
+# Ad-hoc sweeps still work without a preset, e.g.:
+#   bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=8,16 train.learning_rate=2e-5,2e-4
+#
+# Grid = learning_rate{2} x lora_target{2} x lora_r{3} x seed{2} = 24 jobs, run at most
+# `array_parallelism` (4) at a time via the submitit Slurm launcher. Mind the cross-product
+# before adding dimensions (it grows fast).
+#
+# NOTE: model.lora_alpha is held fixed at 32, so the effective scaling alpha/r varies across
+# the lora_r values -- intentional for this coarse pass (constant-ratio is a future
+# refinement). CONFIDENTIALITY (CLAUDE.md): only hyperparameters here, never data content.
+#
+# `# @package _global_` places this `hydra:` block at the config root so it reaches
+# hydra.sweeper.params (the basic sweeper's grid), rather than under a `sweep.` package.
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 2e-5,2e-4
+      model.lora_target: qv,all-linear
+      model.lora_r: 8,16,32
+      train.seed: 37,42

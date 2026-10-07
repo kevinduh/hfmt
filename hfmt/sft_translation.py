@@ -1,9 +1,31 @@
 import time
 import os
+import sys
 import re
 import logging
 import yaml
 from pprint import pprint, pformat
+
+# Wall-clock origin for startup breadcrumbs (see _startup_log). Captured at module import
+# so it covers the heavy ML imports below, which happen before Hydra configures logging.
+_STARTUP_T0 = time.perf_counter()
+
+
+def _startup_log(msg):
+    """Emit a timestamped, unbuffered startup breadcrumb to stderr.
+
+    The transformers import below pulls in peft -> accelerate -> bitsandbytes -> torch and
+    can take tens of seconds on a cold NFS conda env (e.g. the login node at submit time),
+    with no output in between. Hydra's logging isn't configured until main() runs, so these
+    breadcrumbs use plain stderr with flush=True to show that a launch is making progress
+    and how long each phase took. Timing/paths only -- never dataset content (CLAUDE.md).
+    """
+    print(
+        f"[{time.strftime('%H:%M:%S')}][startup][+{time.perf_counter() - _STARTUP_T0:6.1f}s] {msg}",
+        file=sys.stderr,
+        flush=True,
+    )
+
 
 import hydra
 from omegaconf import OmegaConf
@@ -19,10 +41,12 @@ except ModuleNotFoundError:
 # transformers pulls in torch; guard the import so config-only runs (--cfg job) work on
 # a CPU box without the training deps. When absent, the base class is a no-op stand-in
 # (the callback is only instantiated inside main(), never during a config-only run).
+_startup_log("importing transformers (one-time; slow on a cold conda env)...")
 try:
     from transformers import EarlyStoppingCallback
 except ImportError:
     EarlyStoppingCallback = object
+_startup_log("transformers import complete")
 
 
 def format_input_prompt(instruction_prefix, content):
@@ -247,6 +271,8 @@ def main(cfg: Config) -> None:
     outdir = hydra_cfg.runtime.output_dir
     os.makedirs(outdir, exist_ok=True)
 
+    logging.info("Entered main() %.1fs after process start (module import + Hydra setup).",
+                 time.perf_counter() - _STARTUP_T0)
     logging.info("Resolved config:\n%s", OmegaConf.to_yaml(cfg))
     os.environ["WANDB_PROJECT"] = cfg.wandb.project
 

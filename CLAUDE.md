@@ -36,7 +36,7 @@ hfmt/
 │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore) for the SFT workflow
 │   ├── inf_translation.py   # inference for decoder-only MT (optional PeftModel)
 │   └── decode_summarization.py  # zero/few-shot summarization
-├── conf/                    # Hydra config for the SFT workflow (model/data/train/decode/wandb/experiment/launcher)
+├── conf/                    # Hydra config for the SFT workflow (model/data/train/decode/wandb/experiment/sweep/launcher)
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
 ├── egs/                     # recipes; run.sh <experiment> launches the Hydra SFT workflow
@@ -54,6 +54,13 @@ hfmt/
   `conf/experiment/<name>.yaml`; launch with `bash egs/run.sh <name>` (submits to Slurm via
   the submitit launcher; run from a login node, don't `sbatch` it). Override on the CLI, e.g.
   `bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16`. See README and `decisions.md`.
+- **Parameter sweeps (Hydra basic grid)** — `egs/run.sh` runs in `--multirun`, so comma-list
+  overrides fan out into one Slurm job per combination via submitit
+  (`bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=8,16,32`). Reusable grids are committed as
+  `conf/sweep/<name>.yaml` and selected with `+sweep=<name>`. Sweep runs share a per-sweep W&B
+  group and are named/tagged by their swept values (data paths/content never go in labels);
+  `hydra.launcher.array_parallelism` caps concurrency. This replaces the old W&B-sweep tooling
+  (`wandb sweep`/`wandb agent`). See README "Sweeping parameters".
 - **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
   still plain shell scripts that source `install/path.sh`, set shell vars, and call an
   `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable.

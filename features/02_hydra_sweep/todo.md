@@ -88,31 +88,30 @@ and document what already works before adding to it — avoids rebuilding it.*
 ## E. Retire legacy W&B-sweep tooling (D4)
 *Depends on C (the replacement preset must exist first so intent isn't lost — **Risk R7**).*
 
-- [ ] Confirm the search space / metric intent of `egs/mmtc/fr-en/sweep.yaml`
-      (`eval/bleu`, maximize; lr, scheduler, weight_decay, batch, seed, qlora_r/target) is
-      represented (as a subset) by the new preset before deleting.
-- [ ] Delete `egs/mmtc/fr-en/sweep.yaml` and `egs/mmtc/fr-en/sweep_run.sh` (dead — target the
-      removed argparse CLI).
-- [ ] Grep the repo for references to the deleted files (README, `egs/`, comments) and update
-      them to point at the Hydra sweep workflow.
+- [x] Confirmed the legacy space/metric intent (`eval/bleu` maximize; lr, scheduler,
+      weight_decay, batch, seed, qlora_r/target) is represented as a **subset** by the coarse
+      preset (lr, lora_target, lora_r, seed); `eval/bleu` is already logged by the callback;
+      bayes+hyperband is out of scope (D1).
+- [x] Deleted `egs/mmtc/fr-en/sweep.yaml` and `egs/mmtc/fr-en/sweep_run.sh` (kept the unrelated
+      `inf.sh`). *(Both were untracked on `hydra`, so this removes dead working-tree files.)*
+- [x] Grepped the repo: the only remaining mentions are in `features/00_hydra/` (historical
+      records, correctly left as-is) and the `transformers/` submodule (unrelated). No README/
+      code referenced the deleted files, so nothing to re-point.
 
 ## F. Docs & validation handoff
 *Depends on all above.*
 
-- [ ] Add a **Sweeps** subsection to `README.md`: ad-hoc CLI grammar, `+sweep=<name>` presets,
-      `array_parallelism` cap + grid-size warning, where outputs/W&B land, and how sweep runs
-      are named/grouped.
-- [ ] Update `CLAUDE.md`: add `conf/sweep/` to the project structure and a one-line note on the
-      Hydra grid sweep workflow (replacing the legacy W&B-sweep mention).
-- [ ] Append a short `decisions.md` entry: basic grid sweeper (Optuna deferred), committed
-      `conf/sweep/` presets, the per-sweep W&B grouping/naming scheme, and `array_parallelism=4`.
-      Mark the "migrate W&B sweep tooling to Hydra's sweeper" deferral in `decisions.md` as done.
-- [ ] Write an on-cluster validation checklist (**user-run** GPU smoke test) as
-      `features/02_hydra_sweep/validation.md`: launch a tiny 2-point sweep
-      (`bash egs/run.sh mmtc_fr-en_sft1 train.seed=37,42 train.max_steps=20`), confirm **two**
-      Slurm array tasks, two **non-clobbering** W&B runs sharing one sweep **group** with
-      **legible** names/tags, metrics-only, and that one failed/OOM trial doesn't abort the
-      others (**Risk R2**). Then a note to run the full `+sweep=mmtc_fr-en_coarse` preset.
+- [x] Added a **Sweeping parameters** subsection to `README.md` (ad-hoc CLI + override grammar,
+      `+sweep=<name>` presets, `array_parallelism` cap + grid-size warning, no-clobber +
+      identifiability notes) and a `conf/sweep/` bullet to the config-layout list.
+- [x] Updated `CLAUDE.md`: `conf/sweep/` in the project structure + a Parameter-sweeps bullet
+      noting it replaces the old W&B-sweep tooling.
+- [x] Appended a `decisions.md` entry (basic grid; `conf/sweep/` presets; per-sweep W&B
+      grouping/naming from the run-dir timestamp; `array_parallelism=4`) and marked the
+      W&B-sweep→Hydra deferral done.
+- [x] Wrote the on-cluster validation checklist in `features/02_hydra_sweep/validation.md`
+      (Group F): a 2-point smoke test (array of 2, env bootstrap, non-clobber, shared group +
+      legible names/tags, metrics-only, failure-resilience) plus the full `+sweep=` preset run.
 
 ---
 

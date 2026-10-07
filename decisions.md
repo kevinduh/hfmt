@@ -49,3 +49,29 @@ Non-obvious implementation decisions, for future readers/maintainers:
 Deferred (for the future sweep request): external/proprietary data root (`conf/data` still
 points in-repo via `HFMT_ROOT`), `.gitignore`/`path.sh` data hardening, and migrating the
 W&B sweep tooling to Hydra's sweeper. Considering a move to `uv` for env management.
+*(The W&B-sweep → Hydra-sweeper migration is now done — see below.)*
+
+---
+
+## Parameter sweeps use Hydra's basic grid sweeper (feature 02_hydra_sweep)
+
+**Decision:** Sweeps are plain Hydra `--multirun` grids over config knobs, fanned out to Slurm
+by the existing submitit launcher. Reusable grids are committed under `conf/sweep/<name>.yaml`
+(selected with `+sweep=<name>`); ad-hoc comma-list overrides also work. The legacy W&B-sweep
+tooling (`egs/mmtc/fr-en/sweep*.{yaml,sh}`) is removed.
+
+**Context:** The fan-out already existed — `egs/run.sh` runs `--multirun` with
+`hydra/launcher=slurm`, and each job already got a unique output dir + W&B run id. So this
+feature added ergonomics and legibility, not fan-out:
+
+- **Basic grid, not Optuna.** Chose Hydra's built-in sweeper: zero new deps and no need for
+  `main()` to return an objective. Bayesian/pruning search (the old `sweep.yaml`'s
+  bayes+hyperband) is explicitly out of scope; it would need the Optuna plugin + objective
+  reporting. Grid is enough for "experiment over multiple parameters."
+- **W&B identifiability.** In multirun, `derive_run_identity()` groups a sweep's runs under
+  `<base-group>-sweep-<timestamp>` and names/tags each run by its swept values. The sweep id is
+  the **shared timestamp in the run-dir basename** (unique per launch, shared across its jobs),
+  *not* `hydra.sweep.dir` — which is just `outputs/<experiment>` and identical across all sweeps
+  of an experiment. Confidentiality: `data`/path-bearing overrides are stripped from names/tags.
+- **Concurrency cap.** `array_parallelism: 4` in the Slurm launcher (the node-tier size) bounds
+  how many array tasks run at once; grids are cross-products, so job counts multiply fast.

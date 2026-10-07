@@ -43,6 +43,7 @@ not in the training script or a per-experiment shell script.
 * `conf/decode/` — generation knobs (`max_length`, `max_new_tokens`, `num_beams`, ...).
 * `conf/wandb/` — W&B project/entity/group/tags.
 * `conf/experiment/<name>.yaml` — a preset composing the above into one named experiment (the successor to the old per-experiment `.sh` recipes).
+* `conf/sweep/<name>.yaml` — a committed parameter-sweep preset (a grid for Hydra's basic sweeper), selected with `+sweep=<name>` (see **Sweeping parameters**).
 * `conf/hydra/launcher/{slurm,local}.yaml` — how/where to run (Slurm via submitit, or local).
 
 The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
@@ -79,6 +80,32 @@ python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
 Add a file `conf/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), point it at your data config and set any overrides, then `bash egs/run.sh <name>`. No new shell script needed.
 
 Outputs (checkpoints, predictions, logs) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir.
+
+### Sweeping parameters
+
+A sweep runs an experiment over multiple parameter values, fanning out into **one Slurm job per combination** via the submitit launcher (`egs/run.sh` already runs in `--multirun` mode). Two ways to drive it:
+
+**Ad-hoc** — pass comma-separated values on the CLI; Hydra takes the cross-product:
+
+```bash
+bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=8,16,32 train.learning_rate=2e-5,2e-4
+```
+
+The override grammar also supports `range(1,4)`, `choice(a,b)`, and `glob(*)`, and you can sweep a whole config group (e.g. `model=qwen2.5-1.5b,qwen2.5-7b`).
+
+**Committed preset** — define a reusable grid in `conf/sweep/<name>.yaml` and select it:
+
+```bash
+bash egs/run.sh mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse
+```
+
+See `conf/sweep/mmtc_fr-en_coarse.yaml` for the format (it sets `hydra.sweeper.params`).
+
+Notes:
+
+* **Grids are cross-products** — the job count multiplies fast (a 7-way space can be ~200 runs). At most `hydra.launcher.array_parallelism` jobs (default **4**, the node-tier size) run at once; the rest queue. Override per-sweep with `hydra.launcher.array_parallelism=<N>`. Start from a coarse preset and refine.
+* **Runs don't clobber.** Each job gets its own `outputs/<experiment>/<n>_<timestamp>/` dir and a distinct W&B run id.
+* **Runs are identifiable.** A sweep's runs share one W&B **group** (`<experiment>-sweep-<timestamp>`) and each run is **named/tagged by its swept values** (e.g. `model.lora_r=16,train.seed=37`), so you can compare them at a glance. Only hyperparameters appear in names/tags — never data content (data paths are stripped).
 
 ## Usage example: training seq2seq MT model
 

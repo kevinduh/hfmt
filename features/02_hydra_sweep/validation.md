@@ -94,6 +94,40 @@ off-cluster that `+experiment=... hydra/launcher=slurm --cfg hydra` renders
 A grid-size warning lives in the file's comment; CLI override is
 `hydra.launcher.array_parallelism=<N>`. Full README guidance → group F.
 
-## Group F — on-cluster smoke test (user-run)
+## Group F — docs & on-cluster smoke test
 
-*(To be filled in when groups B–E land.)*
+**Docs (done):** README gained a "Sweeping parameters" subsection (ad-hoc + `+sweep=` presets,
+override grammar, `array_parallelism`, no-clobber + identifiability notes) and a `conf/sweep/`
+bullet; `CLAUDE.md` gained a sweep bullet + `conf/sweep/` in the structure; `decisions.md`
+records the sweeper choice and marks the W&B-sweep→Hydra migration done.
+
+**On-cluster smoke test (user-run — needs GPUs, not runnable in the sandbox).** From a login
+node with `HFMT_ROOT` set and the project env active, run a tiny 2-point sweep:
+
+```bash
+export HFMT_ROOT=$(pwd)
+bash egs/run.sh mmtc_fr-en_sft1 train.seed=37,42 train.max_steps=20
+```
+
+Confirm:
+
+1. **Fan-out** — submitit submits a Slurm **job array** of 2 tasks (`squeue` shows them);
+   at most `array_parallelism` (4) run at once.
+2. **Env bootstrap** — each task sources `install/path.sh` on the node and starts training
+   (no import/conda/module errors in the per-job log).
+3. **No clobber** — two distinct `outputs/mmtc_fr-en_sft1/<n>_<ts>/` dirs; two distinct W&B
+   run ids.
+4. **Identifiability** — both runs share one W&B group `mmtc_fr-en_sft1-sweep-<ts>`; names/tags
+   show the swept value (`train.seed=37` / `train.seed=42`); a `sweep` tag is present.
+5. **Confidentiality** — W&B carries only metrics + data-free config; no data content, and no
+   data paths in any run name/tag.
+6. **Resilience** — if one task fails/OOMs, the other still completes (array tasks are independent).
+
+Then run the full coarse preset to exercise a real grid:
+
+```bash
+bash egs/run.sh mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse
+```
+
+Confirm it expands to **24** runs under the concurrency cap, all grouped under one
+`...-sweep-<ts>` group with per-run swept-param names/tags.

@@ -93,6 +93,26 @@ Each feature directory contains three files:
 There is also a single high-level **`decisions.md`** (project root). Update it infrequently
 and only to record important decisions and the context behind them — not routine progress.
 
+## Commit messages
+
+Tie each commit to the feature and the `todo.md` phase it advances. Format the subject as
+`<feature_dir>-<phase>: <summary>`, where `<feature_dir>` is the `features/` directory name
+and `<phase>` is the todo group letter being worked on:
+
+- **Subject line** — `<feature_dir>-<phase>: <clear, specific summary>`, e.g.
+  `02_hydra_sweep-C: add committed sweep presets via +sweep= group`.
+- **Body** — a very short, concise explanation of what else changed (one short paragraph or a
+  couple of bullets). Keep it to the essentials; detail lives in `plan.md`/`todo.md`.
+
+Example:
+
+```
+02_hydra_sweep-C: add committed sweep presets via +sweep= group
+
+Add conf/sweep/ group with the first coarse mmtc fr-en preset (24-job grid).
+Update the feature's todo.md/validation.md to mark group C done.
+```
+
 ## Reminders
 
 - Read relevant files before changing them; follow existing structure and patterns.

@@ -7,7 +7,14 @@ defaults:
   - submitit_slurm          # plugin base (provides _target_ + full schema)
 
 partition: gpu
-gres: gpu:a100:1
+# Land on whichever bf16-capable GPU in our 4gpu_tier is free first. The model uses
+# bnb_4bit_compute_dtype=bfloat16, which needs Ampere+ (CC>=8.0), so v100 (Volta) is out;
+# the tier hard-zeros h100/h200 and gh200 lives in the staff-only `arm` partition. That
+# leaves a100 + l40s, both of which are node *features* (--gres can't OR types, so we
+# request a typeless GPU and OR the types via --constraint). Positive OR-list on purpose:
+# one v100 node group is tagged `dgx` (no `v100` feature), so `!v100` would leak it in.
+gres: gpu:1
+constraint: "a100|l40s"
 timeout_min: 2880           # 48h (matches --time=48:00:00)
 tasks_per_node: 1
 nodes: 1

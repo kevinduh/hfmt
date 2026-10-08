@@ -79,6 +79,22 @@ hfmt/
 - Format with `black`, lint with `pylint`/`flake8`, test with `pytest` (where configured).
 - Follow PEP 8, write docstrings, use type hints, keep functions focused.
 
+## Experiment analysis
+
+When asked to analyze an experiment, archive the analysis under `analysis/` in a directory
+named for the current date (`analysis/<YYYY-MM-DD>/`; if one already exists for today, add a
+short suffix so distinct analyses don't clobber each other, e.g. `analysis/2026-10-08_mmtc_fr-en_sft1/`).
+Into that directory:
+
+- **Copy** the `wandb_export.json` (or other source export) being analyzed, so the inputs are
+  preserved alongside the findings.
+- **Write** a markdown file (e.g. `summary.md`) summarizing the results: what the runs were, the
+  sweep axes, a results table, and the key findings/recommendations.
+
+Keep these the same data-confidentiality rules as everywhere else — summaries hold only
+aggregate metrics and config (hyperparameters, data *paths*, instruction string), never dataset
+content or model hypotheses.
+
 ## Development workflow
 
 Feature work lives under a `features/` directory. Each feature gets its own subdirectory

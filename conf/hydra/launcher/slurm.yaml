@@ -14,11 +14,12 @@ partition: gpu
 # 4gpu_tier (a100=4; h100/h200 are hard-zeroed, gh200 is in the staff-only `arm` partition).
 # To run on l40s instead, override on the CLI: hydra.launcher.gres=gpu:l40s:1
 gres: gpu:a100:1
-# Keep this close to the real runtime: these QLoRA SFT jobs (max_steps~800) finish in a
-# few hours, and an over-long walltime makes a job hard to BACKFILL -- the scheduler won't
-# drop it into a briefly-free GPU it's reserving for a higher-priority job. 4h leaves
-# headroom; bump it (e.g. hydra.launcher.timeout_min=720) for longer runs. (Was 2880/48h,
-# inherited from the legacy sbatch --time; that suppressed backfill on contended a100s.)
+# Keep this close to the real runtime: these QLoRA SFT jobs (max_steps~800) run ~80min on
+# a100, and an over-long walltime makes a job hard to BACKFILL -- the scheduler won't drop
+# it into a briefly-free GPU it's reserving for a higher-priority job. 4h leaves generous
+# headroom over the observed ~80min while still far better than the legacy 48h; trim it
+# (e.g. hydra.launcher.timeout_min=120) once runtimes are well characterized. (Was 2880/48h
+# from the legacy sbatch --time, which suppressed backfill on contended a100s.)
 timeout_min: 240            # 4h
 tasks_per_node: 1
 nodes: 1

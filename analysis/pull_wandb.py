@@ -51,7 +51,7 @@ def parse_args(argv=None):
     p.add_argument("--group", default=None, help="only runs in this W&B group")
     p.add_argument("--run-id", dest="run_ids", action="append", default=[], metavar="ID",
                    help="specific run id (repeatable); overrides --group/--limit/--state")
-    p.add_argument("--limit", type=int, default=10,
+    p.add_argument("--limit", type=int, default=100,
                    help="max number of most-recent runs to export")
     p.add_argument("--state", default="finished",
                    help="only runs in this state (e.g. finished); use 'any' for no filter")

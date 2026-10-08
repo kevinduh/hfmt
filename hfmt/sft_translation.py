@@ -175,6 +175,51 @@ def _sanitize_label(text, maxlen=128):
     return re.sub(r"[^A-Za-z0-9_.=,+-]", "-", text)[:maxlen]
 
 
+def _strict(s):
+    """Collapse a string to a shell-safe filename charset (``[A-Za-z0-9._-]``).
+
+    Any other character -- including the ``=``/``,`` Hydra uses in ``override_dirname`` and
+    whitespace -- becomes ``-``; leading/trailing ``-`` are trimmed. ``_`` is kept so config
+    field names survive verbatim (e.g. ``lora_r``, ``learning_rate``).
+    """
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", str(s)).strip("-")
+
+
+def build_run_label(override_dirname, job_num="0"):
+    """Strict, shell-safe, descriptive run label from Hydra's ``override_dirname``.
+
+    ``override_dirname`` is Hydra's ``key=value`` join of this job's task overrides (default
+    separators: pairs by ``,``, key/value by ``=``; neither char occurs inside our keys or
+    numeric values, so the split is unambiguous). This label is the single source of truth for
+    both the run *directory* name (via the ``hfmt_runlabel`` resolver in ``conf/config.yaml``)
+    and the W&B run *name* (``derive_run_identity``), so disk and W&B line up. For each override:
+
+    - drop structural selectors (``experiment``/``sweep``/``hydra*``) -- no hyperparameter info;
+    - **drop any ``data``/``data.*`` key or ``/``-bearing value** -- confidentiality (CLAUDE.md):
+      a data *path* must never become part of the dir name (hence the W&B run name), and a ``/``
+      would fracture the directory;
+    - strip only the config-group prefix (``model.``/``train.``/...) so the leaf key stays
+      verbatim (``lora_r``, ``lora_target``, ``learning_rate``, ``seed``) -- descriptive, no
+      abbreviation.
+
+    Pairs are emitted as ``<leaf>-<value>`` joined by ``__`` (double underscore) so pair
+    boundaries stay legible even though leaf names contain ``_``. Falls back to ``job<N>`` when
+    no informative override remains (e.g. a preset-only sweep). Example:
+    ``lora_r-8__lora_target-all-linear__learning_rate-0.0002__seed-37``.
+    """
+    pairs = []
+    for tok in filter(None, str(override_dirname).split(",")):
+        key, _, val = tok.partition("=")
+        key = key.lstrip("+~")
+        if key in ("experiment", "sweep") or key.startswith("hydra"):
+            continue
+        if key == "data" or key.startswith("data.") or "/" in val:
+            continue
+        leaf = key.rsplit(".", 1)[-1]  # model.lora_r -> lora_r (kept verbatim)
+        pairs.append(f"{_strict(leaf)}-{_strict(val)}")
+    return "__".join(pairs) if pairs else f"job{job_num}"
+
+
 def _sweep_param_tokens(overrides_task):
     """Swept-hyperparameter tokens (``key=value``) for W&B labeling (feature 02_hydra_sweep).
 
@@ -487,6 +532,15 @@ def main(cfg: Config) -> None:
 
     model.save_pretrained(outdir + "_b")
 
+
+# Resolver for hydra.sweep.subdir (conf/config.yaml): names a run dir by its swept
+# hyperparameters so the dir basename == the W&B run name. Registered at import time -- before
+# Hydra composes config -- which holds because the module is imported first (run.sh runs
+# `python -m hfmt.sft_translation`). replace=True keeps re-imports (submitit unpickle on the
+# compute node, `--cfg`) from raising "resolver already registered".
+OmegaConf.register_new_resolver(
+    "hfmt_runlabel", lambda od, n="0": build_run_label(str(od), str(n)), replace=True
+)
 
 register_configs()
 

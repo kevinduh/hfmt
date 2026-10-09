@@ -1,0 +1,42 @@
+# @package _global_
+# Refinement QLoRA SFT sweep for MMTC fr-en (follows conf/sweep/mmtc_fr-en_coarse.yaml).
+#
+# Derived from analysis/2026-10-08/summary.md of the 24-run coarse sweep. That pass found:
+#   - lora_r is irrelevant (r=8/16/32 within noise, rank inverted) -> drop it, fix r=8.
+#   - the only real effects are learning_rate and lora_target; all-linear >= qv, and lr=2e-4
+#     beat 2e-5 and was the TOP of the coarse range -> probe finer + HIGHER lr.
+#
+# This refinement FIXES lora_target=all-linear (the winner) and gives the budget room to run
+# LONGER: the coarse pass showed all-linear still improving late for some configs (eval_loss
+# kept dropping; note finding #4 -- eval_loss and BLEU diverge, so BLEU may already have peaked).
+# max_steps is raised to 1000 (past the coarse 800) so we can see whether it keeps improving;
+# load_best_model_at_end keeps the best checkpoint regardless of late overfitting.
+#
+# Select it on top of the experiment:
+#   bash egs/run.sh mmtc_fr-en_sft1 +sweep=mmtc_fr-en_refine1
+#
+# Grid = learning_rate{4} x seed{2} = 8 jobs, run at most `array_parallelism` (4) at a time via
+# the submitit Slurm launcher (2 waves).
+#
+# NOTE: with lora_r fixed at 8 and lora_alpha fixed at 32, the scaling alpha/r = 4 is CONSTANT
+# across the grid (no varying-alpha/r confound). CONFIDENTIALITY (CLAUDE.md): only
+# hyperparameters here, never data content.
+#
+# Checkpoint selection is left code-faithful (metric_for_best_model=eval_loss). Finding #4 of the
+# analysis -- selecting on eval_bleu instead -- is a separate training-behavior change tracked in
+# conf/train/qlora_default.yaml; it is intentionally NOT bundled into this sweep.
+
+# Fixed (not swept): drop lora_r and lora_target as axes; extend the step budget.
+model:
+  lora_r: 8                 # analysis: lora_r is noise -> fix at 8 (also makes alpha/r constant)
+  lora_target: all-linear   # analysis: all-linear is the winner -> fix it, focus the sweep on lr
+train:
+  max_steps: 1000           # extend past the coarse 800 to probe continued improvement
+
+# `# @package _global_` places this `hydra:` block at the config root so it reaches
+# hydra.sweeper.params (the basic sweeper's grid), rather than under a `sweep.` package.
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,2e-4,3e-4,5e-4
+      train.seed: 37,42

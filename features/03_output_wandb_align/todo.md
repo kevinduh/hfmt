@@ -44,46 +44,56 @@ Hydra/torch needed to exercise `build_run_label`.*
 *Depends on A (the resolver must exist). Move the shared timestamp up to the sweep root so all
 jobs of one launch cluster under one `sweep-<ts>/` (R3); per-job subdir = the resolver label.*
 
-- [ ] Set `hydra.sweep.dir: ${output_root}/${experiment}/sweep-${now:%Y-%m-%d_%H-%M-%S}` and
+- [x] Set `hydra.sweep.dir: ${output_root}/${experiment}/sweep-${now:%Y-%m-%d_%H-%M-%S}` and
       `hydra.sweep.subdir: ${hfmt_runlabel:${hydra.job.override_dirname},${hydra.job.num}}`.
-- [ ] Keep `hydra.run.dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}` for plain
+- [x] Keep `hydra.run.dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}` for plain
       (non-`-m`) single runs (no overrides → timestamp dir).
-- [ ] Add `hydra.job.config.override_dirname.exclude_keys: [experiment, sweep, hydra/launcher]`
-      (belt-and-suspenders with the resolver's own filtering).
-- [ ] Refresh the now-stale comments in `conf/config.yaml` (they describe the old
-      `${job.num}_${now}` subdir) to document the new layout + the resolver.
-- [ ] Off-cluster check: `python -m hfmt.sft_translation --multirun +experiment=mmtc_fr-en_sft1
-      model.lora_r=8,16 --cfg hydra` → resolved `sweep.subdir`/`dir` are strict labels sharing
-      one `sweep-<ts>/` parent. (`--cfg` + `-m` caveat from 02: use a small compose probe if
-      needed.)
+- [x] Add `hydra.job.config.override_dirname.exclude_keys: [experiment, sweep, hydra/launcher]`
+      (belt-and-suspenders with the resolver's own filtering). *(Confirmed composed via
+      `--cfg hydra`; `experiment` dropped from the raw override_dirname.)*
+- [x] Refresh the now-stale comments in `conf/config.yaml` (they described the old
+      `${job.num}_${now}` subdir) to document the new layout + the resolver + the shared `<ts>`.
+- [x] Off-cluster check: ran the **real** `conf/config.yaml` through an in-process multirun
+      (no-op app, no torch) with `--multirun +experiment=mmtc_fr-en_sft1 model.lora_r=8,16
+      model.lora_target=qv,all-linear train.seed=37` → 4 dirs
+      `outputs/mmtc_fr-en_sft1/sweep-<ts>/lora_r-8__lora_target-qv__seed-37`, … all under one
+      shared `sweep-<ts>/`. (`--cfg hydra --resolve` can't be used here: it resolves the hydra
+      subtree alone, so sibling `${output_root}`/`${experiment}` are out of scope — unrelated to
+      this change. submitit-shared `<ts>` (R1/R3) still to confirm on-cluster — group E.)
 
 ## C. W&B identity read from the path (D4) — `derive_run_identity()`
 *Depends on A+B. Make the W&B run **name == dir basename** so UI and disk match; keep
 confidentiality, requeue-resume, and the single/sweep split.*
 
-- [ ] Rewrite `derive_run_identity()` to read the resolved `outdir`: `run_label =
+- [x] Rewrote `derive_run_identity()` to read the resolved `outdir`: `run_label =
       basename(outdir)`; multirun `sweep_dir = basename(dirname(outdir))` (e.g. `sweep-<ts>`).
-- [ ] Multirun: `group = f"{base_group}-{sweep_dir}"`-style → `<experiment>-sweep-<ts>`
-      (keep the experiment in the W&B group string for a findable flat namespace; document the
-      on-disk `sweep-<ts>` ↔ W&B-group mapping). `run_name = run_label`.
-- [ ] Single run: `group = base_group`, `run_name = f"{experiment}-{run_label}"` (label == ts).
-- [ ] `run_id = _sanitize_label(f"{experiment}_{sweep_dir}_{run_label}")` — unique per job,
-      stable across a Slurm requeue (whole path is stable); keep `resume="allow"`.
-- [ ] **Remove `_sweep_param_tokens()`** (subsumed by `build_run_label`); re-derive sweep
-      **tags** either by splitting the label or from `HydraConfig.overrides.task` kept data-free
-      (preserve the `sweep` tag + the existing `cfg.wandb.tags`).
-- [ ] Update the `derive_run_identity`/`init_wandb` docstrings to the new scheme.
-- [ ] Unit-test `derive_run_identity` for a sweep path and a single-run path (pure; feed fake
-      `outdir`s): name==basename, group/id as specified, no data content.
+      Signature simplified (dropped `overrides_task`); call site in `main()` updated.
+- [x] Multirun: `group = f"{base_group}-{sweep_dir}"` → `<experiment>-sweep-<ts>` (experiment
+      kept in the W&B group string for a findable flat namespace). `run_name = run_label`.
+- [x] Single run: `group = base_group`, `run_name = f"{experiment}-{run_label}"` (label == ts).
+- [x] `run_id` = sanitized `{experiment}_{sweep_dir}_{run_label}` (multirun) / `{experiment}_
+      {run_label}` (single) — unique per job, stable across a Slurm requeue (whole path stable);
+      `resume="allow"` unchanged in `init_wandb`.
+- [x] **Removed `_sweep_param_tokens()`** (subsumed by `build_run_label`); sweep **tags** now
+      split from the label (`run_label.split("__")`, data-free by construction) + the `sweep`
+      tag + existing `cfg.wandb.tags`.
+- [x] Updated the `derive_run_identity` docstring + the `main()` comment to the new scheme.
+- [x] Unit-tested `derive_run_identity` (7 cases): name==basename, group from parent, tags from
+      label, run_id unique+stable, single-run path, `wandb.name` override, no `/`/data anywhere.
+      **All 20 tests pass.** End-to-end check with the real config confirmed: sweep dir
+      `…/sweep-<ts>/lora_r-8__seed-37` → name `lora_r-8__seed-37`, group
+      `mmtc_fr-en_sft1-sweep-<ts>`, both jobs share the group with distinct run_ids.
 
 ## D. Adapter → `model/` (D2) — `sft_translation.py`
 *Depends on nothing in A–C; small and isolated.*
 
-- [ ] Change `model.save_pretrained(outdir + "_b")` → `model.save_pretrained(os.path.join(outdir,
-      "model"))` so the adapter nests inside the run dir.
-- [ ] Grep confirms no in-repo consumer hardcodes the old `..._b` Hydra path
-      (`inf_translation.py` takes `-p/--peft` as an argument; legacy `egs/mmtc/fr-en/inf.sh`
-      uses an unrelated pre-Hydra path). Note the new `<run_dir>/model` path in docs (group E).
+- [x] Changed `model.save_pretrained(outdir + "_b")` → `model.save_pretrained(os.path.join(
+      outdir, "model"))` so the adapter nests inside the run dir; added a comment pointing at
+      `inf_translation.py -p <run_dir>/model`.
+- [x] Grep confirmed no in-repo consumer hardcodes the old `..._b` Hydra path
+      (`inf_translation.py` takes `-p/--peft` as an argument; the only other `_b"` hit is the
+      unrelated pre-Hydra `egs/mmtc/fr-en/inf.sh` path). New `<run_dir>/model` path to be
+      documented in group E.
 
 ## E. Docs, decisions & validation handoff
 *Depends on all above.*

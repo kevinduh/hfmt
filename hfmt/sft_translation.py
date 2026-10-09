@@ -220,56 +220,43 @@ def build_run_label(override_dirname, job_num="0"):
     return "__".join(pairs) if pairs else f"job{job_num}"
 
 
-def _sweep_param_tokens(overrides_task):
-    """Swept-hyperparameter tokens (``key=value``) for W&B labeling (feature 02_hydra_sweep).
+def derive_run_identity(cfg, outdir, is_multirun=False):
+    """Stable, W&B-safe (id, name, group, tags) read off the resolved output path.
 
-    Built from Hydra's task overrides so a sweep run's name/tags show *which* values it used.
-    Drops selectors that add no information (experiment/sweep presets, hydra-group choices)
-    and -- for confidentiality (CLAUDE.md) -- any ``data`` override or path-bearing token, so
-    data paths/content never leak into a W&B run name or tag.
+    The output layout (conf/config.yaml, feature 03_output_wandb_align) mirrors the W&B
+    group->run hierarchy, so identity is *read from the path* rather than recomputed -- the
+    run-dir basename **is** the W&B run name, so disk and W&B cannot drift. The whole path is
+    unique per launch yet stable across a Slurm requeue of the same job, so ``resume='allow'``
+    maps a requeue back onto the same W&B run.
+
+    - **Sweep** (``--multirun``): ``outdir`` is ``.../<experiment>/sweep-<ts>/<run_label>``.
+      ``<run_label>`` (this job's swept hyperparameters, from ``build_run_label``) becomes the
+      W&B **run name**; the parent ``sweep-<ts>`` becomes the W&B **group**
+      ``<base-group>-sweep-<ts>`` so each sweep clusters together and apart from other
+      sweeps/plain runs. Per-param **tags** are split back out of the label (already
+      confidentiality-filtered -- the label never carries data paths/content, CLAUDE.md).
+    - **Single run**: ``outdir`` is ``.../<experiment>/<ts>``; group is the base group and the
+      run name is ``<experiment>-<ts>``.
+
+    ``run_id`` embeds the sweep dir (or ts) so it is unique across different sweeps yet stable
+    across a requeue of the same job.
     """
-    tokens = []
-    for t in overrides_task:
-        key = t.split("=", 1)[0].lstrip("+~")
-        if key in ("experiment", "sweep") or key.startswith("hydra"):
-            continue
-        if key == "data" or key.startswith("data."):
-            continue
-        if "/" in t:  # a path value or a config-group selection -- never label with it
-            continue
-        tokens.append(t)
-    return tokens
-
-
-def derive_run_identity(cfg, outdir, is_multirun=False, overrides_task=()):
-    """Stable, W&B-safe (id, name, group, tags) derived from the experiment + run dir.
-
-    The run dir is unique per launch but identical across a Slurm requeue of the same
-    job, so resume='allow' maps a requeue back onto the same W&B run (D6).
-
-    For a sweep (``--multirun``, feature 02_hydra_sweep) the run dir basename is
-    ``<job.num>_<timestamp>``; the timestamp is shared by every job of one launch and unique
-    per launch, so it serves as the sweep id. Sweep runs are grouped under
-    ``<base-group>-sweep-<sweep-id>`` (so each sweep clusters together and separately from
-    other sweeps/plain runs) and named by their swept params (so they are identifiable at a
-    glance in the W&B UI); the per-job ``run_id`` stays unique so runs never clobber.
-    """
-    job = os.path.basename(os.path.normpath(outdir))
-    run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{job}")
+    run_label = os.path.basename(os.path.normpath(outdir))
     base_group = cfg.wandb.group or cfg.experiment
     tags = list(cfg.wandb.tags)
 
     if is_multirun:
-        job_num, _, sweep_id = job.partition("_")  # "<num>_<timestamp>"
-        sweep_id = sweep_id or job_num
-        group = f"{base_group}-sweep-{sweep_id}"
-        param_tokens = _sweep_param_tokens(overrides_task)
-        suffix = ",".join(param_tokens) if param_tokens else f"job{job_num}"
-        run_name = cfg.wandb.name or _sanitize_label(suffix)
-        tags = tags + ["sweep"] + [_sanitize_label(t) for t in param_tokens]
+        sweep_dir = os.path.basename(os.path.dirname(os.path.normpath(outdir)))  # "sweep-<ts>"
+        group = f"{base_group}-{sweep_dir}"
+        run_name = cfg.wandb.name or _sanitize_label(run_label)
+        # Per-param tags from the label (e.g. "lora_r-8"); data-free by construction.
+        param_tags = [p for p in run_label.split("__") if p]
+        tags = tags + ["sweep"] + [_sanitize_label(t) for t in param_tags]
+        run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{sweep_dir}_{run_label}")
     else:
         group = base_group
-        run_name = cfg.wandb.name or f"{cfg.experiment}-{job}"
+        run_name = cfg.wandb.name or _sanitize_label(f"{cfg.experiment}-{run_label}")
+        run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{run_label}")
 
     return run_id, run_name, group, tags
 
@@ -323,12 +310,11 @@ def main(cfg: Config) -> None:
 
     # Link W&B <-> output dir <-> config. Own the run here (main process only; single-GPU
     # recipe) so it carries our group/name/id and data-free config; the HF Trainer reuses it.
-    # In a sweep (--multirun) the swept params shape the W&B group/name/tags (feature
-    # 02_hydra_sweep) so each run is identifiable and sweeps don't clobber or intermix.
+    # Identity is read off the output path (feature 03_output_wandb_align): the run-dir basename
+    # is the W&B run name and the sweep-<ts> parent is the W&B group, so disk and W&B align and
+    # sweeps don't clobber or intermix.
     is_multirun = hydra_cfg.mode == RunMode.MULTIRUN
-    run_id, run_name, group, tags = derive_run_identity(
-        cfg, outdir, is_multirun=is_multirun, overrides_task=hydra_cfg.overrides.task
-    )
+    run_id, run_name, group, tags = derive_run_identity(cfg, outdir, is_multirun=is_multirun)
     if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
         init_wandb(cfg, outdir, run_id, run_name, group, tags)
 
@@ -530,7 +516,10 @@ def main(cfg: Config) -> None:
     #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(outdir,"eval.pred.trg"), device)
     inference_on_eval_data(tokenizer, model, eval_data, os.path.join(outdir,"eval.pred.trg"), device, instruction_prefix, max_length=cfg.decode.max_length, max_new_tokens=cfg.decode.max_new_tokens, num_beams=cfg.decode.num_beams, do_sample=cfg.decode.do_sample, batch_size=cfg.decode.batch_size)
 
-    model.save_pretrained(outdir + "_b")
+    # Save the trained adapter inside the run dir (feature 03_output_wandb_align) so one run ==
+    # one self-contained directory. Was a sibling ``outdir + "_b"``; now ``<run_dir>/model``.
+    # Load it for inference with ``inf_translation.py -p <run_dir>/model``.
+    model.save_pretrained(os.path.join(outdir, "model"))
 
 
 # Resolver for hydra.sweep.subdir (conf/config.yaml): names a run dir by its swept

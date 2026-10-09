@@ -19,11 +19,28 @@ output_root: outputs
 
 hydra:
   # Keep CWD at the launch dir (repo root) so relative paths / HFMT_ROOT still
-  # work; the code targets the run dir explicitly. Finalized in Stage E.
+  # work; the code targets the run dir explicitly.
+  #
+  # Output layout mirrors the W&B group->run hierarchy so a W&B run maps 1:1 to its
+  # output dir (feature 03_output_wandb_align). A sweep (--multirun, the run.sh path) lands at
+  #   outputs/<experiment>/sweep-<ts>/<run_label>/
+  # where <ts> is the launch timestamp (resolved ONCE here on the login node, so it is shared by
+  # every submitit job of the launch and stable across a Slurm requeue) and <run_label> is this
+  # job's swept hyperparameters, built by the hfmt_runlabel resolver (hfmt/sft_translation.py).
+  # The run-dir basename == the W&B run name (single source of truth), so disk and W&B align.
+  # A plain single run (no --multirun) lands at outputs/<experiment>/<ts>/.
   job:
     chdir: false
+    config:
+      # Keep structural selectors out of override_dirname (the resolver also drops them, but
+      # this keeps the raw dirname clean too). Data/path keys are dropped in the resolver.
+      override_dirname:
+        exclude_keys:
+          - experiment
+          - sweep
+          - hydra/launcher
   run:
     dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}
   sweep:
-    dir: ${output_root}/${experiment}
-    subdir: ${hydra.job.num}_${now:%Y-%m-%d_%H-%M-%S}
+    dir: ${output_root}/${experiment}/sweep-${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hfmt_runlabel:${hydra.job.override_dirname},${hydra.job.num}}

@@ -98,18 +98,19 @@ confidentiality, requeue-resume, and the single/sweep split.*
 ## E. Docs, decisions & validation handoff
 *Depends on all above.*
 
-- [ ] README outputs/sweep section: document the new nested layout, that the run-dir basename ==
-      the W&B run name, the `<run_dir>/model` adapter path, and the `2e-4`→`0.0002` numeric
-      normalization (R10). Show the `run_sacrebleu.py` invocation against `<run_dir>/eval.pred.trg`.
-- [ ] Append a `decisions.md` entry: aligned output↔W&B naming via the `hfmt_runlabel` resolver;
-      nested `sweep-<ts>/<run_label>` layout; adapter as `model/`; forward-only (no migration).
-- [ ] Update `CLAUDE.md` project-structure notes if the `outputs/` description needs it
-      (nested run dirs; `model/` adapter).
-- [ ] Write `features/03_output_wandb_align/validation.md`: off-cluster results (resolver probe,
-      unit tests, `--cfg hydra` layout) + an **on-cluster smoke checklist** — a 2-point sweep
-      `train.seed=37,42 train.max_steps=20` → dirs `…/sweep-<ts>/seed-37/` & `…/seed-42/`, each
-      with `model/` + `eval.pred.trg`, two non-clobbering W&B runs named `seed-37`/`seed-42` in
-      group `<exp>-sweep-<ts>`, and confirmation that **submitit** shares one `sweep-<ts>` (R1/R3).
+- [x] README outputs/sweep section: documented the nested layout, run-dir basename == W&B run
+      name, the `<run_dir>/model` adapter path, the `2e-4`→`0.0002` normalization (R10), and a
+      `run_sacrebleu.py` invocation against `<run_dir>/eval.pred.trg`.
+- [x] Appended a `decisions.md` entry: aligned output↔W&B naming via the `hfmt_runlabel`
+      resolver; nested `sweep-<ts>/<run_label>` layout; sweep-id moved to `hydra.sweep.dir`
+      (evolving the 02 decision); adapter as `model/`; confidentiality chokepoint; forward-only.
+- [x] `CLAUDE.md` — the `outputs/` project-structure line ("Hydra run outputs (gitignored)") is
+      still accurate; no change needed.
+- [x] Wrote `features/03_output_wandb_align/validation.md`: off-cluster results (unit tests,
+      real-config in-process multirun, identity derivation) + the **on-cluster smoke checklist**
+      (`train.seed=37,42 train.max_steps=20` → `…/sweep-<ts>/seed-37|seed-42/` with `model/` +
+      `eval.pred.trg`, two W&B runs in one group, and the submitit-shared `sweep-<ts>` check
+      that the in-process probe can't cover — R1/R3).
 
 ---
 

@@ -75,3 +75,34 @@ feature added ergonomics and legibility, not fan-out:
   of an experiment. Confidentiality: `data`/path-bearing overrides are stripped from names/tags.
 - **Concurrency cap.** `array_parallelism: 4` in the Slurm launcher (the node-tier size) bounds
   how many array tasks run at once; grids are cross-products, so job counts multiply fast.
+
+---
+
+## Run outputs are aligned with W&B names (feature 03_output_wandb_align)
+
+**Decision:** The output directory layout mirrors the W&B group→run hierarchy, and the run-dir
+basename **is** the W&B run name, so a W&B run maps 1:1 to its files on disk. A sweep lands at
+`outputs/<experiment>/sweep-<ts>/<run_label>/` and a plain run at `outputs/<experiment>/<ts>/`;
+the trained adapter is saved inside the run dir as `model/` (was the `outdir + "_b"` sibling).
+
+**Context:** Previously the run dir (`<job.num>_<ts>`) bore no resemblance to the W&B run name
+(the swept-param string), so you couldn't get from a W&B run to its `eval.pred.trg` to score it.
+
+- **Single source of truth.** `build_run_label()` turns Hydra's `override_dirname` into a
+  strict, shell-safe (`[A-Za-z0-9._-]`), descriptive label (group prefix stripped, leaf keys
+  kept verbatim — `lora_r`, `lora_target`, … — pairs joined by `__`). It is exposed to
+  `hydra.sweep.subdir` via a custom OmegaConf resolver (`hfmt_runlabel`, registered at import),
+  and `derive_run_identity()` reads the same string back off the path for the W&B name. One
+  function feeds both, so dir and W&B name cannot drift.
+- **Sweep id moved up to `hydra.sweep.dir`** (`sweep-<ts>`), **evolving the 02 decision.** In 02
+  the shared timestamp lived in the subdir basename; here it moves to the sweep root so all
+  jobs of a launch share one `sweep-<ts>/` parent (resolved once on the login node, stable
+  across a requeue). `derive_run_identity` now derives the W&B group from that parent dir
+  (`<base-group>-sweep-<ts>`) and the run name/tags from the run-dir basename — superseding 02's
+  `job.partition("_")` parsing and retiring `_sweep_param_tokens()`.
+- **Confidentiality is centralized** in `build_run_label()`: it drops `data`/`data.*` keys and
+  any `/`-bearing value, so no data path enters the dir name (hence the W&B run name). The label
+  being the sole confidentiality chokepoint is deliberate — audit it if the filter changes.
+- **Descriptive, not abbreviated** (developer preference): keys stay verbatim and `lora` is kept
+  in LoRA params to avoid confusion. Note values are resolved numbers, so `2e-4` → `0.0002`.
+- **Forward-only.** Existing `outputs/` dirs from before this change are not migrated.

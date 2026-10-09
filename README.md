@@ -79,7 +79,11 @@ python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
 
 Add a file `conf/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), point it at your data config and set any overrides, then `bash egs/run.sh <name>`. No new shell script needed.
 
-Outputs (checkpoints, predictions, logs) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir.
+Outputs (checkpoints, logs, the trained adapter under `model/`, and predictions `eval.pred.trg` / `dev.step_*.pred`) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir. Score the predictions with:
+
+```bash
+python analysis/run_sacrebleu.py --ref <ref.trg> --hyp outputs/<experiment>/<timestamp>/eval.pred.trg
+```
 
 ### Sweeping parameters
 
@@ -104,8 +108,8 @@ See `conf/sweep/mmtc_fr-en_coarse.yaml` for the format (it sets `hydra.sweeper.p
 Notes:
 
 * **Grids are cross-products** — the job count multiplies fast (a 7-way space can be ~200 runs). At most `hydra.launcher.array_parallelism` jobs (default **4**, the node-tier size) run at once; the rest queue. Override per-sweep with `hydra.launcher.array_parallelism=<N>`. Start from a coarse preset and refine.
-* **Runs don't clobber.** Each job gets its own `outputs/<experiment>/<n>_<timestamp>/` dir and a distinct W&B run id.
-* **Runs are identifiable.** A sweep's runs share one W&B **group** (`<experiment>-sweep-<timestamp>`) and each run is **named/tagged by its swept values** (e.g. `model.lora_r=16,train.seed=37`), so you can compare them at a glance. Only hyperparameters appear in names/tags — never data content (data paths are stripped).
+* **Outputs mirror W&B, so a run maps 1:1 to its files.** A sweep's jobs land under one shared `outputs/<experiment>/sweep-<timestamp>/` (the `sweep-<timestamp>` dir == the W&B **group** `<experiment>-sweep-<timestamp>`), and each job's dir is named by its swept values — e.g. `lora_r-16__lora_target-qv__seed-37/`. **That dir basename is exactly the W&B run name**, so from a run in the W&B UI you can `cd` straight to its `eval.pred.trg`. Names are shell-safe (`[A-Za-z0-9._-]`; keys verbatim, pairs joined by `__`). Runs never clobber (distinct dir + W&B run id).
+* **Runs are identifiable.** Each run is **named/tagged by its swept values**, so you can compare them at a glance. Only hyperparameters appear in names/tags — never data content (data paths are stripped). Note values are shown as resolved numbers, so `learning_rate=2e-4` appears as `learning_rate-0.0002`.
 
 ## Usage example: training seq2seq MT model
 

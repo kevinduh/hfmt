@@ -7,36 +7,64 @@ time rather than surfacing as a confusing error deep inside training.
 
 Scope (feature 00_hydra): the ``sft_translation.py`` QLoRA SFT workflow only.
 
+Feature 04 reshaped the groups into atomistic, mix-and-match components:
+``basemodel`` (the pretrained model + quantization), ``lora`` (the adapter, with an
+``enabled`` toggle for full fine-tuning), ``data``, ``train``, ``decode``, plus
+``wandb`` and an inline ``sweep`` block. Experiments compose these and live under
+``egs/experiment/`` (reached via ``hydra.searchpath``).
+
 Confidentiality note (see CLAUDE.md): config carries data *paths*, never data
 *content*. Keep it that way when logging config to W&B.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from omegaconf import MISSING
 
 
 @dataclass
-class ModelConfig:
-    """Base model + QLoRA adaptation (quantization lives with the model)."""
+class BaseModelConfig:
+    """The pretrained base model we fine-tune, plus its (optional) quantization.
+
+    LoRA lives in its own ``LoraConfig`` group now (feature 04) so the base model
+    and the adaptation method are independent, mix-and-match components. When LoRA
+    is disabled (full fine-tune), set ``load_in_4bit=false`` -- a 4-bit frozen base
+    cannot be fully fine-tuned (enforced in sft_translation.py).
+    """
 
     checkpoint: str = "Qwen/Qwen2.5-1.5B-Instruct"
     # Fine-tune a pretrained checkpoint. Training a CausalLM from scratch is
     # unsupported in sft_translation.py, so this is effectively always True.
     pretrain: bool = True
 
-    # 4-bit quantization (bitsandbytes / QLoRA).
+    # 4-bit quantization (bitsandbytes / QLoRA). Required for QLoRA; turn OFF for a
+    # full fine-tune.
     load_in_4bit: bool = True
     bnb_4bit_use_double_quant: bool = True
     bnb_4bit_quant_type: str = "nf4"
-    bnb_4bit_compute_dtype: str = "bfloat16"  # resolved to a torch dtype in code
+    bnb_4bit_compute_dtype: str = "bfloat16"  # quantized compute dtype (torch dtype in code)
 
-    # LoRA adapter.
+    # Load dtype used only when NOT quantized (full fine-tune path); resolved to a
+    # torch dtype in code. Ignored when load_in_4bit=true.
+    dtype: str = "bfloat16"
+
+
+@dataclass
+class LoraConfig:
+    """LoRA adapter settings (feature 04: split out of the old ModelConfig).
+
+    ``enabled=false`` skips adapter injection entirely to fully fine-tune the base
+    model (requires ``basemodel.load_in_4bit=false``). Named ``LoraConfig`` only in
+    this schema module; peft's own ``LoraConfig`` is imported separately inside
+    sft_translation.py, so there is no clash.
+    """
+
+    enabled: bool = True
     lora_r: int = 8
     lora_alpha: float = 32
     lora_dropout: float = 0.1  # D4: previously hardcoded in sft_translation.py
-    lora_target: str = "qv"  # one of: qv | all-linear
+    lora_target: str = "qv"  # one of: qv | all-linear | attention | mlp
 
 
 @dataclass
@@ -109,6 +137,29 @@ class WandbConfig:
 
 
 @dataclass
+class SweepConfig:
+    """Inline, toggleable parameter sweep (feature 04).
+
+    Lives in the experiment config (``egs/experiment/<name>.yaml``) so a sweep is a
+    self-contained part of the experiment. ``enabled`` is the on/off switch;
+    ``params`` maps each sweep axis to a comma-separated list of choices. Axes are
+    ordinary Hydra task overrides -- either a config-group choice (sweep over whole
+    component files, e.g. ``basemodel: "qwen2.5-7b,qwen2.5-1.5b"``) or a leaf value
+    (e.g. ``train.learning_rate: "2e-5,2e-4"``).
+
+    Hydra itself does not act on this block: ``egs/run.sh`` runs ``sweep_probe.py``,
+    which reads it and, only when ``enabled``, forwards the axes as bare
+    comma-list overrides to the ``--multirun`` launch (passing them under
+    ``hydra.sweeper.params`` on the CLI is rejected by Hydra). Confidentiality
+    (CLAUDE.md): axis names/values are hyperparameters or config-file names, never
+    data content, so this is safe to log to W&B.
+    """
+
+    enabled: bool = False
+    params: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class Config:
     """Top-level experiment config."""
 
@@ -116,11 +167,13 @@ class Config:
     # Root for run outputs; hydra.run.dir composes this with experiment + timestamp.
     output_root: str = "outputs"
 
-    model: ModelConfig = field(default_factory=ModelConfig)
+    basemodel: BaseModelConfig = field(default_factory=BaseModelConfig)
+    lora: LoraConfig = field(default_factory=LoraConfig)
     data: DataConfig = field(default_factory=DataConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
     decode: DecodeConfig = field(default_factory=DecodeConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
+    sweep: SweepConfig = field(default_factory=SweepConfig)
 
 
 def register_configs() -> None:

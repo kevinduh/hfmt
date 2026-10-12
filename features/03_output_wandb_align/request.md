@@ -8,5 +8,5 @@ nested directory structure make sense here?
 
 Follow-on constraints:
 
-- I want the dirs to be reasonable and not pains in the butt that need to be escaped — perform some
+- I want the dirs to be reasonable and not need to be escaped — perform some
   kind of string escape/sanitization so the names are shell-safe.

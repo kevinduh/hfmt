@@ -28,19 +28,19 @@ completed. Commit per group using `04_config_structure_change-<phase>: <summary>
 
 ## B — `conf/` component groups
 
-- [ ] `git mv conf/model/ conf/basemodel/`.
-- [ ] Strip LoRA keys from `conf/basemodel/qwen2.5-1.5b.yaml` and `qwen2.5-7b.yaml`;
+- [x] `git mv conf/model/ conf/basemodel/`.
+- [x] Strip LoRA keys from `conf/basemodel/qwen2.5-1.5b.yaml` and `qwen2.5-7b.yaml`;
       add `dtype: bfloat16` (comment: used only when `load_in_4bit=false`).
-- [ ] Create `conf/lora/` group; add `conf/lora/default.yaml`
+- [x] Create `conf/lora/` group; add `conf/lora/default.yaml`
       (`enabled: true`, `lora_r: 8`, `lora_alpha: 32`, `lora_dropout: 0.1`,
       `lora_target: qv`).
-- [ ] Edit `conf/config.yaml` defaults list → `base_config, basemodel, data, train,
+- [x] Edit `conf/config.yaml` defaults list → `base_config, basemodel, data, train,
       lora, decode, _self_` (drop `model`/`wandb`).
-- [ ] Add `hydra.searchpath: [file://${oc.env:HFMT_ROOT}/egs]` to `conf/config.yaml`
-      (or the `--config-dir` fallback from A).
-- [ ] Delete `conf/wandb/` (defaults now come from the `WandbConfig` dataclass).
-- [ ] `--cfg job` smoke: default compose resolves with `basemodel`/`lora`/`sweep`
-      present and no `model` key.
+- [x] Add `hydra.searchpath: [file://${oc.env:HFMT_ROOT}/egs]` to `conf/config.yaml`
+      (searchpath verified in A, no fallback needed).
+- [x] Delete `conf/wandb/` (defaults now come from the `WandbConfig` dataclass).
+- [x] Compose smoke (compose API): default resolves with `basemodel`/`lora`/`sweep`
+      present, `wandb` from the dataclass, and no `model` key.
 
 ## C — Code wiring + full-FT path (`hfmt/sft_translation.py`)
 

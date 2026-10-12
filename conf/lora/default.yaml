@@ -1,0 +1,11 @@
+# Default LoRA adapter (feature 04: split out of the old `model` group).
+# Matches egs/mmtc/fr-en/sft1.sh: r=8, target=qv.
+#
+# Set `enabled: false` to skip the adapter and fully fine-tune the base model
+# (also requires basemodel.load_in_4bit=false -- a 4-bit frozen base cannot be
+# fully fine-tuned).
+enabled: true
+lora_r: 8
+lora_alpha: 32
+lora_dropout: 0.1
+lora_target: qv   # qv | all-linear | attention | mlp

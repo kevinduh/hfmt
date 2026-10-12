@@ -7,17 +7,24 @@
 
 defaults:
   - base_config           # structured schema (validates everything below)
-  - model: qwen2.5-1.5b
+  - basemodel: qwen2.5-1.5b
   - data: mmtc_fr-en
   - train: qlora_default
+  - lora: default
   - decode: default
-  - wandb: default
   - _self_                # this file's values win over the groups
+  # wandb is not a config group anymore (feature 04): its defaults come from the
+  # WandbConfig dataclass and experiments set wandb.* inline.
 
 experiment: default
 output_root: outputs
 
 hydra:
+  # Extend the config search path to egs/ so experiment presets can live there
+  # (feature 04). Resolved at compose time from HFMT_ROOT, the repo-wide path anchor,
+  # so +experiment=<name> finds egs/experiment/<name>.yaml under any launcher.
+  searchpath:
+    - file://${oc.env:HFMT_ROOT}/egs
   # Keep CWD at the launch dir (repo root) so relative paths / HFMT_ROOT still
   # work; the code targets the run dir explicitly.
   #

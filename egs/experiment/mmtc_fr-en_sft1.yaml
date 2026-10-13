@@ -24,3 +24,22 @@ train:
 wandb:
   group: mmtc_fr-en_sft1
   tags: [sft, fr-en]
+
+# Inline, toggleable sweep (feature 04). Flip `enabled: true` (or override on the CLI,
+# `bash egs/run.sh mmtc_fr-en_sft1 sweep.enabled=true`) to fan out the grid below;
+# left off, `bash egs/run.sh mmtc_fr-en_sft1` is a single run. egs/run.sh reads this
+# block via hfmt/sweep_probe.py and forwards the axes to --multirun.
+#
+# This is the former conf/sweep/mmtc_fr-en_coarse.yaml grid (24 jobs =
+# learning_rate{2} x lora_target{2} x lora_r{3} x seed{2}). Axes are ordinary Hydra
+# overrides: leaf values here, but you can also sweep whole component files, e.g. add
+#   basemodel: "qwen2.5-7b,qwen2.5-1.5b"
+# to sweep across entire base-model configs. CONFIDENTIALITY (CLAUDE.md): axis
+# names/values are hyperparameters only, never data content.
+sweep:
+  enabled: false
+  params:
+    train.learning_rate: "2e-5,2e-4"
+    lora.lora_target: "qv,all-linear"
+    lora.lora_r: "8,16,32"
+    train.seed: "37,42"

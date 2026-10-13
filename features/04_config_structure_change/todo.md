@@ -80,23 +80,26 @@ completed. Commit per group using `04_config_structure_change-<phase>: <summary>
 
 ## E — Inline wandb + the sweep toggle
 
-- [ ] In `egs/experiment/mmtc_fr-en_sft1.yaml`: keep inline `wandb.group`/`wandb.tags`.
-- [ ] Add the inline `sweep: {enabled: false, params: {...}}` block; port the old
-      coarse grid, rewriting `model.lora_r`/`model.lora_target` →
-      `lora.lora_r`/`lora.lora_target`; optionally add a `basemodel: ...,...`
-      group-choice axis as the example.
-- [ ] Write `hfmt/sweep_probe.py`: compose-only (import `hydra`, `omegaconf`,
-      `hfmt.hydra_config`; **no** `transformers`); register schema + a no-op
-      `hfmt_runlabel` resolver; compose `+experiment=<argv[1]>`; if
-      `cfg.sweep.enabled`, print one **bare** `<axis>=<csv>` task override per axis
-      (NOT `hydra.sweeper.params.*` — CLI-rejected per spike), else print nothing.
-      Resolve via the same `hydra.searchpath`.
-- [ ] Update `egs/run.sh` to call the probe and inject `$EXTRA` into the
-      always-`--multirun` launch.
-- [ ] Delete `conf/sweep/`.
-- [ ] Verify: `sweep.enabled=false` → 1 job; `true` → expected grid; ad-hoc CLI
-      (`lora.lora_r=8,16`) still fans out; probe prints correct tokens for both
-      states.
+- [x] In `egs/experiment/mmtc_fr-en_sft1.yaml`: keep inline `wandb.group`/`wandb.tags`.
+- [x] Add the inline `sweep: {enabled: false, params: {...}}` block; port the old
+      coarse grid, rewriting `model.lora_*` → `lora.lora_*`; documented a
+      `basemodel: "a,b"` group-choice axis as the example in the comment.
+- [x] Preserve the analysis-derived refine1 sweep (would have been lost with
+      `conf/sweep/`) as a first-class experiment
+      `egs/experiment/mmtc_fr-en_sft1_refine1.yaml` (fixes all-linear/r8/max_steps=1000,
+      sweeps lr×seed, `enabled: true`). [not in original plan; see note below]
+- [x] Write `hfmt/sweep_probe.py`: compose-only (import `hydra`, `omegaconf`,
+      `hfmt.hydra_config`; **no** `transformers`); register schema + no-op
+      `hfmt_runlabel`; compose `+experiment=<name>` (+ forwarded `sweep.enabled`);
+      print **bare** `<axis>=<csv>` overrides when `cfg.sweep.enabled`, else nothing.
+- [x] Update `egs/run.sh` to call the probe (forwarding only `sweep.enabled=*`) and
+      inject `${sweep_axes}` into the always-`--multirun` launch.
+- [x] Delete `conf/sweep/`.
+- [x] Verify: `sweep.enabled=false` → 1 job; `true` → 24-job grid; refine1 → 8-job
+      grid; ad-hoc CLI (`lora.lora_r=8,16`) fans out via passthrough; probe tokens
+      correct for all states; concrete grid points compose type-valid.
+      Robustness: probe only accepts `sweep.enabled` from CLI (a comma-list
+      `sweep.params.*` override crashes single-run compose — use bare overrides).
 
 ## F — Run labels resolve to component file names
 

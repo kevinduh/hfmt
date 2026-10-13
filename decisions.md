@@ -106,3 +106,46 @@ the trained adapter is saved inside the run dir as `model/` (was the `outdir + "
 - **Descriptive, not abbreviated** (developer preference): keys stay verbatim and `lora` is kept
   in LoRA params to avoid confusion. Note values are resolved numbers, so `2e-4` → `0.0002`.
 - **Forward-only.** Existing `outputs/` dirs from before this change are not migrated.
+
+---
+
+## Config is atomistic components + experiments in egs/ (feature 04_config_structure_change)
+
+**Decision:** `conf/` holds only atomistic, mix-and-match components — `basemodel`, `lora`,
+`data`, `train`, `decode` — and nothing else. An *experiment* composes them (plus inline `wandb`
+and `sweep` blocks) and lives under `egs/experiment/<name>.yaml`, discovered via
+`hydra.searchpath`. The old `model` group is split into `basemodel` (checkpoint + quantization +
+load `dtype`) and `lora` (adapter, with an `enabled` toggle); `conf/wandb/`, `conf/experiment/`
+and `conf/sweep/` are removed. LoRA can be turned off (`lora.enabled=false`, requires
+`basemodel.load_in_4bit=false`) to fully fine-tune the base model.
+
+**Context:** Feature 00 put everything in `conf/`, including experiments and (feature 02) sweep
+presets; the `model` group conflated the base model with the adaptation method. This feature
+makes the base model and the adaptation independent components, moves experiments next to the
+other recipes under `egs/`, and folds wandb/sweep into the experiment so one file fully describes
+a run.
+
+- **`hydra.searchpath` over `--config-dir`.** `conf/config.yaml` adds
+  `file://${oc.env:HFMT_ROOT}/egs` to the search path, so `+experiment=<name>` resolves from
+  `egs/experiment/` under *any* launcher (`run.sh`, direct `python -m`, the compose API) — not
+  just when `run.sh` passes a flag. Verified on the pinned Hydra (1.3.7).
+- **Sweep toggle via a compose probe, not `hydra.sweeper.params` on the CLI.** Hydra has no
+  native on/off for the basic sweeper and *rejects* `hydra.sweeper.params.*` as a CLI override
+  ("Sweeping over Hydra's configuration is not supported"). So the grid lives in a typed
+  `sweep: {enabled, params}` block and `egs/run.sh` runs `hfmt/sweep_probe.py` (compose-only, no
+  `transformers`) which, when `sweep.enabled`, emits bare `<axis>=<csv>` overrides the sweeper
+  fans out. We always `--multirun` (submitit only runs in multirun); disabled → no axes → one
+  job. The probe honors `sweep.enabled` from the CLI; adding an *axis* from the CLI uses a bare
+  override (`basemodel=a,b`), not `sweep.params.*` (a comma value breaks single-run compose).
+- **Sweep over whole component files; label by file name.** Axes may be group choices
+  (`basemodel: "qwen2.5-7b,qwen2.5-1.5b"`), so `build_run_label` labels such a job
+  `basemodel-qwen2.5-7b` — the selected YAML file, not the checkpoint value inside. A bare
+  `data=<name>` config name is now allowed in labels (a name, not a path); dotted `data.<leaf>`
+  and any `/`-bearing value are still dropped (confidentiality unchanged).
+- **Full fine-tune support.** `sft_translation.py` makes quantization conditional on
+  `basemodel.load_in_4bit` and the adapter conditional on `lora.enabled`, with a fail-fast
+  guardrail when LoRA is off but the base is 4-bit. Full-FT inference needs no new code — load
+  `<run_dir>/model` as `inf_translation.py --checkpoint` with no `--peft`.
+- **Refinement sweep is now an experiment.** The old `conf/sweep/mmtc_fr-en_refine1.yaml` (which
+  both fixed values and swept others) became `egs/experiment/mmtc_fr-en_sft1_refine1.yaml`,
+  since "a refined sweep" is just another experiment in the new model.

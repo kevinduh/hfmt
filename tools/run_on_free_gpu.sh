@@ -5,13 +5,13 @@
 # hydra.launcher.gres by hand.
 #
 # Usage (run from a login node):
-#   bash tools/run_on_free_gpu.sh mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse
+#   bash tools/run_on_free_gpu.sh mmtc_fr-en_sft1 sweep.enabled=true
 #   bash tools/run_on_free_gpu.sh mmtc_fr-en_sft1 train.seed=37,42 train.max_steps=20
 #
 # All args are forwarded to egs/run.sh verbatim; this wrapper only appends the chosen
 # `hydra.launcher.gres=gpu:<type>:1`. So do NOT pass your own hydra.launcher.gres (that
 # would be a duplicate override). Change the candidate types with GPU_TYPES:
-#   GPU_TYPES="a100 l40s v100" bash tools/run_on_free_gpu.sh mmtc_fr-en_sft1 +sweep=...
+#   GPU_TYPES="a100 l40s v100" bash tools/run_on_free_gpu.sh mmtc_fr-en_sft1 sweep.enabled=true
 #
 # Policy: pick the type with the most free GPUs (tie -> first in GPU_TYPES). Note your
 # 4gpu_tier caps you at 4 concurrent GPUs regardless, so "freest" mainly shortens queueing.

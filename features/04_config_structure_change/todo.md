@@ -117,14 +117,20 @@ completed. Commit per group using `04_config_structure_change-<phase>: <summary>
 
 ## G — Stale references + docs
 
-- [ ] Grep + fix `model\.`, `conf/model`, `conf/wandb`, `conf/sweep`,
-      `conf/experiment`, `+sweep=`, `hydra.sweeper.params` across the repo.
-- [ ] README: update `### Config layout`, `### Running`, `### Sweeping parameters`
-      (document `sweep.enabled`, component-file sweeps, and the probe-based toggle).
-- [ ] `inf_translation.py`: document the two load modes (adapter via `--peft`;
-      full-FT via `--checkpoint <run_dir>/model`); optionally honor a dtype.
-- [ ] Add a `decisions.md` entry for the restructure.
-- [ ] Update this feature's validation notes; check off completed items.
+- [x] Grep + fix stale refs across LIVE files (README, CLAUDE.md conventions,
+      conf/config.yaml comment, egs/run.sh comments, tools/run_on_free_gpu.sh).
+      Historical feature docs (00/02/03) and analysis/ left as as-built records;
+      decisions.md feature-00/02 entries kept (new entry documents supersession).
+- [x] **test_run_label.py updated** (live test): flipped the data assertion to the
+      new "config name kept" behavior, migrated `model.`→`basemodel.`/`lora.`, added
+      group-choice + `sweep.enabled` coverage. 21/21 pass.
+- [x] README: rewrote `### Config layout`, `### Running`, `### Adding a new
+      experiment`, `### Sweeping parameters` (sweep.enabled toggle, component-file
+      sweeps, probe, egs/ layout, full-FT).
+- [x] `inf_translation.py`: documented the two load modes (adapter via `--peft`;
+      full-FT via `--checkpoint <run_dir>/model`) in argparse help + a comment.
+- [x] Added a `decisions.md` entry for the restructure.
+- [x] Checked off todo items.
 
 ## Validation (run before marking the feature done)
 

@@ -36,17 +36,18 @@ not in the training script or a per-experiment shell script.
 
 ### Config layout (`conf/`)
 
-* `conf/config.yaml` — top-level defaults + Hydra settings (output dir, launcher).
-* `conf/model/` — checkpoint, 4-bit quantization, LoRA (`r`/`alpha`/`dropout`/`target`).
+`conf/` holds only **atomistic, mix-and-match components** (feature 04); an experiment composes them and lives under `egs/`:
+
+* `conf/config.yaml` — top-level defaults + Hydra settings (output dir, launcher, and `hydra.searchpath` pointing at `egs/`).
+* `conf/basemodel/` — the pretrained base model: checkpoint, 4-bit quantization, load `dtype`.
+* `conf/lora/` — the LoRA adapter (`enabled`/`r`/`alpha`/`dropout`/`target`). Set `lora.enabled=false` (with `basemodel.load_in_4bit=false`) to fully fine-tune the base model instead.
 * `conf/data/` — train/dev/test paths (a YAML manifest) + instruction prefix. **Paths only, never data content.**
 * `conf/train/` — learning rate, schedule, steps, batch size, early stopping, etc.
 * `conf/decode/` — generation knobs (`max_length`, `max_new_tokens`, `num_beams`, ...).
-* `conf/wandb/` — W&B project/entity/group/tags.
-* `conf/experiment/<name>.yaml` — a preset composing the above into one named experiment (the successor to the old per-experiment `.sh` recipes).
-* `conf/sweep/<name>.yaml` — a committed parameter-sweep preset (a grid for Hydra's basic sweeper), selected with `+sweep=<name>` (see **Sweeping parameters**).
 * `conf/hydra/launcher/{slurm,local}.yaml` — how/where to run (Slurm via submitit, or local).
+* `egs/experiment/<name>.yaml` — a preset composing the components above into one named experiment, plus inline `wandb` and `sweep` blocks (the successor to the old per-experiment `.sh` recipes). Found via `hydra.searchpath`.
 
-The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
+W&B settings are no longer a `conf/` group: their defaults come from the `WandbConfig` dataclass and each experiment sets `wandb.group`/`wandb.tags` inline. The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
 
 ### Running an experiment
 
@@ -60,7 +61,7 @@ bash egs/run.sh mmtc_fr-en_sft1
 Override any parameter on the command line (forwarded to Hydra):
 
 ```bash
-bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16 train.learning_rate=2e-5
+bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=16 train.learning_rate=2e-5
 ```
 
 Preview the fully-composed config without running anything:
@@ -77,7 +78,7 @@ python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
 
 ### Adding a new experiment
 
-Add a file `conf/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), point it at your data config and set any overrides, then `bash egs/run.sh <name>`. No new shell script needed.
+Add a file `egs/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), select your components (`override /basemodel:`, `/data:`, `/lora:`, ...), set any value overrides, then `bash egs/run.sh <name>`. No new shell script needed. To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
 
 Outputs (checkpoints, logs, the trained adapter under `model/`, and predictions `eval.pred.trg` / `dev.step_*.pred`) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir. Score the predictions with:
 
@@ -87,27 +88,39 @@ python analysis/run_sacrebleu.py --ref <ref.trg> --hyp outputs/<experiment>/<tim
 
 ### Sweeping parameters
 
-A sweep runs an experiment over multiple parameter values, fanning out into **one Slurm job per combination** via the submitit launcher (`egs/run.sh` already runs in `--multirun` mode). Two ways to drive it:
+A sweep runs an experiment over multiple parameter values, fanning out into **one Slurm job per combination** via the submitit launcher (`egs/run.sh` always runs in `--multirun` mode). Two ways to drive it:
 
-**Ad-hoc** — pass comma-separated values on the CLI; Hydra takes the cross-product:
-
-```bash
-bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=8,16,32 train.learning_rate=2e-5,2e-4
-```
-
-The override grammar also supports `range(1,4)`, `choice(a,b)`, and `glob(*)`, and you can sweep a whole config group (e.g. `model=qwen2.5-1.5b,qwen2.5-7b`).
-
-**Committed preset** — define a reusable grid in `conf/sweep/<name>.yaml` and select it:
+**Inline, toggleable grid (committed with the experiment)** — each experiment carries a `sweep: {enabled, params}` block. Turn it on with the flag; off (the default) is a single run:
 
 ```bash
-bash egs/run.sh mmtc_fr-en_sft1 +sweep=mmtc_fr-en_coarse
+bash egs/run.sh mmtc_fr-en_sft1 sweep.enabled=true     # fan out the experiment's grid
+bash egs/run.sh mmtc_fr-en_sft1                         # single run (sweep off)
 ```
 
-See `conf/sweep/mmtc_fr-en_coarse.yaml` for the format (it sets `hydra.sweeper.params`).
+`egs/run.sh` reads the block via `hfmt/sweep_probe.py` and forwards the axes to the sweeper (passing `hydra.sweeper.params.*` on the CLI is rejected by Hydra, so the probe emits bare `<axis>=<csv>` overrides). Each `params` axis is an ordinary Hydra override — a leaf value **or a whole component file**:
+
+```yaml
+sweep:
+  enabled: false
+  params:
+    train.learning_rate: "2e-5,2e-4"
+    lora.lora_target: "qv,all-linear"
+    basemodel: "qwen2.5-7b,qwen2.5-1.5b"   # sweep across entire base-model configs
+```
+
+Runs are labelled by the swept values — and for a component-file axis, by the **selected YAML file name** (e.g. `basemodel-qwen2.5-7b`), not the value inside it. See `egs/experiment/mmtc_fr-en_sft1.yaml` (coarse grid, off by default) and `egs/experiment/mmtc_fr-en_sft1_refine1.yaml` (a refinement sweep, on by default).
+
+**Ad-hoc** — pass comma-separated values on the CLI; Hydra takes the cross-product. This works independently of the inline block (no probe involved):
+
+```bash
+bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=8,16,32 train.learning_rate=2e-5,2e-4
+```
+
+The override grammar also supports `range(1,4)`, `choice(a,b)`, and `glob(*)`, and you can sweep a whole config group (e.g. `basemodel=qwen2.5-1.5b,qwen2.5-7b`).
 
 Notes:
 
-* **Grids are cross-products** — the job count multiplies fast (a 7-way space can be ~200 runs). At most `hydra.launcher.array_parallelism` jobs (default **4**, the node-tier size) run at once; the rest queue. Override per-sweep with `hydra.launcher.array_parallelism=<N>`. Start from a coarse preset and refine.
+* **Grids are cross-products** — the job count multiplies fast (a 7-way space can be ~200 runs). At most `hydra.launcher.array_parallelism` jobs (default **4**, the node-tier size) run at once; the rest queue. Override per-sweep with `hydra.launcher.array_parallelism=<N>`. Start from a coarse grid and refine (see the `_refine1` experiment).
 * **Outputs mirror W&B, so a run maps 1:1 to its files.** A sweep's jobs land under one shared `outputs/<experiment>/sweep-<timestamp>/` (the `sweep-<timestamp>` dir == the W&B **group** `<experiment>-sweep-<timestamp>`), and each job's dir is named by its swept values — e.g. `lora_r-16__lora_target-qv__seed-37/`. **That dir basename is exactly the W&B run name**, so from a run in the W&B UI you can `cd` straight to its `eval.pred.trg`. Names are shell-safe (`[A-Za-z0-9._-]`; keys verbatim, pairs joined by `__`). Runs never clobber (distinct dir + W&B run id).
 * **Runs are identifiable.** Each run is **named/tagged by its swept values**, so you can compare them at a glance. Only hyperparameters appear in names/tags — never data content (data paths are stripped). Note values are shown as resolved numbers, so `learning_rate=2e-4` appears as `learning_rate-0.0002`.
 

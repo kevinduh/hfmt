@@ -2,8 +2,8 @@
 #
 # Composes the config groups below onto the structured schema (base_config,
 # registered from hfmt/hydra_config.py) so every value is type-validated.
-# Select a ready-made experiment with:  experiment=mmtc_fr-en_sft1
-# Override any knob on the CLI, e.g.:    train.learning_rate=2e-4 model.lora_r=16
+# Select a ready-made experiment with:  +experiment=mmtc_fr-en_sft1  (from egs/experiment/)
+# Override any knob on the CLI, e.g.:    train.learning_rate=2e-4 lora.lora_r=16
 
 defaults:
   - base_config           # structured schema (validates everything below)

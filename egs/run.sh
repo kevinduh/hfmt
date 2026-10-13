@@ -1,15 +1,19 @@
 #!/bin/sh
 
-# Generic Hydra launcher for HFMT experiments (feature 00_hydra).
-# The experiment recipe lives in conf/experiment/<name>.yaml; this script just
-# activates the env and submits to Slurm via the submitit launcher.
+# Generic Hydra launcher for HFMT experiments (feature 00_hydra; egs/ layout + sweep
+# toggle in feature 04). The experiment recipe lives in egs/experiment/<name>.yaml
+# (found via hydra.searchpath); this script activates the env, resolves the inline
+# sweep toggle, and submits to Slurm via the submitit launcher.
 #
 # Run from a LOGIN node; submitit submits the Slurm job for you (do NOT sbatch this):
 #   export HFMT_ROOT=$(pwd)
 #   bash egs/run.sh mmtc_fr-en_sft1
 #
 # Override any knob on the CLI (forwarded via "$@"), e.g.:
-#   bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16 train.learning_rate=2e-5
+#   bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=16 train.learning_rate=2e-5
+# Turn the experiment's inline sweep on/off, or sweep ad hoc:
+#   bash egs/run.sh mmtc_fr-en_sft1 sweep.enabled=true
+#   bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=8,16,32
 #
 # Run locally/in-process instead of submitting (e.g. already on a GPU node):
 #   cd ${HFMT_ROOT} && python -m hfmt.sft_translation +experiment=mmtc_fr-en_sft1
@@ -22,7 +26,7 @@ set -e
 
 if [ -z "$1" ]; then
     echo "usage: bash egs/run.sh <experiment> [hydra overrides...]" >&2
-    echo "       <experiment> is a file in conf/experiment/ (without .yaml)" >&2
+    echo "       <experiment> is a file in egs/experiment/ (without .yaml)" >&2
     exit 1
 fi
 

@@ -49,18 +49,23 @@ hfmt/
 
 ## Key conventions
 
-- **Configuration (Hydra)** — for the `sft_translation.py` QLoRA SFT workflow: all tunable
-  params live in `conf/` (typed schema in `hfmt/hydra_config.py`); an experiment is a preset
-  `conf/experiment/<name>.yaml`; launch with `bash egs/run.sh <name>` (submits to Slurm via
-  the submitit launcher; run from a login node, don't `sbatch` it). Override on the CLI, e.g.
-  `bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=16`. See README and `decisions.md`.
-- **Parameter sweeps (Hydra basic grid)** — `egs/run.sh` runs in `--multirun`, so comma-list
-  overrides fan out into one Slurm job per combination via submitit
-  (`bash egs/run.sh mmtc_fr-en_sft1 model.lora_r=8,16,32`). Reusable grids are committed as
-  `conf/sweep/<name>.yaml` and selected with `+sweep=<name>`. Sweep runs share a per-sweep W&B
-  group and are named/tagged by their swept values (data paths/content never go in labels);
-  `hydra.launcher.array_parallelism` caps concurrency. This replaces the old W&B-sweep tooling
-  (`wandb sweep`/`wandb agent`). See README "Sweeping parameters".
+- **Configuration (Hydra)** — for the `sft_translation.py` QLoRA SFT workflow: `conf/` holds
+  only atomistic, mix-and-match components (`basemodel`, `lora`, `data`, `train`, `decode`;
+  typed schema in `hfmt/hydra_config.py`). An experiment composes them (plus inline `wandb`
+  and `sweep`) and lives under `egs/experiment/<name>.yaml`, found via `hydra.searchpath`.
+  Launch with `bash egs/run.sh <name>` (submits to Slurm via the submitit launcher; run from a
+  login node, don't `sbatch` it). Override on the CLI, e.g.
+  `bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=16`. Set `lora.enabled=false` (with
+  `basemodel.load_in_4bit=false`) to fully fine-tune instead of LoRA. See README and `decisions.md`.
+- **Parameter sweeps (inline, toggleable)** — each experiment carries a `sweep: {enabled, params}`
+  block. `egs/run.sh` always runs `--multirun` and reads the block via `hfmt/sweep_probe.py`,
+  forwarding the axes only when `sweep.enabled` (toggle with `sweep.enabled=true`; off → one job).
+  Axes are ordinary overrides — leaf values or whole component files
+  (`basemodel: "qwen2.5-7b,qwen2.5-1.5b"`). Ad-hoc comma-list overrides still fan out directly
+  (`bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=8,16,32`). Sweep runs share a per-sweep W&B group
+  and are named/tagged by their swept values — component-file axes by the selected YAML file name
+  (data paths/content never go in labels); `hydra.launcher.array_parallelism` caps concurrency.
+  See README "Sweeping parameters".
 - **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
   still plain shell scripts that source `install/path.sh`, set shell vars, and call an
   `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable.

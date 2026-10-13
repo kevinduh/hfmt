@@ -1,4 +1,5 @@
-"""Tests for the run-label helpers in sft_translation.py (feature 03_output_wandb_align).
+"""Tests for the run-label helpers in sft_translation.py (feature 03_output_wandb_align;
+label hardening in feature 04_config_structure_change).
 
 Pure functions -- no GPU, no torch/transformers needed (those imports are guarded or live
 inside main()). Hydra/OmegaConf are imported at module load, so the test env needs them.
@@ -27,7 +28,7 @@ SWEEP_OUT = "/x/outputs/mmtc_fr-en_sft1/sweep-2026-10-08_15-47-06/lora_r-8__lora
 SINGLE_OUT = "/x/outputs/mmtc_fr-en_sft1/2026-10-08_15-47-06"
 
 # Hydra's default override_dirname separators (pairs ',', key/value '=').
-GRID = "model.lora_r=16,model.lora_target=all-linear,train.learning_rate=0.0002,train.seed=37"
+GRID = "lora.lora_r=16,lora.lora_target=all-linear,train.learning_rate=0.0002,train.seed=37"
 SHELL_SAFE = re.compile(r"\A[A-Za-z0-9._-]*\Z")
 
 
@@ -42,40 +43,52 @@ def test_descriptive_grid_label():
 
 def test_keeps_lora_prefix_and_underscores():
     # 'lora' must survive and leaf underscores are preserved (not collapsed to '-').
-    label = S.build_run_label("model.lora_r=8,model.lora_dropout=0.1")
+    label = S.build_run_label("lora.lora_r=8,lora.lora_dropout=0.1")
     assert label == "lora_r-8__lora_dropout-0.1"
     assert "lora_r" in label and "lora_dropout" in label
 
 
 def test_order_is_preserved_from_override_dirname():
-    assert S.build_run_label("train.seed=37,model.lora_r=8") == "seed-37__lora_r-8"
+    assert S.build_run_label("train.seed=37,lora.lora_r=8") == "seed-37__lora_r-8"
 
 
-def test_data_key_dropped_for_confidentiality():
+def test_group_choice_labels_by_file_name():
+    # Feature 04: sweeping whole component files labels by the selected YAML option
+    # (the file name), not the value inside it. The group name is kept (no dot to strip).
+    assert S.build_run_label("basemodel=qwen2.5-7b") == "basemodel-qwen2.5-7b"
+    assert S.build_run_label("basemodel=qwen2.5-1.5b,lora=aggressive") == (
+        "basemodel-qwen2.5-1.5b__lora-aggressive"
+    )
+
+
+def test_data_path_dropped_for_confidentiality():
     # A data *path* must never enter the label (== dir name == W&B run name).
-    label = S.build_run_label("model.lora_r=8,data.train_yaml=/proprietary/corpus.yaml")
+    label = S.build_run_label("lora.lora_r=8,data.train_yaml=/proprietary/corpus.yaml")
     assert label == "lora_r-8"
     assert "proprietary" not in label and "corpus" not in label
 
 
-def test_bare_data_group_dropped():
-    assert S.build_run_label("data=mmtc_fr-en,model.lora_r=8") == "lora_r-8"
+def test_bare_data_group_kept():
+    # Feature 04: a bare data=<name> group choice is a config-file NAME (not a path or
+    # content), so it IS kept -- sweeping across data configs is labelled by file name.
+    assert S.build_run_label("data=mmtc_fr-en,lora.lora_r=8") == "data-mmtc_fr-en__lora_r-8"
 
 
 def test_slash_bearing_value_dropped():
     # Any '/'-bearing value is dropped (would fracture the dir) even on a non-data key.
-    assert S.build_run_label("model.checkpoint=/path/to/model,model.lora_r=8") == "lora_r-8"
+    assert S.build_run_label("basemodel.checkpoint=/path/to/model,lora.lora_r=8") == "lora_r-8"
 
 
 def test_structural_selectors_dropped():
-    tok = "experiment=mmtc_fr-en_sft1,sweep=coarse,hydra.launcher=slurm,model.lora_r=8"
+    # experiment/sweep/sweep.enabled/hydra* carry no hyperparameter info.
+    tok = "experiment=mmtc_fr-en_sft1,sweep=coarse,sweep.enabled=true,hydra.launcher=slurm,lora.lora_r=8"
     assert S.build_run_label(tok) == "lora_r-8"
 
 
 def test_append_and_tilde_prefixes_stripped():
     # '+'/'~' are stripped before matching, so '+experiment' is still recognised and dropped,
     # while a real '~'-deleted param override is kept.
-    assert S.build_run_label("+experiment=x,+model.lora_r=8") == "lora_r-8"
+    assert S.build_run_label("+experiment=x,+lora.lora_r=8") == "lora_r-8"
     assert S.build_run_label("~train.optim=adamw") == "optim-adamw"
 
 
@@ -91,7 +104,7 @@ def test_value_underscores_preserved():
 
 def test_label_is_shell_safe():
     # Even with hostile characters in a value, the label stays within [A-Za-z0-9._-].
-    label = S.build_run_label("train.instruction=a b;c|d,model.lora_r=8")
+    label = S.build_run_label("train.instruction=a b;c|d,lora.lora_r=8")
     assert SHELL_SAFE.match(label), label
 
 

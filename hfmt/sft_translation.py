@@ -194,28 +194,34 @@ def build_run_label(override_dirname, job_num="0"):
     both the run *directory* name (via the ``hfmt_runlabel`` resolver in ``conf/config.yaml``)
     and the W&B run *name* (``derive_run_identity``), so disk and W&B line up. For each override:
 
-    - drop structural selectors (``experiment``/``sweep``/``hydra*``) -- no hyperparameter info;
-    - **drop any ``data``/``data.*`` key or ``/``-bearing value** -- confidentiality (CLAUDE.md):
-      a data *path* must never become part of the dir name (hence the W&B run name), and a ``/``
-      would fracture the directory;
-    - strip only the config-group prefix (``model.``/``train.``/...) so the leaf key stays
-      verbatim (``lora_r``, ``lora_target``, ``learning_rate``, ``seed``) -- descriptive, no
-      abbreviation.
+    - drop structural selectors (``experiment``/``sweep``/``sweep.*``/``hydra*``) -- no
+      hyperparameter info (``sweep.enabled`` may ride along as a passthrough override);
+    - **confidentiality (CLAUDE.md): never let a data *path* into the dir/W&B name.**
+      A bare ``data=<option>`` group choice is only a config-file *name* (not content,
+      not a path), so it is kept -- sweeping across whole data configs is labelled by
+      file name (feature 04). But a dotted ``data.<leaf>`` override (e.g.
+      ``data.train_yaml=/path``) or any ``/``-bearing value is dropped;
+    - keep the leaf for dotted leaf-value overrides (``lora.lora_r`` -> ``lora_r``,
+      ``train.learning_rate`` -> ``learning_rate``) and keep the group name for a
+      whole-component group choice (``basemodel=qwen2.5-7b`` -> ``basemodel``), so the
+      label resolves to the selected YAML file, not the value inside it -- descriptive,
+      no abbreviation.
 
     Pairs are emitted as ``<leaf>-<value>`` joined by ``__`` (double underscore) so pair
     boundaries stay legible even though leaf names contain ``_``. Falls back to ``job<N>`` when
-    no informative override remains (e.g. a preset-only sweep). Example:
-    ``lora_r-8__lora_target-all-linear__learning_rate-0.0002__seed-37``.
+    no informative override remains (e.g. a preset-only sweep). Examples:
+    ``lora_r-8__lora_target-all-linear__learning_rate-0.0002__seed-37`` (leaf-value sweep);
+    ``basemodel-qwen2.5-7b__lora_target-all-linear`` (group-choice + leaf sweep).
     """
     pairs = []
     for tok in filter(None, str(override_dirname).split(",")):
         key, _, val = tok.partition("=")
         key = key.lstrip("+~")
-        if key in ("experiment", "sweep") or key.startswith("hydra"):
+        if key in ("experiment", "sweep") or key.startswith(("sweep.", "hydra")):
             continue
-        if key == "data" or key.startswith("data.") or "/" in val:
+        if key.startswith("data.") or "/" in val:  # drop data *paths*, keep data=<name>
             continue
-        leaf = key.rsplit(".", 1)[-1]  # model.lora_r -> lora_r (kept verbatim)
+        leaf = key.rsplit(".", 1)[-1]  # lora.lora_r -> lora_r; basemodel -> basemodel
         pairs.append(f"{_strict(leaf)}-{_strict(val)}")
     return "__".join(pairs) if pairs else f"job{job_num}"
 

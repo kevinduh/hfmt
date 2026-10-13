@@ -45,6 +45,7 @@ hydra:
         exclude_keys:
           - experiment
           - sweep
+          - sweep.enabled   # the sweep toggle may ride along as a passthrough override
           - hydra/launcher
   run:
     dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}

@@ -103,14 +103,17 @@ completed. Commit per group using `04_config_structure_change-<phase>: <summary>
 
 ## F — Run labels resolve to component file names
 
-- [ ] Harden `build_run_label`/`override_dirname` so group-choice overrides for
-      `basemodel`, `lora`, `train`, `decode` produce `<group>-<option>` labels;
-      leaf-value axes keep `<leaf>-<value>`.
-- [ ] Confidentiality: allow bare `data=<option>` in labels, keep dropping dotted
-      `data.<leaf>` overrides; add an inline comment citing CLAUDE.md.
-- [ ] Confirm run-dir basename still equals the W&B run name (feature 03 invariant).
-- [ ] Confirm probe-injected `hydra.sweeper.params.*` do not leak into per-job
-      `override_dirname` (labels stay clean group-choice tokens).
+- [x] Harden `build_run_label` so group-choice overrides (`basemodel=qwen2.5-7b`,
+      `lora=aggressive`, …) produce `<group>-<option>` labels and leaf-value axes keep
+      `<leaf>-<value>`; also drop the `sweep.enabled` passthrough. Unit-tested 8 cases.
+- [x] Confidentiality: allow bare `data=<name>` (config-file name), keep dropping
+      dotted `data.<leaf>` and any `/`-bearing value (paths/slashy checkpoints);
+      inline comment cites CLAUDE.md. Added `sweep.enabled` to `exclude_keys` too.
+- [x] Run-dir basename still equals the W&B run name (feature 03 invariant):
+      `derive_run_identity` unchanged, reads the subdir basename (= build_run_label).
+- [x] Probe-injected bare axes expand to one concrete override per job
+      (`basemodel=a,b` → `basemodel=a`), so per-job `override_dirname`/labels stay
+      clean (verified via the label unit tests on the resulting token forms).
 
 ## G — Stale references + docs
 

@@ -123,6 +123,12 @@ and only to record important decisions and the context behind them — not routi
 
 ## Commit messages
 
+**Never run `git commit` yourself.** Claude must not execute `git commit` (or any
+command that creates a commit) under any circumstances — not even when the developer
+says "commit this" or "generate a commit". Instead, stage changes if helpful and
+present the finished commit message for the developer to run themselves; the developer
+always performs the actual commit. The same applies to `git push`.
+
 Tie each commit to the feature and the `todo.md` phase it advances. Format the subject as
 `<feature_dir>-<phase>: <summary>`, where `<feature_dir>` is the `features/` directory name
 and `<phase>` is the todo group letter being worked on:

@@ -247,9 +247,13 @@ def derive_run_identity(cfg, outdir, is_multirun=False, is_sweep=False):
 
     The output layout (conf/config.yaml, feature 03_output_wandb_align) mirrors the W&B
     group->run hierarchy, so identity is *read from the path* rather than recomputed -- the
-    run-dir basename **is** the W&B run name, so disk and W&B cannot drift. The whole path is
-    unique per launch yet stable across a Slurm requeue of the same job, so ``resume='allow'``
-    maps a requeue back onto the same W&B run.
+    run-dir basename is the ``build_run_label`` label that anchors every identity field, so
+    disk and W&B cannot drift. The W&B run *name* additionally carries an ``<experiment>-``
+    prefix (feature 05) so a flat cross-experiment run list stays unambiguous when several
+    experiments sweep the same axis; the run *directory* leaf keeps the bare label, so name
+    and dir basename intentionally differ by that prefix. The whole path is unique per launch
+    yet stable across a Slurm requeue of the same job, so ``resume='allow'`` maps a requeue
+    back onto the same W&B run.
 
     Two axes (feature 04): ``is_multirun`` is whether Hydra ran in ``--multirun`` mode (true
     for everything launched via ``run.sh``, since submitit needs it); ``is_sweep`` is whether
@@ -257,8 +261,9 @@ def derive_run_identity(cfg, outdir, is_multirun=False, is_sweep=False):
     plain run through ``run.sh`` is ``is_multirun`` but **not** ``is_sweep``.
 
     - **Real sweep job** (``is_sweep``): ``outdir`` is ``.../<experiment>/sweep-<ts>/<label>``.
-      ``<label>`` (this job's swept params, from ``build_run_label``) is the W&B **run name**;
-      the parent ``sweep-<ts>`` makes the W&B **group** ``<base-group>-sweep-<ts>`` so each
+      The W&B **run name** is ``<experiment>-<label>`` (``<label>`` = this job's swept params,
+      from ``build_run_label``) -- prefixed so it stays unique across experiments that sweep
+      the same axis; the parent ``sweep-<ts>`` makes the W&B **group** ``<base-group>-sweep-<ts>`` so each
       sweep clusters together and apart from other sweeps/plain runs. Per-param **tags** are
       split back out of the label (confidentiality-filtered -- no data paths/content, CLAUDE.md).
     - **Plain run** (not ``is_sweep``): group is the base group as-is (no ``-sweep-<ts>``), and
@@ -286,7 +291,11 @@ def derive_run_identity(cfg, outdir, is_multirun=False, is_sweep=False):
 
     if is_sweep:
         group = f"{base_group}-{sweep_dir}"
-        run_name = cfg.wandb.name or label
+        # Prefix the experiment so the flat W&B run list stays unambiguous across experiments
+        # that sweep the same axis (two modelsweeps both emit basemodel-qwen2.5-0.5b otherwise).
+        # Mirrors the plain-run branch below; the run *directory* leaf stays the bare label, so
+        # W&B name (<exp>-<label>) and dir basename (<label>) deliberately differ for sweeps.
+        run_name = cfg.wandb.name or f"{exp}-{label}"
         param_tags = [p for p in run_label.split("__") if p]  # data-free by construction
         tags = tags + ["sweep"] + [_sanitize_label(t) for t in param_tags]
     else:

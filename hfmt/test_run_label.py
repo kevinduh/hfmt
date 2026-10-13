@@ -137,11 +137,13 @@ def test_strict_collapses_and_trims():
 
 # --- derive_run_identity --------------------------------------------------------
 
-def test_identity_sweep_name_is_dir_basename():
+def test_identity_sweep_name_prefixes_experiment():
     rid, name, group, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
-    # The W&B run name IS the run-dir basename (single source of truth).
-    assert name == "lora_r-8__lora_target-qv__seed-37"
-    assert name == os.path.basename(SWEEP_OUT)
+    # Feature 05: the W&B run name prefixes the experiment onto the label so flat run lists
+    # stay unambiguous across experiments that sweep the same axis. The run *directory* leaf
+    # keeps the bare label, so name and dir basename differ by exactly that prefix.
+    assert name == "mmtc_fr-en_sft1-lora_r-8__lora_target-qv__seed-37"
+    assert name == f"{_cfg().experiment}-{os.path.basename(SWEEP_OUT)}"
 
 
 def test_identity_sweep_group_from_parent():

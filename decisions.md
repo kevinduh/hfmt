@@ -168,3 +168,29 @@ a run.
   is a footgun — an experiment that selects no launcher falls back to the local `basic` launcher —
   so every committed experiment selects a slurm profile. Per-run tweaks still work on the CLI
   (`hydra.launcher.timeout_min=120`, `hydra/launcher=local`).
+
+---
+
+## W&B run names prefix the experiment (feature 05_wandb_run_name_prefix)
+
+**Decision:** A sweep job's W&B run *name* is `<experiment>-<label>` (e.g.
+`mmtc_fr-en_sft1-basemodel-qwen2.5-0.5b`), not the bare swept-param `<label>`. The run
+*directory* leaf still keeps the bare label, so name and dir basename now differ by exactly
+the `<experiment>-` prefix. This **loosens the feature 03 invariant** that the run-dir basename
+*is* the W&B run name — on disk it still is; in W&B it is prefixed.
+
+**Context:** Sweep run names collided across experiments. Any two experiments that sweep the
+same axis (the `fullft`/`lora` model-sweeps both sweep `basemodel`) emitted byte-identical names
+like `basemodel-qwen2.5-0.5b`, indistinguishable in W&B's flat run list even though their
+*groups* differed. Plain runs were already prefixed (`<experiment>-<label>` since feature 04);
+the sweep branch was the lone holdout.
+
+- **One-line change, consistent with plain runs.** Only `derive_run_identity`'s `is_sweep`
+  branch changed (`run_name = cfg.wandb.name or f"{exp}-{label}"`), mirroring the plain-run
+  branch. The `cfg.wandb.name` manual override still wins.
+- **`run_id` and grouping are untouched.** `run_id` already embedded the experiment, so
+  requeue/`resume` behavior is unchanged; the group stays `<base-group>-sweep-<ts>`.
+- **Confidentiality unchanged.** The experiment name is config, not data; the label is still the
+  sole data-path chokepoint (`build_run_label`). No data content enters the name.
+- **Trade-off.** Names get longer and the prefix is redundant inside a single group's view, but
+  the flat cross-experiment list — the view that was broken — is now unambiguous.

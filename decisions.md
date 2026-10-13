@@ -149,6 +149,14 @@ a run.
 - **Refinement sweep is now an experiment.** The old `conf/sweep/mmtc_fr-en_refine1.yaml` (which
   both fixed values and swept others) became `egs/experiment/mmtc_fr-en_sft1_refine1.yaml`,
   since "a refined sweep" is just another experiment in the new model.
+- **Plain runs are named by the experiment, not `job0`.** `run.sh` always uses `--multirun`
+  (submitit needs it), so a single non-swept run reached the sweep naming path and got the
+  `job0` fallback label and a `-sweep-<ts>` W&B group. Now `main` distinguishes a real sweep
+  job (its `override_dirname` carries informative tokens) from a plain run: a plain run falls
+  back to the `<experiment>` name for the run-dir leaf and W&B run name (so disk and W&B still
+  match), keeps the base W&B group without the `-sweep-<ts>` suffix, and drops the `sweep` tag.
+  `${experiment}` is threaded into the `hfmt_runlabel` resolver for the dir leaf (verified it
+  interpolates inside `hydra.sweep.subdir`). Real sweeps are unchanged.
 - **Launcher is a selectable component, not a forced flag.** The Slurm settings (GPU type,
   walltime, memory, concurrency) live in `conf/hydra/launcher/` profiles — `slurm` (QLoRA
   baseline) and `slurm_fullft` (extends `slurm`, bumps RAM/walltime for full fine-tunes) — and

@@ -41,7 +41,11 @@ hydra:
   # every submitit job of the launch and stable across a Slurm requeue) and <run_label> is this
   # job's swept hyperparameters, built by the hfmt_runlabel resolver (hfmt/sft_translation.py).
   # The run-dir basename == the W&B run name (single source of truth), so disk and W&B align.
-  # A plain single run (no --multirun) lands at outputs/<experiment>/<ts>/.
+  # A PLAIN run through run.sh is still --multirun (submitit needs it) but has no swept params,
+  # so <run_label> falls back to the <experiment> name (feature 04) -- so it reads as
+  # outputs/<experiment>/sweep-<ts>/<experiment>/ and the W&B run is named <experiment>, grouped
+  # under the base group (no -sweep-<ts>). A true in-process single run (no --multirun) lands at
+  # outputs/<experiment>/<ts>/.
   job:
     chdir: false
     config:
@@ -57,4 +61,4 @@ hydra:
     dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}
   sweep:
     dir: ${output_root}/${experiment}/sweep-${now:%Y-%m-%d_%H-%M-%S}
-    subdir: ${hfmt_runlabel:${hydra.job.override_dirname},${hydra.job.num}}
+    subdir: ${hfmt_runlabel:${hydra.job.override_dirname},${hydra.job.num},${experiment}}

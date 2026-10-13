@@ -26,6 +26,9 @@ def _cfg(experiment="mmtc_fr-en_sft1", group="mmtc_fr-en_sft1", tags=("sft", "fr
 
 SWEEP_OUT = "/x/outputs/mmtc_fr-en_sft1/sweep-2026-10-08_15-47-06/lora_r-8__lora_target-qv__seed-37"
 SINGLE_OUT = "/x/outputs/mmtc_fr-en_sft1/2026-10-08_15-47-06"
+# Plain run via run.sh: --multirun (so under sweep-<ts>/) but no swept params, so the dir
+# leaf is the experiment name (build_run_label fallback) -- feature 04.
+PLAIN_OUT = "/x/outputs/mmtc_fr-en_sft1_fullft/sweep-2026-10-08_15-47-06/mmtc_fr-en_sft1_fullft"
 
 # Hydra's default override_dirname separators (pairs ',', key/value '=').
 GRID = "lora.lora_r=16,lora.lora_target=all-linear,train.learning_rate=0.0002,train.seed=37"
@@ -98,6 +101,16 @@ def test_empty_falls_back_to_job_num():
     assert S.build_run_label("experiment=x", job_num=5) == "job5"
 
 
+def test_fallback_uses_experiment_when_given():
+    # Feature 04: a plain run (no informative tokens) is named by the experiment, not jobN,
+    # so run.sh single runs get a meaningful dir/W&B name instead of "job0".
+    assert S.build_run_label("", experiment="mmtc_fr-en_sft1_fullft") == "mmtc_fr-en_sft1_fullft"
+    # Tokens that all get dropped (data path) still fall back to the experiment.
+    assert S.build_run_label("data.train_yaml=/x/y.yaml", experiment="exp") == "exp"
+    # An informative token still wins over the experiment fallback.
+    assert S.build_run_label("lora.lora_r=8", experiment="exp") == "lora_r-8"
+
+
 def test_value_underscores_preserved():
     assert S.build_run_label("train.optim=adamw_torch_fused") == "optim-adamw_torch_fused"
 
@@ -125,25 +138,25 @@ def test_strict_collapses_and_trims():
 # --- derive_run_identity --------------------------------------------------------
 
 def test_identity_sweep_name_is_dir_basename():
-    rid, name, group, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True)
+    rid, name, group, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
     # The W&B run name IS the run-dir basename (single source of truth).
     assert name == "lora_r-8__lora_target-qv__seed-37"
     assert name == os.path.basename(SWEEP_OUT)
 
 
 def test_identity_sweep_group_from_parent():
-    _, _, group, _ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True)
+    _, _, group, _ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
     assert group == "mmtc_fr-en_sft1-sweep-2026-10-08_15-47-06"
 
 
 def test_identity_sweep_tags_split_from_label():
-    _, _, _, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True)
+    _, _, _, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
     assert tags == ["sft", "fr-en", "sweep", "lora_r-8", "lora_target-qv", "seed-37"]
 
 
 def test_identity_sweep_run_id_unique_and_stable():
-    rid1, *_ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True)
-    rid2, *_ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True)
+    rid1, *_ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
+    rid2, *_ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
     assert rid1 == rid2  # stable across a requeue of the same job (same path)
     assert rid1 == "mmtc_fr-en_sft1_sweep-2026-10-08_15-47-06_lora_r-8__lora_target-qv__seed-37"
 
@@ -156,14 +169,30 @@ def test_identity_single_run():
     assert tags == ["sft", "fr-en"]  # no sweep tag
 
 
+def test_identity_plain_multirun_run():
+    # A plain run via run.sh is --multirun but has no sweep params: named by the experiment
+    # (== dir leaf, so disk/W&B match), grouped under the base group with NO -sweep-<ts>
+    # suffix, and with no 'sweep' tag (feature 04).
+    cfg = _cfg(experiment="mmtc_fr-en_sft1_fullft", group="mmtc_fr-en_sft1_fullft",
+               tags=("sft", "fr-en", "fullft"))
+    rid, name, group, tags = S.derive_run_identity(cfg, PLAIN_OUT, is_multirun=True, is_sweep=False)
+    assert name == "mmtc_fr-en_sft1_fullft"
+    assert name == os.path.basename(PLAIN_OUT)        # dir basename == W&B name (invariant holds)
+    assert group == "mmtc_fr-en_sft1_fullft"          # base group, no date appended
+    assert "sweep" not in tags
+    assert tags == ["sft", "fr-en", "fullft"]
+    # run_id carries the sweep-<ts> parent so separate launches stay distinct + requeue-stable.
+    assert rid == "mmtc_fr-en_sft1_fullft_sweep-2026-10-08_15-47-06_mmtc_fr-en_sft1_fullft"
+
+
 def test_identity_respects_wandb_name_override():
-    _, name, _, _ = S.derive_run_identity(_cfg(name="my-run"), SWEEP_OUT, is_multirun=True)
+    _, name, _, _ = S.derive_run_identity(_cfg(name="my-run"), SWEEP_OUT, is_multirun=True, is_sweep=True)
     assert name == "my-run"
 
 
 def test_identity_no_slashes_or_data_anywhere():
     # Labels are data-free by construction; identity must stay path-safe / content-free.
-    rid, name, group, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True)
+    rid, name, group, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
     for s in [rid, name, group, *tags]:
         assert "/" not in s
         assert SHELL_SAFE.match(s), s

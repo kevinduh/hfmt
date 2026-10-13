@@ -185,7 +185,27 @@ def _strict(s):
     return re.sub(r"[^A-Za-z0-9._-]+", "-", str(s)).strip("-")
 
 
-def build_run_label(override_dirname, job_num="0"):
+def _label_pairs(override_dirname):
+    """The informative ``<leaf>-<value>`` pairs from Hydra's ``override_dirname``.
+
+    Shared by ``build_run_label`` (to name the run) and the ``is_sweep`` check in
+    ``main`` (a job is a real sweep job iff it carries distinguishing override tokens).
+    Dropping/keeping rules match ``build_run_label``'s docstring.
+    """
+    pairs = []
+    for tok in filter(None, str(override_dirname).split(",")):
+        key, _, val = tok.partition("=")
+        key = key.lstrip("+~")
+        if key in ("experiment", "sweep") or key.startswith(("sweep.", "hydra")):
+            continue
+        if key.startswith("data.") or "/" in val:  # drop data *paths*, keep data=<name>
+            continue
+        leaf = key.rsplit(".", 1)[-1]  # lora.lora_r -> lora_r; basemodel -> basemodel
+        pairs.append(f"{_strict(leaf)}-{_strict(val)}")
+    return pairs
+
+
+def build_run_label(override_dirname, job_num="0", experiment=""):
     """Strict, shell-safe, descriptive run label from Hydra's ``override_dirname``.
 
     ``override_dirname`` is Hydra's ``key=value`` join of this job's task overrides (default
@@ -208,25 +228,21 @@ def build_run_label(override_dirname, job_num="0"):
       no abbreviation.
 
     Pairs are emitted as ``<leaf>-<value>`` joined by ``__`` (double underscore) so pair
-    boundaries stay legible even though leaf names contain ``_``. Falls back to ``job<N>`` when
-    no informative override remains (e.g. a preset-only sweep). Examples:
+    boundaries stay legible even though leaf names contain ``_``. When no informative override
+    remains (a plain run -- ``run.sh`` always uses ``--multirun`` for submitit, so even a single
+    non-swept run reaches here), it falls back to the ``experiment`` name so the run dir / W&B
+    name stay meaningful (``mmtc_fr-en_sft1_fullft`` rather than ``job0``); ``job<N>`` only if no
+    experiment is given. Examples:
     ``lora_r-8__lora_target-all-linear__learning_rate-0.0002__seed-37`` (leaf-value sweep);
     ``basemodel-qwen2.5-7b__lora_target-all-linear`` (group-choice + leaf sweep).
     """
-    pairs = []
-    for tok in filter(None, str(override_dirname).split(",")):
-        key, _, val = tok.partition("=")
-        key = key.lstrip("+~")
-        if key in ("experiment", "sweep") or key.startswith(("sweep.", "hydra")):
-            continue
-        if key.startswith("data.") or "/" in val:  # drop data *paths*, keep data=<name>
-            continue
-        leaf = key.rsplit(".", 1)[-1]  # lora.lora_r -> lora_r; basemodel -> basemodel
-        pairs.append(f"{_strict(leaf)}-{_strict(val)}")
-    return "__".join(pairs) if pairs else f"job{job_num}"
+    pairs = _label_pairs(override_dirname)
+    if pairs:
+        return "__".join(pairs)
+    return _strict(experiment) or f"job{job_num}"
 
 
-def derive_run_identity(cfg, outdir, is_multirun=False):
+def derive_run_identity(cfg, outdir, is_multirun=False, is_sweep=False):
     """Stable, W&B-safe (id, name, group, tags) read off the resolved output path.
 
     The output layout (conf/config.yaml, feature 03_output_wandb_align) mirrors the W&B
@@ -235,34 +251,49 @@ def derive_run_identity(cfg, outdir, is_multirun=False):
     unique per launch yet stable across a Slurm requeue of the same job, so ``resume='allow'``
     maps a requeue back onto the same W&B run.
 
-    - **Sweep** (``--multirun``): ``outdir`` is ``.../<experiment>/sweep-<ts>/<run_label>``.
-      ``<run_label>`` (this job's swept hyperparameters, from ``build_run_label``) becomes the
-      W&B **run name**; the parent ``sweep-<ts>`` becomes the W&B **group**
-      ``<base-group>-sweep-<ts>`` so each sweep clusters together and apart from other
-      sweeps/plain runs. Per-param **tags** are split back out of the label (already
-      confidentiality-filtered -- the label never carries data paths/content, CLAUDE.md).
-    - **Single run**: ``outdir`` is ``.../<experiment>/<ts>``; group is the base group and the
-      run name is ``<experiment>-<ts>``.
+    Two axes (feature 04): ``is_multirun`` is whether Hydra ran in ``--multirun`` mode (true
+    for everything launched via ``run.sh``, since submitit needs it); ``is_sweep`` is whether
+    this job actually varies parameters (``override_dirname`` carries informative tokens). A
+    plain run through ``run.sh`` is ``is_multirun`` but **not** ``is_sweep``.
 
-    ``run_id`` embeds the sweep dir (or ts) so it is unique across different sweeps yet stable
+    - **Real sweep job** (``is_sweep``): ``outdir`` is ``.../<experiment>/sweep-<ts>/<label>``.
+      ``<label>`` (this job's swept params, from ``build_run_label``) is the W&B **run name**;
+      the parent ``sweep-<ts>`` makes the W&B **group** ``<base-group>-sweep-<ts>`` so each
+      sweep clusters together and apart from other sweeps/plain runs. Per-param **tags** are
+      split back out of the label (confidentiality-filtered -- no data paths/content, CLAUDE.md).
+    - **Plain run** (not ``is_sweep``): group is the base group as-is (no ``-sweep-<ts>``), and
+      the run name is the ``experiment`` name (the ``build_run_label`` fallback makes the dir
+      leaf the experiment too, so disk and W&B still match) -- no ``sweep`` tag. A true
+      in-process single run (not ``--multirun``) has a ``<ts>`` leaf, so it is named
+      ``<experiment>-<ts>``.
+
+    ``run_id`` embeds the sweep dir (``--multirun``) or ts so it is unique per launch yet stable
     across a requeue of the same job.
     """
     run_label = os.path.basename(os.path.normpath(outdir))
     base_group = cfg.wandb.group or cfg.experiment
     tags = list(cfg.wandb.tags)
+    exp = _sanitize_label(cfg.experiment)
+    label = _sanitize_label(run_label)
 
     if is_multirun:
-        sweep_dir = os.path.basename(os.path.dirname(os.path.normpath(outdir)))  # "sweep-<ts>"
-        group = f"{base_group}-{sweep_dir}"
-        run_name = cfg.wandb.name or _sanitize_label(run_label)
-        # Per-param tags from the label (e.g. "lora_r-8"); data-free by construction.
-        param_tags = [p for p in run_label.split("__") if p]
-        tags = tags + ["sweep"] + [_sanitize_label(t) for t in param_tags]
+        # The sweep-<ts> parent keeps launches distinct and is stable across a requeue.
+        sweep_dir = os.path.basename(os.path.dirname(os.path.normpath(outdir)))
         run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{sweep_dir}_{run_label}")
     else:
-        group = base_group
-        run_name = cfg.wandb.name or _sanitize_label(f"{cfg.experiment}-{run_label}")
+        sweep_dir = None
         run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{run_label}")
+
+    if is_sweep:
+        group = f"{base_group}-{sweep_dir}"
+        run_name = cfg.wandb.name or label
+        param_tags = [p for p in run_label.split("__") if p]  # data-free by construction
+        tags = tags + ["sweep"] + [_sanitize_label(t) for t in param_tags]
+    else:
+        group = base_group
+        # Avoid doubling when the leaf is already the experiment (plain --multirun run);
+        # a true single run's leaf is a timestamp, so prefix the experiment for context.
+        run_name = cfg.wandb.name or (label if label == exp else f"{exp}-{label}")
 
     return run_id, run_name, group, tags
 
@@ -317,10 +348,16 @@ def main(cfg: Config) -> None:
     # Link W&B <-> output dir <-> config. Own the run here (main process only; single-GPU
     # recipe) so it carries our group/name/id and data-free config; the HF Trainer reuses it.
     # Identity is read off the output path (feature 03_output_wandb_align): the run-dir basename
-    # is the W&B run name and the sweep-<ts> parent is the W&B group, so disk and W&B align and
-    # sweeps don't clobber or intermix.
+    # is the W&B run name. For a real sweep the sweep-<ts> parent is the W&B group; a plain run
+    # (is_multirun but no swept params) keeps the base group and is named by the experiment
+    # (feature 04), so disk and W&B align and sweeps don't clobber or intermix.
     is_multirun = hydra_cfg.mode == RunMode.MULTIRUN
-    run_id, run_name, group, tags = derive_run_identity(cfg, outdir, is_multirun=is_multirun)
+    # A real sweep job carries distinguishing override tokens; a plain run via run.sh is
+    # --multirun but has none, so it is named/grouped like a single run (feature 04).
+    is_sweep = is_multirun and bool(_label_pairs(hydra_cfg.job.override_dirname))
+    run_id, run_name, group, tags = derive_run_identity(
+        cfg, outdir, is_multirun=is_multirun, is_sweep=is_sweep
+    )
     if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
         init_wandb(cfg, outdir, run_id, run_name, group, tags)
 
@@ -570,7 +607,9 @@ def main(cfg: Config) -> None:
 # `python -m hfmt.sft_translation`). replace=True keeps re-imports (submitit unpickle on the
 # compute node, `--cfg`) from raising "resolver already registered".
 OmegaConf.register_new_resolver(
-    "hfmt_runlabel", lambda od, n="0": build_run_label(str(od), str(n)), replace=True
+    "hfmt_runlabel",
+    lambda od, n="0", exp="": build_run_label(str(od), str(n), str(exp)),
+    replace=True,
 )
 
 register_configs()

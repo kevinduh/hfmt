@@ -4,9 +4,9 @@
 #   bash egs/run.sh mmtc_fr-en_sft1_lora_modelsweep
 #
 # 2 jobs (one per base-model config), each a 4-bit QLoRA fine-tune. Runs are labelled by
-# the selected YAML file name, e.g. basemodel-qwen2.5-7b / basemodel-qwen2.5-1.5b.
+# the selected YAML file name, e.g. basemodel-qwen2.5-0.5b / basemodel-qwen2.5-1.5b.
 defaults:
-  - override /basemodel: qwen2.5-7b
+  - override /basemodel: qwen2.5-1.5b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
@@ -25,4 +25,4 @@ wandb:
 sweep:
   enabled: true
   params:
-    basemodel: "qwen2.5-7b,qwen2.5-1.5b"   # sweep across whole base-model configs
+    basemodel: "qwen2.5-0.5b,qwen2.5-1.5b"   # sweep across whole base-model configs

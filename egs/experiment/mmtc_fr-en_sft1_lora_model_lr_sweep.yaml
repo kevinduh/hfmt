@@ -5,9 +5,9 @@
 #
 # 2 base models x 3 learning rates = 6 jobs, each a 4-bit QLoRA fine-tune. Runs are
 # labelled by the selected model file name + the learning rate, e.g.
-# basemodel-qwen2.5-7b__learning_rate-0.0002.
+# basemodel-qwen2.5-1.5b__learning_rate-0.0002.
 defaults:
-  - override /basemodel: qwen2.5-7b
+  - override /basemodel: qwen2.5-1.5b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
@@ -26,5 +26,5 @@ wandb:
 sweep:
   enabled: true
   params:
-    basemodel: "qwen2.5-7b,qwen2.5-1.5b"
+    basemodel: "qwen2.5-0.5b,qwen2.5-1.5b"
     train.learning_rate: "1e-4,2e-4,3e-4"

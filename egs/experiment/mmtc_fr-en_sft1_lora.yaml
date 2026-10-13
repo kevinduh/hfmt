@@ -3,10 +3,11 @@
 # This is the canonical single run -- identical to mmtc_fr-en_sft1 but without the
 # inline coarse grid. Select with:  bash egs/run.sh mmtc_fr-en_sft1_lora
 #
-# lora.enabled defaults true and basemodel.load_in_4bit defaults true, so this is a
-# 4-bit QLoRA fine-tune; no sweep block -> a single Slurm job.
+# Uses the 1.5B model for quick iteration (override /basemodel: qwen2.5-7b for the
+# larger model). lora.enabled defaults true and basemodel.load_in_4bit defaults true,
+# so this is a 4-bit QLoRA fine-tune; no sweep block -> a single Slurm job.
 defaults:
-  - override /basemodel: qwen2.5-7b
+  - override /basemodel: qwen2.5-1.5b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default

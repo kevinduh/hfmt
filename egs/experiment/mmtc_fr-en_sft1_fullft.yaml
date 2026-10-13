@@ -6,10 +6,10 @@
 # base (a 4-bit frozen base cannot be fully fine-tuned -- sft_translation.py fails fast
 # otherwise). So we set lora.enabled=false AND basemodel.load_in_4bit=false.
 #
-# BASE MODEL: 1.5B, not the 7B of mmtc_fr-en_sft1. Full fine-tuning 7B (weights +
-# optimizer state in fp32) will not fit on a single GPU; 1.5B is the realistic target.
+# BASE MODEL: 0.5B, for the quickest full-FT iteration (1.5B/3B also fit a single GPU;
+# 7B full FT -- weights + fp32 optimizer state -- does NOT, so it is not an option here).
 defaults:
-  - override /basemodel: qwen2.5-1.5b
+  - override /basemodel: qwen2.5-0.5b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default

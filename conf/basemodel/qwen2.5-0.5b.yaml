@@ -1,0 +1,14 @@
+# Qwen2.5-0.5B-Instruct base model (feature 04: LoRA now lives in the `lora` group).
+# Smallest Qwen2.5 size -- handy for quick smoke tests and fast iteration.
+checkpoint: Qwen/Qwen2.5-0.5B-Instruct
+pretrain: true
+
+# 4-bit quantization (bitsandbytes). Required for QLoRA; set false for a full
+# fine-tune (see the `lora` group's `enabled` toggle).
+load_in_4bit: true
+bnb_4bit_use_double_quant: true
+bnb_4bit_quant_type: nf4
+bnb_4bit_compute_dtype: bfloat16
+
+# Load dtype for the non-quantized (full fine-tune) path; ignored when load_in_4bit=true.
+dtype: bfloat16

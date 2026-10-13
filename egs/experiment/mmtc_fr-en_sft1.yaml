@@ -1,5 +1,6 @@
 # @package _global_
-# Experiment preset reproducing egs/mmtc/fr-en/sft1.sh exactly.
+# Default QLoRA SFT example. Based on egs/mmtc/fr-en/sft1.sh but on the smaller 1.5B
+# model for faster iteration (sft1.sh used 7B -- override /basemodel: qwen2.5-7b to match).
 # Select with:  +experiment=mmtc_fr-en_sft1
 # (Hydra "experiment" pattern: this file overrides group choices + values.)
 #
@@ -7,7 +8,7 @@
 # An experiment is a collection of atomistic components (basemodel/data/train/lora/decode)
 # plus inline wandb and (feature 04) an inline sweep block added in group E.
 defaults:
-  - override /basemodel: qwen2.5-7b
+  - override /basemodel: qwen2.5-1.5b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
@@ -34,7 +35,7 @@ wandb:
 # This is the former conf/sweep/mmtc_fr-en_coarse.yaml grid (24 jobs =
 # learning_rate{2} x lora_target{2} x lora_r{3} x seed{2}). Axes are ordinary Hydra
 # overrides: leaf values here, but you can also sweep whole component files, e.g. add
-#   basemodel: "qwen2.5-7b,qwen2.5-1.5b"
+#   basemodel: "qwen2.5-0.5b,qwen2.5-1.5b"
 # to sweep across entire base-model configs. CONFIDENTIALITY (CLAUDE.md): axis
 # names/values are hyperparameters only, never data content.
 sweep:

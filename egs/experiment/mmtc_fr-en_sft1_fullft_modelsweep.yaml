@@ -7,12 +7,11 @@
 # set here -- and it SURVIVES the per-job basemodel group swap (verified), so every
 # swept model is loaded full-precision for full fine-tuning.
 #
-# !! HARDWARE WARNING !! The grid includes qwen2.5-7b, whose FULL fine-tune (weights +
-# fp32 optimizer state) will almost certainly OOM a single GPU. The config is valid; the
-# 7B job is the hardware-bound part. Drop 7B from the grid (leave only 1.5B) unless you
-# have the memory, or add more small base-model configs to sweep over.
+# Grid is the two small models (0.5B, 1.5B), both of which full-fine-tune on a single
+# GPU. NOTE: 7B full FT (weights + fp32 optimizer state) would OOM a single GPU, so keep
+# it out of this grid unless you have the memory.
 defaults:
-  - override /basemodel: qwen2.5-1.5b
+  - override /basemodel: qwen2.5-0.5b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
@@ -39,4 +38,4 @@ wandb:
 sweep:
   enabled: true
   params:
-    basemodel: "qwen2.5-7b,qwen2.5-1.5b"   # 7B full-FT will OOM a single GPU (see warning)
+    basemodel: "qwen2.5-0.5b,qwen2.5-1.5b"   # both full-fine-tune on a single GPU

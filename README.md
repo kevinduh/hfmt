@@ -44,8 +44,10 @@ not in the training script or a per-experiment shell script.
 * `conf/data/` — train/dev/test paths (a YAML manifest) + instruction prefix. **Paths only, never data content.**
 * `conf/train/` — learning rate, schedule, steps, batch size, early stopping, etc.
 * `conf/decode/` — generation knobs (`max_length`, `max_new_tokens`, `num_beams`, ...).
-* `conf/hydra/launcher/{slurm,local}.yaml` — how/where to run (Slurm via submitit, or local).
+* `conf/hydra/launcher/` — launcher profiles (where/how to run): `slurm` (the QLoRA baseline), `slurm_fullft` (more host RAM + walltime for full fine-tunes, extends `slurm`), `local`. These are selectable components too — each experiment picks one.
 * `egs/experiment/<name>.yaml` — a preset composing the components above into one named experiment, plus inline `wandb` and `sweep` blocks (the successor to the old per-experiment `.sh` recipes). Found via `hydra.searchpath`.
+
+An experiment is a flat list of component *selections* — base model, data, train, lora, decode, **and launcher** — so the end user reads only choices, never buried settings; the complex presets live in their own `conf/` files. Every experiment selects a launcher (`- override /hydra/launcher: slurm`); one that selects none falls back to Hydra's local `basic` launcher (it will not submit to Slurm).
 
 W&B settings are no longer a `conf/` group: their defaults come from the `WandbConfig` dataclass and each experiment sets `wandb.group`/`wandb.tags` inline. The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
 
@@ -78,7 +80,7 @@ python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
 
 ### Adding a new experiment
 
-Add a file `egs/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), select your components (`override /basemodel:`, `/data:`, `/lora:`, ...), set any value overrides, then `bash egs/run.sh <name>`. No new shell script needed. To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
+Add a file `egs/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), select your components (`override /basemodel:`, `/data:`, `/lora:`, `/hydra/launcher:`, ...), set any value overrides, then `bash egs/run.sh <name>`. No new shell script needed. Remember to select a launcher (`- override /hydra/launcher: slurm`, or `slurm_fullft` for a full fine-tune). To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
 
 Outputs (checkpoints, logs, the trained adapter under `model/`, and predictions `eval.pred.trg` / `dev.step_*.pred`) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir. Score the predictions with:
 

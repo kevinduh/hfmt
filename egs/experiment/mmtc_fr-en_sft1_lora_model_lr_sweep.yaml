@@ -1,0 +1,30 @@
+# @package _global_
+# Case 5: train MULTIPLE models via a sweep, WITH LoRA, sweeping across learning rates.
+# Sweeps base-model config x learning_rate. Select with:
+#   bash egs/run.sh mmtc_fr-en_sft1_lora_model_lr_sweep
+#
+# 2 base models x 3 learning rates = 6 jobs, each a 4-bit QLoRA fine-tune. Runs are
+# labelled by the selected model file name + the learning rate, e.g.
+# basemodel-qwen2.5-7b__learning_rate-0.0002.
+defaults:
+  - override /basemodel: qwen2.5-7b
+  - override /data: mmtc_fr-en
+  - override /train: qlora_default
+  - override /lora: default
+  - override /decode: default
+  - override /hydra/launcher: slurm
+
+experiment: mmtc_fr-en_sft1_lora_model_lr_sweep
+
+train:
+  seed: 37
+
+wandb:
+  group: mmtc_fr-en_sft1_lora_model_lr_sweep
+  tags: [sft, fr-en, lora]
+
+sweep:
+  enabled: true
+  params:
+    basemodel: "qwen2.5-7b,qwen2.5-1.5b"
+    train.learning_rate: "1e-4,2e-4,3e-4"

@@ -149,3 +149,14 @@ a run.
 - **Refinement sweep is now an experiment.** The old `conf/sweep/mmtc_fr-en_refine1.yaml` (which
   both fixed values and swept others) became `egs/experiment/mmtc_fr-en_sft1_refine1.yaml`,
   since "a refined sweep" is just another experiment in the new model.
+- **Launcher is a selectable component, not a forced flag.** The Slurm settings (GPU type,
+  walltime, memory, concurrency) live in `conf/hydra/launcher/` profiles — `slurm` (QLoRA
+  baseline) and `slurm_fullft` (extends `slurm`, bumps RAM/walltime for full fine-tunes) — and
+  each experiment *selects* one in its defaults (`- override /hydra/launcher: <profile>`), so the
+  experiment stays a flat list of choices with the complex presets in their own files.
+  `egs/run.sh` no longer hardcodes `hydra/launcher=slurm`. **Why not a primary-config default:**
+  Hydra ignores an experiment's launcher group-override once the primary config sets one (verified),
+  so defaulting it in `conf/config.yaml` would silently block per-experiment selection. The trade-off
+  is a footgun — an experiment that selects no launcher falls back to the local `basic` launcher —
+  so every committed experiment selects a slurm profile. Per-run tweaks still work on the CLI
+  (`hydra.launcher.timeout_min=120`, `hydra/launcher=local`).

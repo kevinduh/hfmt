@@ -1,0 +1,42 @@
+# @package _global_
+# Case 3: train MULTIPLE models via a sweep, WITHOUT LoRA (full fine-tune).
+# Sweeps across whole base-model configs with the adapter off. Select with:
+#   bash egs/run.sh mmtc_fr-en_sft1_fullft_modelsweep
+#
+# lora.enabled=false requires a non-quantized base, so basemodel.load_in_4bit=false is
+# set here -- and it SURVIVES the per-job basemodel group swap (verified), so every
+# swept model is loaded full-precision for full fine-tuning.
+#
+# !! HARDWARE WARNING !! The grid includes qwen2.5-7b, whose FULL fine-tune (weights +
+# fp32 optimizer state) will almost certainly OOM a single GPU. The config is valid; the
+# 7B job is the hardware-bound part. Drop 7B from the grid (leave only 1.5B) unless you
+# have the memory, or add more small base-model configs to sweep over.
+defaults:
+  - override /basemodel: qwen2.5-1.5b
+  - override /data: mmtc_fr-en
+  - override /train: qlora_default
+  - override /lora: default
+  - override /decode: default
+  - override /hydra/launcher: slurm_fullft   # more host RAM + walltime for full FT
+
+experiment: mmtc_fr-en_sft1_fullft_modelsweep
+
+lora:
+  enabled: false          # full fine-tune: no adapter
+
+basemodel:
+  load_in_4bit: false     # required when lora.enabled=false; survives the basemodel sweep
+
+train:
+  # Full-FT LR (see mmtc_fr-en_sft1_fullft): 2e-5, not qlora_default's LoRA-tuned 2e-4.
+  learning_rate: 2e-5
+  seed: 37
+
+wandb:
+  group: mmtc_fr-en_sft1_fullft_modelsweep
+  tags: [sft, fr-en, fullft]
+
+sweep:
+  enabled: true
+  params:
+    basemodel: "qwen2.5-7b,qwen2.5-1.5b"   # 7B full-FT will OOM a single GPU (see warning)

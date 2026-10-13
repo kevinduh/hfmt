@@ -59,8 +59,12 @@ done
 
 sweep_axes=$(python -m hfmt.sweep_probe "${experiment}" ${probe_overrides})
 
+# The launcher is a selectable component now (feature 04): each experiment SELECTS one
+# in its defaults list (`- override /hydra/launcher: slurm` or a preset like
+# slurm_fullft), so we no longer force it here. Override on the CLI if needed, e.g.
+# hydra/launcher=local. (An experiment that selects none falls back to Hydra's local
+# `basic` launcher -- committed experiments always select a slurm profile.)
 python -m hfmt.sft_translation --multirun \
     +experiment="${experiment}" \
-    hydra/launcher=slurm \
     ${sweep_axes} \
     "$@"

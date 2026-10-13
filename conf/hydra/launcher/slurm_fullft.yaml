@@ -1,0 +1,10 @@
+# Slurm profile for FULL fine-tunes (feature 04). Extends the base slurm profile and
+# only bumps the deltas: full fine-tuning trains all weights (fp32 optimizer state) and
+# saves full-size checkpoints, so it needs more host RAM and walltime headroom than QLoRA.
+# Select it from an experiment's defaults list:
+#   - override /hydra/launcher: slurm_fullft
+defaults:
+  - slurm            # inherit the base QLoRA slurm profile; override only what differs
+
+timeout_min: 720     # 12h: full-FT runtimes aren't characterized yet; trim once they are
+mem_gb: 64           # more host RAM for full-weight checkpointing + dataloading

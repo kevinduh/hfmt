@@ -12,6 +12,7 @@ defaults:
   - override /train: qlora_default
   - override /lora: default
   - override /decode: default
+  - override /hydra/launcher: slurm
 
 experiment: mmtc_fr-en_sft1
 

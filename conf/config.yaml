@@ -13,6 +13,12 @@ defaults:
   - lora: default
   - decode: default
   - _self_                # this file's values win over the groups
+  # The launcher is NOT defaulted here (feature 04): a primary-config launcher default
+  # would block an experiment from selecting its own (Hydra ignores the experiment's
+  # group override once the primary sets one). Instead every experiment SELECTS a
+  # launcher in its own defaults list (`- override /hydra/launcher: slurm` or a preset
+  # like slurm_fullft), keeping the experiment a flat list of component choices. Absent
+  # any selection Hydra falls back to its built-in `basic` (local) launcher.
   # wandb is not a config group anymore (feature 04): its defaults come from the
   # WandbConfig dataclass and experiments set wandb.* inline.
 

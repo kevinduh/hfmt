@@ -2,10 +2,15 @@
 # Experiment preset reproducing egs/mmtc/fr-en/sft1.sh exactly.
 # Select with:  +experiment=mmtc_fr-en_sft1
 # (Hydra "experiment" pattern: this file overrides group choices + values.)
+#
+# Lives under egs/ (feature 04); Hydra finds it via hydra.searchpath in conf/config.yaml.
+# An experiment is a collection of atomistic components (basemodel/data/train/lora/decode)
+# plus inline wandb and (feature 04) an inline sweep block added in group E.
 defaults:
-  - override /model: qwen2.5-7b
+  - override /basemodel: qwen2.5-7b
   - override /data: mmtc_fr-en
   - override /train: qlora_default
+  - override /lora: default
   - override /decode: default
 
 experiment: mmtc_fr-en_sft1

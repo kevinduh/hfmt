@@ -68,12 +68,15 @@ completed. Commit per group using `04_config_structure_change-<phase>: <summary>
 
 ## D — Move experiments to `egs/`
 
-- [ ] Create `egs/experiment/`.
-- [ ] Migrate `conf/experiment/mmtc_fr-en_sft1.yaml` → `egs/experiment/`; rewrite
-      `override /model:` → `override /basemodel:` and add `override /lora: default`.
-- [ ] Delete `conf/experiment/`.
-- [ ] Verify `+experiment=mmtc_fr-en_sft1 --cfg job` resolves via searchpath both
-      through `run.sh` and direct `python -m hfmt.sft_translation`.
+- [x] Create `egs/experiment/`.
+- [x] Migrate `conf/experiment/mmtc_fr-en_sft1.yaml` → `egs/experiment/` (`git mv`);
+      rewrite `override /model:` → `override /basemodel:` and add
+      `override /lora: default` + `override /decode: default`.
+- [x] Delete `conf/experiment/` (now empty).
+- [x] Verify `+experiment=mmtc_fr-en_sft1 --cfg job` resolves via searchpath (7B
+      base, seed 37, wandb group/tags applied). NOTE: `--multirun` + `--cfg` can't be
+      combined (Hydra CLI rule); `--multirun` doesn't change `+experiment=`
+      resolution, so real multirun launch is deferred to integration (needs deps/Slurm).
 
 ## E — Inline wandb + the sweep toggle
 

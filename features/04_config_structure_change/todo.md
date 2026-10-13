@@ -44,25 +44,27 @@ completed. Commit per group using `04_config_structure_change-<phase>: <summary>
 
 ## C — Code wiring + full-FT path (`hfmt/sft_translation.py`)
 
-- [ ] Repoint base-model reads to `cfg.basemodel.*` (checkpoint, pretrain, bnb at
-      ~372–383).
-- [ ] Repoint LoRA reads to `cfg.lora.*` (lora_target at ~389–399; r/alpha/dropout
-      at ~401–406).
-- [ ] Make quantization conditional on `cfg.basemodel.load_in_4bit`: build + pass
-      `BitsAndBytesConfig` only then; otherwise load the model in
-      `getattr(torch, cfg.basemodel.dtype)`.
-- [ ] Gate the LoRA block on `cfg.lora.enabled`:
-      - enabled → `prepare_model_for_kbit_training` + `get_peft_model` +
-        `print_trainable_parameters` (current path).
-      - disabled → skip those; still call `gradient_checkpointing_enable()` (when
-        configured) and set `model.config.use_cache = False`.
-- [ ] Guard the peft-only `print_trainable_parameters()` so it only runs when LoRA
-      is enabled.
-- [ ] Add the fail-fast guardrail: `lora.enabled=false` **and**
-      `basemodel.load_in_4bit=true` → clear error (QLoRA can't full-FT a frozen
-      quantized base).
-- [ ] Confirm `model.save_pretrained(outdir/model)` works for both adapter and full
-      checkpoints (no code change expected).
+- [x] Repoint base-model reads to `cfg.basemodel.*` (tokenizer at 326; checkpoint,
+      pretrain, bnb in the Model Configuration block).
+- [x] Repoint LoRA reads to `cfg.lora.*` (lora_target branch; r/alpha/dropout).
+- [x] Make quantization conditional on `cfg.basemodel.load_in_4bit`: build + pass
+      `BitsAndBytesConfig` only then; otherwise load the model with
+      `torch_dtype=getattr(torch, cfg.basemodel.dtype)`.
+- [x] Gate the LoRA block on `cfg.lora.enabled`:
+      - enabled → `get_peft_model` (+ `prepare_model_for_kbit_training` only on the
+        quantized path) + `print_trainable_parameters`.
+      - disabled → skip those; `gradient_checkpointing_enable()` (when configured)
+        now runs before the branch for both paths; set `model.config.use_cache=False`.
+- [x] Guard the peft-only `print_trainable_parameters()` (inside the `lora.enabled`
+      branch).
+- [x] Add the fail-fast guardrail: `lora.enabled=false` **and**
+      `basemodel.load_in_4bit=true` → clear error.
+- [x] Confirm `model.save_pretrained(outdir/model)` works for both (PeftModel saves
+      an adapter; AutoModelForCausalLM saves full weights) — no code change.
+- [x] Verify: no `cfg.model` refs remain; `py_compile` passes; real `--cfg job`
+      composes for default and the full-FT override (`lora.enabled=false
+      basemodel.load_in_4bit=false`). (Runtime guardrail/full-FT branch not exercised
+      — needs GPU + model download.)
 
 ## D — Move experiments to `egs/`
 

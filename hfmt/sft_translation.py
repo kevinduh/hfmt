@@ -323,7 +323,7 @@ def main(cfg: Config) -> None:
     instruction_prefix = cfg.data.instruction
     logging.info(f"instruction: '{instruction_prefix}'")
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model.checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.basemodel.checkpoint)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -369,53 +369,89 @@ def main(cfg: Config) -> None:
     ###################################
     ## Model Configuration
     logging.info(f"======== Model Configuration ========")
-    config = AutoConfig.from_pretrained(cfg.model.checkpoint)
 
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=cfg.model.load_in_4bit,
-        bnb_4bit_use_double_quant=cfg.model.bnb_4bit_use_double_quant,
-        bnb_4bit_quant_type=cfg.model.bnb_4bit_quant_type,
-        bnb_4bit_compute_dtype=getattr(torch, cfg.model.bnb_4bit_compute_dtype),
-    )
+    # Full fine-tune requires a non-quantized base (feature 04): a 4-bit frozen base
+    # is not trainable end-to-end, so QLoRA (load_in_4bit) and "turn LoRA off" are
+    # mutually exclusive. Fail fast with a clear message instead of a confusing error
+    # deep inside PEFT/bitsandbytes.
+    if not cfg.lora.enabled and cfg.basemodel.load_in_4bit:
+        logging.error(
+            "lora.enabled=false requires basemodel.load_in_4bit=false: a 4-bit "
+            "quantized base is frozen and cannot be fully fine-tuned. Set "
+            "basemodel.load_in_4bit=false for a full fine-tune, or keep LoRA enabled."
+        )
+        exit(1)
 
-    if cfg.model.pretrain == True:
+    config = AutoConfig.from_pretrained(cfg.basemodel.checkpoint)
+
+    # Quantization is optional now: build the bitsandbytes config only for the QLoRA
+    # (4-bit) path; for a full fine-tune load the base model in basemodel.dtype.
+    if cfg.basemodel.load_in_4bit:
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=cfg.basemodel.load_in_4bit,
+            bnb_4bit_use_double_quant=cfg.basemodel.bnb_4bit_use_double_quant,
+            bnb_4bit_quant_type=cfg.basemodel.bnb_4bit_quant_type,
+            bnb_4bit_compute_dtype=getattr(torch, cfg.basemodel.bnb_4bit_compute_dtype),
+        )
+    else:
+        bnb_config = None
+
+    if cfg.basemodel.pretrain == True:
         logging.info("Fine-tuning a pretrained model")
-        model = AutoModelForCausalLM.from_pretrained(cfg.model.checkpoint, quantization_config=bnb_config).to(device)
+        if bnb_config is not None:
+            model = AutoModelForCausalLM.from_pretrained(
+                cfg.basemodel.checkpoint, quantization_config=bnb_config
+            ).to(device)
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                cfg.basemodel.checkpoint, torch_dtype=getattr(torch, cfg.basemodel.dtype)
+            ).to(device)
     else:
         logging.info("Training from scratch with CausalLM is not supported")
         exit(1)
 
-    # TODO: fix, this is brittle
-    if cfg.model.lora_target == "qv":
-        target_modules = ["q_proj", "v_proj"]
-    elif cfg.model.lora_target == "all-linear":
-        target_modules = "all-linear"
-    elif cfg.model.lora_target == "attention":
-        target_modules = ["q_proj", "v_proj", "k_proj", "out_proj"]
-    elif cfg.model.lora_target == "mlp":
-        target_modules = ["up_proj", "down_proj"]
-    else:
-        logging.error(f"Invalid qlora_target: {cfg.model.lora_target}. Must be 'attention' or 'all'.")
-        exit(1)
-
-    lora_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM, # type of task to train on
-        inference_mode=False, # set to False for training
-        r=cfg.model.lora_r, # dimension of the smaller matrices
-        lora_alpha=cfg.model.lora_alpha, # scaling factor
-        lora_dropout=cfg.model.lora_dropout, # dropout of LoRA layers,
-        target_modules=target_modules,
-        #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
-        #bias="none"
-    )
-
     if cfg.train.gradient_checkpointing:
         model.gradient_checkpointing_enable()
-    model = prepare_model_for_kbit_training(model)
-    model = get_peft_model(model, lora_config)
-    model.config.use_cache = False
-    logging.info(f"QLoRA:")
-    model.print_trainable_parameters()
+
+    if cfg.lora.enabled:
+        # TODO: fix, this is brittle
+        if cfg.lora.lora_target == "qv":
+            target_modules = ["q_proj", "v_proj"]
+        elif cfg.lora.lora_target == "all-linear":
+            target_modules = "all-linear"
+        elif cfg.lora.lora_target == "attention":
+            target_modules = ["q_proj", "v_proj", "k_proj", "out_proj"]
+        elif cfg.lora.lora_target == "mlp":
+            target_modules = ["up_proj", "down_proj"]
+        else:
+            logging.error(
+                f"Invalid lora_target: {cfg.lora.lora_target}. "
+                "Must be one of: qv | all-linear | attention | mlp."
+            )
+            exit(1)
+
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM, # type of task to train on
+            inference_mode=False, # set to False for training
+            r=cfg.lora.lora_r, # dimension of the smaller matrices
+            lora_alpha=cfg.lora.lora_alpha, # scaling factor
+            lora_dropout=cfg.lora.lora_dropout, # dropout of LoRA layers,
+            target_modules=target_modules,
+            #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
+            #bias="none"
+        )
+
+        # Only the QLoRA (quantized) path needs k-bit preparation before adapters.
+        if cfg.basemodel.load_in_4bit:
+            model = prepare_model_for_kbit_training(model)
+        model = get_peft_model(model, lora_config)
+        model.config.use_cache = False
+        logging.info("LoRA adapter enabled:")
+        model.print_trainable_parameters()  # PEFT-only; guarded by lora.enabled
+    else:
+        # Full fine-tune: no adapter, every base-model parameter is trainable.
+        model.config.use_cache = False
+        logging.info("LoRA disabled: fully fine-tuning the base model.")
     logging.info(f"tokenizer pad/bos/eos: {tokenizer.pad_token_id} {tokenizer.bos_token_id} {tokenizer.eos_token_id}")
     logging.info(f"model.config         : {model.config.pad_token_id} {model.config.bos_token_id} {model.config.eos_token_id}")
     logging.info(f"generation.config    : {model.generation_config.pad_token_id} {model.generation_config.bos_token_id} {model.generation_config.eos_token_id}")

@@ -302,7 +302,11 @@ def _label_pairs(override_dirname):
         key = key.lstrip("+~")
         if key in ("experiment", "sweep") or key.startswith(("sweep.", "hydra")):
             continue
-        if key.startswith("data.") or "/" in val:  # drop data *paths*, keep data=<name>
+        # Drop data *paths* and slash-bearing tokens: a dotted data.<leaf>, any "/"-bearing
+        # value, and any "/"-bearing KEY. The last covers the nested experiment selector
+        # (+<dataset>/<lang>=<name>, e.g. +mmtc/fr-en=sft1) introduced in feature 06, which is
+        # a structural choice, not a hyperparameter, so it must not pollute the label.
+        if key.startswith("data.") or "/" in val or "/" in key:
             continue
         leaf = key.rsplit(".", 1)[-1]  # lora.lora_r -> lora_r; basemodel -> basemodel
         pairs.append(f"{_strict(leaf)}-{_strict(val)}")
@@ -319,12 +323,14 @@ def build_run_label(override_dirname, job_num="0", experiment=""):
     and the W&B run *name* (``derive_run_identity``), so disk and W&B line up. For each override:
 
     - drop structural selectors (``experiment``/``sweep``/``sweep.*``/``hydra*``) -- no
-      hyperparameter info (``sweep.enabled`` may ride along as a passthrough override);
-    - **confidentiality (CLAUDE.md): never let a data *path* into the dir/W&B name.**
-      A bare ``data=<option>`` group choice is only a config-file *name* (not content,
-      not a path), so it is kept -- sweeping across whole data configs is labelled by
-      file name (feature 04). But a dotted ``data.<leaf>`` override (e.g.
-      ``data.data_root=/path``) or any ``/``-bearing value is dropped;
+      hyperparameter info (``sweep.enabled`` may ride along as a passthrough override). This
+      includes the nested experiment group selector (feature 06): the experiment is chosen as
+      ``+<dataset>/<lang>=<name>`` (e.g. ``+mmtc/fr-en=sft1``), whose KEY contains ``/`` and is
+      dropped by the slash rule below -- it is a structural choice, not a hyperparameter;
+    - **confidentiality (CLAUDE.md): never let a data *path* into the dir/W&B name.** A dotted
+      ``data.<leaf>`` override (e.g. ``data.data_root=/path``) or any ``/``-bearing value *or
+      key* is dropped -- data lives inline on the experiment now (feature 06), so there is no
+      ``data=<name>`` group choice to keep;
     - keep the leaf for dotted leaf-value overrides (``lora.lora_r`` -> ``lora_r``,
       ``train.learning_rate`` -> ``learning_rate``) and keep the group name for a
       whole-component group choice (``basemodel=qwen2.5-7b`` -> ``basemodel``), so the

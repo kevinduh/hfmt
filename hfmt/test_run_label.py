@@ -88,6 +88,22 @@ def test_structural_selectors_dropped():
     assert S.build_run_label(tok) == "lora_r-8"
 
 
+def test_nested_experiment_selector_dropped():
+    # Feature 06: the experiment is chosen as a nested group +<dataset>/<lang>=<name>, whose KEY
+    # contains '/'. It is a structural choice, not a hyperparameter, so it must be dropped (else
+    # it would leak into the run-dir / W&B name and flip is_sweep for a plain run).
+    assert S._label_pairs("+mmtc/fr-en=sft1") == []
+    assert S._label_pairs("+mmtc/fr-en=sft1,train.seed=37,lora.lora_r=8") == ["seed-37", "lora_r-8"]
+    # dropped at any nesting depth
+    assert S._label_pairs("+mmtc/fr-en/variant=sft1,train.learning_rate=2e-4") == ["learning_rate-2e-4"]
+
+
+def test_nested_selector_plain_run_falls_back_to_experiment():
+    # A plain run via run.sh (nested selector only, no swept axes) has no informative tokens,
+    # so the label falls back to the experiment name -- dir/W&B name stay meaningful.
+    assert S.build_run_label("+mmtc/fr-en=sft1", experiment="mmtc_fr-en_sft1") == "mmtc_fr-en_sft1"
+
+
 def test_append_and_tilde_prefixes_stripped():
     # '+'/'~' are stripped before matching, so '+experiment' is still recognised and dropped,
     # while a real '~'-deleted param override is kept.

@@ -41,51 +41,51 @@ not in the training script or a per-experiment shell script.
 * `conf/config.yaml` — top-level defaults + Hydra settings (output dir, launcher, and `hydra.searchpath` pointing at `egs/`).
 * `conf/basemodel/` — the pretrained base model: checkpoint, 4-bit quantization, load `dtype`.
 * `conf/lora/` — the LoRA adapter (`enabled`/`r`/`alpha`/`dropout`/`target`). Set `lora.enabled=false` (with `basemodel.load_in_4bit=false`) to fully fine-tune the base model instead.
-* `conf/data/` — train/dev/test paths (a YAML manifest) + instruction prefix. **Paths only, never data content.**
 * `conf/train/` — learning rate, schedule, steps, batch size, early stopping, etc.
 * `conf/decode/` — generation knobs (`max_length`, `max_new_tokens`, `num_beams`, ...).
 * `conf/hydra/launcher/` — launcher profiles (where/how to run): `slurm` (the QLoRA baseline), `slurm_fullft` (more host RAM + walltime for full fine-tunes, extends `slurm`), `local`. These are selectable components too — each experiment picks one.
-* `egs/experiment/<name>.yaml` — a preset composing the components above into one named experiment, plus inline `wandb` and `sweep` blocks (the successor to the old per-experiment `.sh` recipes). Found via `hydra.searchpath`.
+* `egs/<dataset>/<src>-<trg>/<name>.yaml` — a preset composing the components above into one named experiment, plus an inline `data` block, `wandb`, and `sweep` (feature 06; the successor to the old `egs/experiment/` layout and the per-experiment `.sh` recipes). Selected as the nested Hydra group `+<dataset>/<src>-<trg>=<name>`, found via `hydra.searchpath`.
+* `egs/<dataset>/<src>-<trg>/dataset.yaml` — a per-lang-pair **template** giving the train/dev/test file paths with `$DATA_ROOT`/`$SRC`/`$TRG` placeholders, inflated in code from the experiment's `data.data_root`/`src`/`trg` (feature 06, replacing the old `conf/data` group). **Paths only, never data content.** `test` is optional — if its files are absent, the final held-out inference pass is skipped.
 
-An experiment is a flat list of component *selections* — base model, data, train, lora, decode, **and launcher** — so the end user reads only choices, never buried settings; the complex presets live in their own `conf/` files. Every experiment selects a launcher (`- override /hydra/launcher: slurm`); one that selects none falls back to Hydra's local `basic` launcher (it will not submit to Slurm).
+An experiment is a flat list of component *selections* — base model, train, lora, decode, **and launcher** — plus an inline `data` block (`data_root`/`src`/`trg`/`instruction`), so the end user reads only choices, never buried settings; the complex presets live in their own `conf/` files. Every experiment selects a launcher (`- override /hydra/launcher: slurm`); one that selects none falls back to Hydra's local `basic` launcher (it will not submit to Slurm).
 
 W&B settings are no longer a `conf/` group: their defaults come from the `WandbConfig` dataclass and each experiment sets `wandb.group`/`wandb.tags` inline. The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
 
 ### Running an experiment
 
-Set `HFMT_ROOT`, then launch by experiment name. Run from a **login node** — the submitit launcher submits the Slurm job for you (do **not** `sbatch` this script):
+Set `HFMT_ROOT`, then launch by the experiment's path under `egs/` (the `.yaml` file; a trailing `.yaml` is optional). Run from a **login node** — the submitit launcher submits the Slurm job for you (do **not** `sbatch` this script):
 
 ```bash
 export HFMT_ROOT=`pwd`
-bash egs/run.sh mmtc_fr-en_sft1
+bash egs/run.sh mmtc/fr-en/sft1.yaml
 ```
 
 Override any parameter on the command line (forwarded to Hydra):
 
 ```bash
-bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=16 train.learning_rate=2e-5
+bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=16 train.learning_rate=2e-5
 ```
 
-Preview the fully-composed config without running anything:
+Preview the fully-composed config without running anything (pass the nested selector + the dataset dir yourself when not going through `run.sh`):
 
 ```bash
-python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1 --cfg job
+python hfmt/sft_translation.py +mmtc/fr-en=sft1 data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en --cfg job
 ```
 
 Run in-process instead of submitting (e.g. when already on a GPU node):
 
 ```bash
-python hfmt/sft_translation.py +experiment=mmtc_fr-en_sft1
+python hfmt/sft_translation.py +mmtc/fr-en=sft1 data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en
 ```
 
 ### Adding a new experiment
 
-Add a file `egs/experiment/<name>.yaml` (copy `mmtc_fr-en_sft1.yaml`), select your components (`override /basemodel:`, `/data:`, `/lora:`, `/hydra/launcher:`, ...), set any value overrides, then `bash egs/run.sh <name>`. No new shell script needed. Remember to select a launcher (`- override /hydra/launcher: slurm`, or `slurm_fullft` for a full fine-tune). To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
+Add a file `egs/<dataset>/<src>-<trg>/<name>.yaml` (copy `egs/mmtc/fr-en/sft1.yaml`) next to a `dataset.yaml` template, select your components (`override /basemodel:`, `/lora:`, `/hydra/launcher:`, ...), fill the inline `data` block (`data_root`/`src`/`trg`/`instruction`; `dataset_file` defaults to `dataset.yaml`), set any value overrides, then `bash egs/run.sh <dataset>/<src>-<trg>/<name>.yaml`. No new shell script needed. Remember to select a launcher (`- override /hydra/launcher: slurm`, or `slurm_fullft` for a full fine-tune). To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
 
-Outputs (checkpoints, logs, the trained adapter under `model/`, and predictions `eval.pred.trg` / `dev.step_*.pred`) land under `outputs/<experiment>/<timestamp>/`, and the W&B run is named/grouped by the experiment and linked to that output dir. Score the predictions with:
+Outputs (checkpoints, logs, the trained adapter under `model/`, and predictions `eval.pred.trg` / `dev.step_*.pred`) land under `egs/<dataset>/<src>-<trg>/outputs/<experiment>/<timestamp>/` (feature 06; gitignored), and the W&B run is named/grouped by the experiment and linked to that output dir. Score the predictions with:
 
 ```bash
-python analysis/run_sacrebleu.py --ref <ref.trg> --hyp outputs/<experiment>/<timestamp>/eval.pred.trg
+python analysis/run_sacrebleu.py --ref <ref.trg> --hyp egs/<dataset>/<src>-<trg>/outputs/<experiment>/<timestamp>/eval.pred.trg
 ```
 
 ### Sweeping parameters
@@ -95,8 +95,8 @@ A sweep runs an experiment over multiple parameter values, fanning out into **on
 **Inline, toggleable grid (committed with the experiment)** — each experiment carries a `sweep: {enabled, params}` block. Turn it on with the flag; off (the default) is a single run:
 
 ```bash
-bash egs/run.sh mmtc_fr-en_sft1 sweep.enabled=true     # fan out the experiment's grid
-bash egs/run.sh mmtc_fr-en_sft1                         # single run (sweep off)
+bash egs/run.sh mmtc/fr-en/sft1.yaml sweep.enabled=true   # fan out the experiment's grid
+bash egs/run.sh mmtc/fr-en/sft1.yaml                       # single run (sweep off)
 ```
 
 `egs/run.sh` reads the block via `hfmt/sweep_probe.py` and forwards the axes to the sweeper (passing `hydra.sweeper.params.*` on the CLI is rejected by Hydra, so the probe emits bare `<axis>=<csv>` overrides). Each `params` axis is an ordinary Hydra override — a leaf value **or a whole component file**:
@@ -110,12 +110,12 @@ sweep:
     basemodel: "qwen2.5-7b,qwen2.5-1.5b"   # sweep across entire base-model configs
 ```
 
-Runs are labelled by the swept values — and for a component-file axis, by the **selected YAML file name** (e.g. `basemodel-qwen2.5-7b`), not the value inside it. See `egs/experiment/mmtc_fr-en_sft1.yaml` (coarse grid, off by default) and `egs/experiment/mmtc_fr-en_sft1_refine1.yaml` (a refinement sweep, on by default).
+Runs are labelled by the swept values — and for a component-file axis, by the **selected YAML file name** (e.g. `basemodel-qwen2.5-7b`), not the value inside it. See `egs/mmtc/fr-en/sft1.yaml` (coarse grid, off by default) and `egs/mmtc/fr-en/sft1_refine1.yaml` (a refinement sweep, on by default).
 
 **Ad-hoc** — pass comma-separated values on the CLI; Hydra takes the cross-product. This works independently of the inline block (no probe involved):
 
 ```bash
-bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=8,16,32 train.learning_rate=2e-5,2e-4
+bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=8,16,32 train.learning_rate=2e-5,2e-4
 ```
 
 The override grammar also supports `range(1,4)`, `choice(a,b)`, and `glob(*)`, and you can sweep a whole config group (e.g. `basemodel=qwen2.5-1.5b,qwen2.5-7b`).

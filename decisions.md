@@ -194,3 +194,50 @@ the sweep branch was the lone holdout.
   sole data-path chokepoint (`build_run_label`). No data content enters the name.
 - **Trade-off.** Names get longer and the prefix is redundant inside a single group's view, but
   the flat cross-experiment list — the view that was broken — is now unambiguous.
+
+---
+
+## Dataset/lang directory hierarchy + inline data (feature 06_hydra_config_directory_hierarchy)
+
+**Decision:** Experiments move from the flat `egs/experiment/<name>.yaml` into
+`egs/<dataset>/<src>-<trg>/<name>.yaml`, each beside a per-lang-pair `dataset.yaml` **template**.
+The `conf/data` config group is removed: an experiment now declares its data **inline**
+(`data.data_root`/`src`/`trg`/`instruction`) and names the template (`data.dataset_file`, default
+`dataset.yaml`); the template's `$DATA_ROOT`/`$SRC`/`$TRG` placeholders are **inflated in code**
+into absolute `train`/`dev`/`test` paths. Run outputs move under `egs/<dataset>/<src>-<trg>/outputs/`.
+
+**Context:** A flat `egs/experiment/` got cluttered across datasets and language pairs, and the
+data config was a separate group file disconnected from the experiment that used it. Embedding
+the dataset/lang in the directory and the data knobs in the experiment makes each recipe
+self-contained and self-describing.
+
+- **Nested-group addressing, unchanged searchpath (verified by a compose spike).** `egs/run.sh`
+  takes the experiment's `egs`-relative `.yaml` path, splits it into the directory (a nested
+  Hydra config group) and basename (the option), and selects `+<dataset>/<src>-<trg>=<name>`
+  against the existing `hydra.searchpath: [file://$HFMT_ROOT/egs]`. No per-run searchpath
+  rewrite; `run.sh` stays `dirname`/`basename` and depth-agnostic. **Why not keep a fixed
+  `experiment` group:** that would force an `egs/experiment/<dataset>/<lang>/` path, not the
+  requested `egs/<dataset>/<lang>/`. The one cost is that the selector key now contains `/`, so
+  `_label_pairs` drops `/`-bearing keys (a one-line, symmetric extension of the existing
+  `/`-in-value rule) to keep the structural selector out of run-dir/W&B names and the `is_sweep`
+  check. `run.sh` injects `data.dataset_dir` (the experiment's own dir) and
+  `output_root=egs/<group>/outputs`.
+- **Template inflated in code, not via OmegaConf interpolation.** `dataset.yaml` stays a plain
+  shell-`$VAR` template (not a Hydra config). Inflation parses the YAML **first**, then
+  substitutes only in string *values* — so a stray `$`/`${...}` in a template comment can't break
+  it (found and fixed during migration). Inflated paths are written back into `cfg.data` so the
+  logged/resolved config carries real paths (paths are W&B-safe; only data *content* is forbidden).
+- **`test` split is optional.** When the `test` block is absent or its source file(s) don't exist
+  on disk, the end-of-run held-out inference pass is skipped (no error). `train`/`dev` stay
+  required (`dev` drives `eval_loss`/early-stopping). The `evalset` terminology is retired in
+  favour of `cfg.data.test.src`.
+- **Validation fails fast.** The named template must exist in the experiment's directory
+  (`dataset_file` a bare basename ending in `.yaml`); this is checked authoritatively at the start
+  of `main()` and again as a cheap login-node fast-fail in `sweep_probe.py` (before the Slurm
+  submit), so a missing/mistyped template aborts early rather than deep in data loading.
+- **Confidentiality.** Outputs now live inside the tracked `egs/` tree, so `egs/**/outputs/` is
+  gitignored (they hold `*.pred`/`eval.pred.trg` dumps). Only paths + hyperparameters + the
+  instruction string reach W&B, never data content.
+- **Scope.** Only the Hydra SFT workflow (`sft_translation.py`) is migrated; the other
+  (unmigrated) entry points — seq2seq, inference, summarization — keep their plain-manifest/shell
+  recipes.

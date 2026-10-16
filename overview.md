@@ -63,6 +63,12 @@ A YAML manifest (`egs/data/example.template.yaml`) lists `train`/`dev` `src`/`tr
 lists, which are loaded via `datasets.load_dataset("text", ...)`, renamed to `src`/`trg`,
 and column-concatenated. Summarization instead uses JSONL with `text`/`summary` fields.
 
+The **Hydra SFT workflow** (`sft_translation.py`) uses a feature-06 variant: instead of a
+hand-written manifest, each lang-pair has a `egs/<dataset>/<src>-<trg>/dataset.yaml` *template*
+with `$DATA_ROOT`/`$SRC`/`$TRG` placeholders (plus an optional `test` split), inflated in code
+from the experiment's inline `data.data_root`/`src`/`trg`. The other (unmigrated) entry points
+still read a plain manifest. Either way it's the same `load_dataset("text", ...)` loader.
+
 **Why:** matches how bitext is distributed in the MT community; no custom data format to learn.
 
 ### 2.4 Two prompting regimes

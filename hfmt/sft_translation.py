@@ -34,9 +34,9 @@ from omegaconf import OmegaConf
 # which puts hfmt/ on sys.path. If later run as `python -m hfmt.sft_translation`, fall
 # back to the package-qualified name.
 try:
-    from hydra_config import Config, register_configs
+    from hydra_config import Config, DataSplit, register_configs
 except ModuleNotFoundError:
-    from hfmt.hydra_config import Config, register_configs
+    from hfmt.hydra_config import Config, DataSplit, register_configs
 
 # transformers pulls in torch; guard the import so config-only runs (--cfg job) work on
 # a CPU box without the training deps. When absent, the base class is a no-op stand-in
@@ -51,6 +51,110 @@ _startup_log("transformers import complete")
 
 def format_input_prompt(instruction_prefix, content):
     return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
+
+
+def resolve_dataset_template(data_cfg):
+    """Absolute path to the experiment's ``dataset.yaml`` template, validated to exist (feature 06).
+
+    The experiment names the template *file* (``data.dataset_file`` -- a bare basename including
+    the ``.yaml`` suffix); ``egs/run.sh`` injects the *directory* it lives in (``data.dataset_dir``,
+    the experiment's own directory). We fail fast with a clear message when the inputs are
+    malformed or the file is missing, rather than surfacing a confusing error deep in data loading.
+    """
+    if OmegaConf.is_missing(data_cfg, "dataset_dir"):
+        raise ValueError(
+            "data.dataset_dir is unset. egs/run.sh injects it from the experiment's directory; "
+            "a raw `python -m hfmt.sft_translation` run must pass "
+            "data.dataset_dir=<dir containing the dataset template>."
+        )
+    dataset_dir = str(data_cfg.dataset_dir)
+    dataset_file = str(data_cfg.dataset_file)
+    if not dataset_file.endswith(".yaml"):
+        raise ValueError(
+            f"data.dataset_file must name a .yaml template file, got {dataset_file!r}."
+        )
+    if os.path.isabs(dataset_file) or os.path.dirname(dataset_file):
+        raise ValueError(
+            "data.dataset_file must be a bare filename living in data.dataset_dir, not a path, "
+            f"got {dataset_file!r}."
+        )
+    path = os.path.join(dataset_dir, dataset_file)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"dataset template not found: {path} "
+            f"(data.dataset_dir={dataset_dir!r}, data.dataset_file={dataset_file!r}). "
+            "The named template must exist in the experiment's directory."
+        )
+    return path
+
+
+def inflate_dataset_template(template_path, data_root, src, trg):
+    """Parse a ``dataset.yaml`` template, substituting its ``$DATA_ROOT``/``$SRC``/``$TRG`` vars.
+
+    The template is plain text with shell-style ``$VAR`` placeholders (NOT a Hydra config), so we
+    substitute then parse -- consistent with "inflated during dataset creation" (feature 06).
+    Returns ``{split: {"src": [...], "trg": [...]}}`` for the splits present. Paths only, never
+    data content (CLAUDE.md).
+    """
+    from string import Template
+    with open(template_path) as f:
+        raw = f.read()
+    try:
+        inflated = Template(raw).substitute(
+            DATA_ROOT=str(data_root), SRC=str(src), TRG=str(trg)
+        )
+    except KeyError as e:
+        raise ValueError(
+            f"dataset template {template_path} references an unknown placeholder {e}; "
+            "only $DATA_ROOT, $SRC and $TRG are supported."
+        ) from e
+    return yaml.safe_load(inflated)
+
+
+def populate_data_paths(cfg):
+    """Inflate the experiment's dataset template into ``cfg.data.train/dev/test`` (feature 06).
+
+    ``train``/``dev`` are required; ``test`` is optional -- when the template has no ``test`` block
+    or its source file(s) do not exist on disk, ``cfg.data.test`` is left ``None`` and the
+    end-of-run inference pass is skipped. Writes absolute paths (W&B-safe) back into the resolved
+    config. Returns the resolved template path (for logging).
+    """
+    for key in ("data_root", "src", "trg"):
+        if OmegaConf.is_missing(cfg.data, key):
+            raise ValueError(f"data.{key} is required; set it in the experiment yaml.")
+
+    template_path = resolve_dataset_template(cfg.data)
+    splits = inflate_dataset_template(
+        template_path, cfg.data.data_root, cfg.data.src, cfg.data.trg
+    )
+
+    # Assign DataSplit *instances* (not plain dicts): the fields are typed DataSplit, and
+    # OmegaConf struct-validation rejects a bare dict for a structured field (feature 06 R2b).
+    for split in ("train", "dev"):
+        block = splits.get(split) or {}
+        if "src" not in block or "trg" not in block:
+            raise ValueError(
+                f"dataset template {template_path} is missing a required "
+                f"'{split}' src/trg block."
+            )
+        cfg.data[split] = DataSplit(src=list(block["src"]), trg=list(block["trg"]))
+
+    test = splits.get("test") or {}
+    test_src = list(test.get("src", []))
+    test_trg = list(test.get("trg", []))
+    if test_src and all(os.path.isfile(p) for p in test_src):
+        cfg.data.test = DataSplit(src=test_src, trg=test_trg)
+    else:
+        cfg.data.test = None
+        if test_src:
+            logging.info(
+                "Test source files not found (%s); skipping the final inference pass.", test_src
+            )
+        else:
+            logging.info(
+                "No test split in the dataset template; skipping the final inference pass."
+            )
+    return template_path
 
 
 def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, max_length=128, max_new_tokens=128, num_beams=1, do_sample=False, batch_size=16, text_field='text'):
@@ -220,7 +324,7 @@ def build_run_label(override_dirname, job_num="0", experiment=""):
       A bare ``data=<option>`` group choice is only a config-file *name* (not content,
       not a path), so it is kept -- sweeping across whole data configs is labelled by
       file name (feature 04). But a dotted ``data.<leaf>`` override (e.g.
-      ``data.train_yaml=/path``) or any ``/``-bearing value is dropped;
+      ``data.data_root=/path``) or any ``/``-bearing value is dropped;
     - keep the leaf for dotted leaf-value overrides (``lora.lora_r`` -> ``lora_r``,
       ``train.learning_rate`` -> ``learning_rate``) and keep the group name for a
       whole-component group choice (``basemodel=qwen2.5-7b`` -> ``basemodel``), so the
@@ -351,6 +455,12 @@ def main(cfg: Config) -> None:
 
     logging.info("Entered main() %.1fs after process start (module import + Hydra setup).",
                  time.perf_counter() - _STARTUP_T0)
+
+    # Inflate the experiment's dataset.yaml template into cfg.data.train/dev/test (feature 06)
+    # BEFORE logging/W&B so the resolved config carries real (W&B-safe) paths. test is optional.
+    dataset_template = populate_data_paths(cfg)
+    logging.info("Inflated dataset template: %s", dataset_template)
+
     logging.info("Resolved config:\n%s", OmegaConf.to_yaml(cfg))
     os.environ["WANDB_PROJECT"] = cfg.wandb.project
 
@@ -395,12 +505,13 @@ def main(cfg: Config) -> None:
         return {"prompt": prompt, "completion": completion}
 
 
-    def get_data(train_yamlfile):
-        with open(train_yamlfile) as F:
-            train_yaml = yaml.safe_load(F)
-        logging.info(f"Loading data... {train_yaml}")
-        d_src = load_dataset("text", data_files={"train":train_yaml["train"]["src"], "dev":train_yaml["dev"]["src"]}, streaming=False).rename_column("text", "src")
-        d_trg = load_dataset("text", data_files={"train":train_yaml["train"]["trg"], "dev":train_yaml["dev"]["trg"]}, streaming=False).rename_column("text", "trg")
+    def get_data():
+        # train/dev src+trg file lists were inflated from the dataset template into cfg.data
+        # (feature 06); convert the OmegaConf lists to plain lists for datasets.load_dataset.
+        train, dev = cfg.data.train, cfg.data.dev
+        logging.info("Loading data... train.src=%s dev.src=%s", list(train.src), list(dev.src))
+        d_src = load_dataset("text", data_files={"train":list(train.src), "dev":list(dev.src)}, streaming=False).rename_column("text", "src")
+        d_trg = load_dataset("text", data_files={"train":list(train.trg), "dev":list(dev.trg)}, streaming=False).rename_column("text", "trg")
         data = DatasetDict({"train": concatenate_datasets([d_src['train'], d_trg['train']], axis=1),
                             "dev": concatenate_datasets([d_src['dev'], d_trg['dev']], axis=1)})
 
@@ -412,7 +523,7 @@ def main(cfg: Config) -> None:
     ## Load data
     logging.info(f"======== Loading data ========")
     start_time = time.time()
-    D = get_data(cfg.data.train_yaml)
+    D = get_data()
     logging.info(D)
     logging.info(f"Example data: {D['train'][0]}")
     end_time = time.time()
@@ -596,11 +707,15 @@ def main(cfg: Config) -> None:
 #    logging.info("DONE FOR NOW"); exit(0)
 
     ###################################
-    ## Inference on Eval set
+    ## Inference on the held-out test set (optional -- feature 06)
     logging.info(f"======== Testing ========")
-    eval_data = load_dataset("text", data_files=cfg.data.evalset, streaming=False, split="train")
-    #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(outdir,"eval.pred.trg"), device)
-    inference_on_eval_data(tokenizer, model, eval_data, os.path.join(outdir,"eval.pred.trg"), device, instruction_prefix, max_length=cfg.decode.max_length, max_new_tokens=cfg.decode.max_new_tokens, num_beams=cfg.decode.num_beams, do_sample=cfg.decode.do_sample, batch_size=cfg.decode.batch_size)
+    if cfg.data.test is not None:
+        test_src = list(cfg.data.test.src)
+        logging.info("Decoding held-out test source: %s", test_src)
+        test_data = load_dataset("text", data_files=test_src, streaming=False, split="train")
+        inference_on_eval_data(tokenizer, model, test_data, os.path.join(outdir,"eval.pred.trg"), device, instruction_prefix, max_length=cfg.decode.max_length, max_new_tokens=cfg.decode.max_new_tokens, num_beams=cfg.decode.num_beams, do_sample=cfg.decode.do_sample, batch_size=cfg.decode.batch_size)
+    else:
+        logging.info("No test set available -- skipping the final inference pass (feature 06).")
 
     # Save the trained adapter inside the run dir (feature 03_output_wandb_align) so one run ==
     # one self-contained directory. Was a sibling ``outdir + "_b"``; now ``<run_dir>/model``.

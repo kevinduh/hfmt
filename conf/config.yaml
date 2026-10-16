@@ -8,7 +8,9 @@
 defaults:
   - base_config           # structured schema (validates everything below)
   - basemodel: qwen2.5-1.5b
-  - data: mmtc_fr-en
+  # No `data` group (feature 06): the conf/data group is gone. An experiment declares its data
+  # inline (data_root/src/trg + a dataset.yaml template); defaults come from the DataConfig
+  # dataclass. Paths are inflated from the template in code (hfmt/sft_translation.py).
   - train: qlora_default
   - lora: default
   - decode: default

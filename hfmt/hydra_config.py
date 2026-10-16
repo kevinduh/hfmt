@@ -68,17 +68,46 @@ class LoraConfig:
 
 
 @dataclass
-class DataConfig:
-    """Parallel-text data. Paths only — never data content."""
+class DataSplit:
+    """Source/target file lists for one split (post-inflation absolute paths).
 
-    src_lang: str = "fr"
-    trg_lang: str = "en"
-    # YAML manifest with train/dev src/trg file lists (see egs/data/*.yaml).
-    train_yaml: str = MISSING
-    # Eval source text (one sentence per line) to decode at the end.
-    evalset: str = MISSING
+    Mirrors one ``train``/``dev``/``test`` block of the ``dataset.yaml`` template once its
+    ``$DATA_ROOT``/``$SRC``/``$TRG`` placeholders are inflated (feature 06). Lists (not scalars)
+    because ``datasets.load_dataset("text", data_files=...)`` takes a list of files per split.
+    """
+
+    src: List[str] = field(default_factory=list)
+    trg: List[str] = field(default_factory=list)
+
+
+@dataclass
+class DataConfig:
+    """Parallel-text data. Paths only — never data content.
+
+    Feature 06: the old ``conf/data`` group (with a ``train_yaml`` manifest + a flat
+    ``evalset``) is gone. An experiment now declares ``data_root``/``src``/``trg`` and names a
+    per-lang-pair ``dataset.yaml`` template (``dataset_file`` in ``dataset_dir``); the template
+    is inflated in code into the ``train``/``dev``/``test`` path lists below. ``dataset_dir`` is
+    injected by ``egs/run.sh`` (the experiment's own directory). ``test`` is optional — when its
+    source files are absent the end-of-run inference pass is skipped.
+    """
+
+    src: str = MISSING  # source language code, e.g. "fr"
+    trg: str = MISSING  # target language code, e.g. "en"
+    # Absolute dir where the data FILES live; the inflation input for $DATA_ROOT.
+    data_root: str = MISSING
+    # Template file NAME (basename, including the .yaml suffix); default dataset.yaml.
+    dataset_file: str = "dataset.yaml"
+    # Directory holding dataset_file (== the experiment's own dir); injected by egs/run.sh.
+    dataset_dir: str = MISSING
     # Instruction prefix prepended to the source in the chat prompt.
     instruction: str = ""
+
+    # Inflated absolute paths, filled in code from dataset_file (feature 06). train/dev are
+    # required; test is optional (None -> skip the final held-out inference pass).
+    train: DataSplit = field(default_factory=DataSplit)
+    dev: DataSplit = field(default_factory=DataSplit)
+    test: Optional[DataSplit] = None
 
 
 @dataclass

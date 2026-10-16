@@ -114,6 +114,13 @@ class DataConfig:
 class TrainConfig:
     """Trainer hyperparameters (maps onto trl.SFTConfig + the MT callback)."""
 
+    # Fine-tuning mode selected in sft_translation.py's model-loading block:
+    #   "full"  -- full-parameter fine-tune of the (unquantized) base model
+    #   "lora"  -- LoRA adapters on an unquantized base
+    #   "qlora" -- LoRA adapters on a 4-bit (bitsandbytes) quantized base
+    # "qlora" requires basemodel.load_in_4bit=true; "full"/"lora" load the base
+    # unquantized.
+    finetune_mode: str = "qlora"
     max_steps: int = 800
     learning_rate: float = 2e-4
     train_batch_size: int = 16

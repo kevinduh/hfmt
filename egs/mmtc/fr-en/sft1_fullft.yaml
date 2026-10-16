@@ -1,10 +1,11 @@
 # @package _global_
-# Case 1: train a SINGLE model WITHOUT LoRA (full fine-tune).
+# Case 1: train a SINGLE model with a FULL fine-tune (no LoRA).
 # Select with:  bash egs/run.sh mmtc/fr-en/sft1_fullft.yaml
 #
-# Turning LoRA off trains every base-model parameter, which requires a NON-quantized
-# base (a 4-bit frozen base cannot be fully fine-tuned -- sft_translation.py fails fast
-# otherwise). So we set lora.enabled=false AND basemodel.load_in_4bit=false.
+# train.finetune_mode=full is the single switch (sft_translation.py dispatches on
+# finetune_mode: full | lora | qlora). "full" loads the base UNQUANTIZED and trains
+# every parameter -- a full FT cannot run on a 4-bit base, so this mode never
+# quantizes and basemodel.load_in_4bit is not consulted (no need to set it here).
 #
 # BASE MODEL: 0.5B, for the quickest full-FT iteration (1.5B/3B also fit a single GPU;
 # 7B full FT -- weights + fp32 optimizer state -- does NOT, so it is not an option here).
@@ -24,13 +25,8 @@ data:
   trg: en
   instruction: "Translate French to English"
 
-lora:
-  enabled: false          # full fine-tune: no adapter
-
-basemodel:
-  load_in_4bit: false     # required when lora.enabled=false
-
 train:
+  finetune_mode: full       # full-parameter fine-tune: unquantized base, no adapter
   # Full fine-tuning updates ALL weights, so it needs a much lower LR than LoRA.
   # qlora_default's 2e-4 is a LoRA rate (~20x too high here and would diverge / cause
   # catastrophic forgetting); 2e-5 is the standard full-model SFT rate (try 1e-5-2e-5).

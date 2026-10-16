@@ -4,8 +4,9 @@
 # inline coarse grid. Select with:  bash egs/run.sh mmtc/fr-en/sft1_lora.yaml
 #
 # Uses the 1.5B model for quick iteration (override /basemodel: qwen2.5-7b for the
-# larger model). lora.enabled defaults true and basemodel.load_in_4bit defaults true,
-# so this is a 4-bit QLoRA fine-tune; no sweep block -> a single Slurm job.
+# larger model). The qlora_default train group sets finetune_mode=qlora and
+# basemodel.load_in_4bit defaults true, so this is a 4-bit QLoRA fine-tune; no sweep
+# block -> a single Slurm job.
 defaults:
   - override /basemodel: qwen2.5-1.5b
   - override /train: qlora_default

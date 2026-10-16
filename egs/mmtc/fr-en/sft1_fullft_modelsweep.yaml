@@ -1,11 +1,12 @@
 # @package _global_
-# Case 3: train MULTIPLE models via a sweep, WITHOUT LoRA (full fine-tune).
-# Sweeps across whole base-model configs with the adapter off. Select with:
+# Case 3: train MULTIPLE models via a sweep with a FULL fine-tune (no LoRA).
+# Sweeps across whole base-model configs in full-FT mode. Select with:
 #   bash egs/run.sh mmtc/fr-en/sft1_fullft_modelsweep.yaml
 #
-# lora.enabled=false requires a non-quantized base, so basemodel.load_in_4bit=false is
-# set here -- and it SURVIVES the per-job basemodel group swap (verified), so every
-# swept model is loaded full-precision for full fine-tuning.
+# train.finetune_mode=full drives it (unquantized base, all params trained). Because
+# finetune_mode lives in the unswept train group, it SURVIVES the per-job basemodel
+# group swap, so every swept model is loaded full-precision for full fine-tuning --
+# no need to pin basemodel.load_in_4bit (full mode never quantizes).
 #
 # Grid is the two small models (0.5B, 1.5B), both of which full-fine-tune on a single
 # GPU. NOTE: 7B full FT (weights + fp32 optimizer state) would OOM a single GPU, so keep
@@ -26,13 +27,9 @@ data:
   trg: en
   instruction: "Translate French to English"
 
-lora:
-  enabled: false          # full fine-tune: no adapter
-
-basemodel:
-  load_in_4bit: false     # required when lora.enabled=false; survives the basemodel sweep
-
 train:
+  finetune_mode: full       # full-parameter fine-tune; in the unswept train group, so it
+                            # survives the per-job basemodel swap (every model loads unquantized)
   # Full-FT LR (see mmtc_fr-en_sft1_fullft): 2e-5, not qlora_default's LoRA-tuned 2e-4.
   learning_rate: 2e-5
   seed: 37

@@ -548,11 +548,11 @@ def main(cfg: Config) -> None:
     logging.info(f"======== Model Configuration ========")
 
     ### Load Base Model
-    finetune_mode = cfg.finetune_mode # todo: get from config, "full", "lora", "qlora"
+    finetune_mode = cfg.train.finetune_mode  # one of: full | lora | qlora
     use_bf16 = torch.cuda.is_bf16_supported(including_emulation=False)
     compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
     logging.info(f"finetune_mode: {finetune_mode}, use_bf16: {use_bf16}, compute_dtype: {compute_dtype}")
-    if finetune_mode == ("full", "lora"):
+    if finetune_mode in ("full", "lora"):
         model_dtype = torch.float32 if finetune_mode == "full" else compute_dtype
         model = AutoModelForCausalLM.from_pretrained(
             cfg.basemodel.checkpoint,

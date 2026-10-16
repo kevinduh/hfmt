@@ -1,4 +1,9 @@
 # Default QLoRA SFT training hyperparameters (mirrors egs/mmtc/fr-en/sft1.sh).
+
+# Fine-tuning mode: full | lora | qlora (see sft_translation.py model-loading block).
+# "qlora" (LoRA on a 4-bit base) matches this preset's basemodel.load_in_4bit=true;
+# use "lora"/"full" with basemodel.load_in_4bit=false for an unquantized base.
+finetune_mode: qlora
 max_steps: 800
 learning_rate: 2e-4
 train_batch_size: 16

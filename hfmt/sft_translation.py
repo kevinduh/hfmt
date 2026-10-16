@@ -422,50 +422,37 @@ def main(cfg: Config) -> None:
     ## Model Configuration
     logging.info(f"======== Model Configuration ========")
 
-    # Full fine-tune requires a non-quantized base (feature 04): a 4-bit frozen base
-    # is not trainable end-to-end, so QLoRA (load_in_4bit) and "turn LoRA off" are
-    # mutually exclusive. Fail fast with a clear message instead of a confusing error
-    # deep inside PEFT/bitsandbytes.
-    if not cfg.lora.enabled and cfg.basemodel.load_in_4bit:
-        logging.error(
-            "lora.enabled=false requires basemodel.load_in_4bit=false: a 4-bit "
-            "quantized base is frozen and cannot be fully fine-tuned. Set "
-            "basemodel.load_in_4bit=false for a full fine-tune, or keep LoRA enabled."
-        )
-        exit(1)
-
-    config = AutoConfig.from_pretrained(cfg.basemodel.checkpoint)
-
-    # Quantization is optional now: build the bitsandbytes config only for the QLoRA
-    # (4-bit) path; for a full fine-tune load the base model in basemodel.dtype.
-    if cfg.basemodel.load_in_4bit:
+    ### Load Base Model
+    finetune_mode = cfg.finetune_mode # todo: get from config, "full", "lora", "qlora"
+    use_bf16 = torch.cuda.is_bf16_supported(including_emulation=False)
+    compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
+    logging.info(f"finetune_mode: {finetune_mode}, use_bf16: {use_bf16}, compute_dtype: {compute_dtype}")
+    if finetune_mode == ("full", "lora"):
+        model_dtype = torch.float32 if finetune_mode == "full" else compute_dtype
+        model = AutoModelForCausalLM.from_pretrained(
+            cfg.basemodel.checkpoint,
+            dtype=model_dtype,
+        ).to(device)
+    elif finetune_mode == "qlora":
+        model_dtype = compute_dtype
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=cfg.basemodel.load_in_4bit,
             bnb_4bit_use_double_quant=cfg.basemodel.bnb_4bit_use_double_quant,
             bnb_4bit_quant_type=cfg.basemodel.bnb_4bit_quant_type,
-            bnb_4bit_compute_dtype=getattr(torch, cfg.basemodel.bnb_4bit_compute_dtype),
+            bnb_4bit_compute_dtype=compute_dtype # todo: original code has getattr(torch, cfg.basemodel.bnb_4bit_compute_dtype),
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            cfg.basemodel.checkpoint,
+            dtype=model_dtype,
+            quantization_config=bnb_config,
+            device_map = {"": torch.cuda.current_device()}
         )
     else:
-        bnb_config = None
+        raise ValueError(f"Unknown mode: {finetune_mode}")
 
-    if cfg.basemodel.pretrain == True:
-        logging.info("Fine-tuning a pretrained model")
-        if bnb_config is not None:
-            model = AutoModelForCausalLM.from_pretrained(
-                cfg.basemodel.checkpoint, quantization_config=bnb_config
-            ).to(device)
-        else:
-            model = AutoModelForCausalLM.from_pretrained(
-                cfg.basemodel.checkpoint, torch_dtype=getattr(torch, cfg.basemodel.dtype)
-            ).to(device)
-    else:
-        logging.info("Training from scratch with CausalLM is not supported")
-        exit(1)
-
-    if cfg.train.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
-
-    if cfg.lora.enabled:
+    ### Apply LoRA/QLoRA if needed
+    lora_config = None
+    if finetune_mode in ("lora", "qlora"):
         # TODO: fix, this is brittle
         if cfg.lora.lora_target == "qv":
             target_modules = ["q_proj", "v_proj"]
@@ -491,24 +478,27 @@ def main(cfg: Config) -> None:
             target_modules=target_modules,
             #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
             #bias="none"
-        )
+        )    
 
-        # Only the QLoRA (quantized) path needs k-bit preparation before adapters.
-        if cfg.basemodel.load_in_4bit:
+        if finetune_mode == "qlora":
             model = prepare_model_for_kbit_training(model)
+
         model = get_peft_model(model, lora_config)
         model.config.use_cache = False
-        logging.info("LoRA adapter enabled:")
-        model.print_trainable_parameters()  # PEFT-only; guarded by lora.enabled
-    else:
-        # Full fine-tune: no adapter, every base-model parameter is trainable.
+        logging.info("LoRA/QLoRA adapter enabled:")
+        model.print_trainable_parameters()
+    else: # full fine-tune of all parameters
         model.config.use_cache = False
-        logging.info("LoRA disabled: fully fine-tuning the base model.")
+        logging.info(f"Full fine-tuning of base model. #param: {model.num_parameters()}")
+    
     logging.info(f"tokenizer pad/bos/eos: {tokenizer.pad_token_id} {tokenizer.bos_token_id} {tokenizer.eos_token_id}")
     logging.info(f"model.config         : {model.config.pad_token_id} {model.config.bos_token_id} {model.config.eos_token_id}")
     logging.info(f"generation.config    : {model.generation_config.pad_token_id} {model.generation_config.bos_token_id} {model.generation_config.eos_token_id}")
     logging.info(f"model: {model}")
 
+    for name, p in model.named_parameters():
+        print(f"{name:80s} {str(p.dtype):15s} trainable={p.requires_grad} shape={tuple(p.shape)}")
+    
     training_args = SFTConfig(
         output_dir=outdir,
         completion_only_loss=cfg.train.completion_only_loss,
@@ -521,7 +511,9 @@ def main(cfg: Config) -> None:
         weight_decay=cfg.train.weight_decay,
         save_total_limit=cfg.train.save_total_limit,
         max_steps=cfg.train.max_steps,
-        fp16=False,
+        bf16=use_bf16,
+        fp16=not use_bf16,
+        gradient_checkpointing=cfg.train.gradient_checkpointing,
         push_to_hub=False,
         report_to="wandb" if cfg.wandb.enabled else "none",
         run_name=run_name,
@@ -547,6 +539,12 @@ def main(cfg: Config) -> None:
         train_dataset=D["train"],
         eval_dataset=D["dev"],
     )
+
+    # temp logging
+    logging.info("Trainer fp16:", trainer.args.fp16)
+    logging.info("Trainer bf16:", trainer.args.bf16)
+    logging.info("Accelerate precision:", trainer.accelerator.mixed_precision)
+    logging.info("Accelerate scaler:", trainer.accelerator.scaler)
 
     logging.info(f"======== Inspecting batch before training ========")
     train_dataloader = trainer.get_train_dataloader()

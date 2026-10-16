@@ -1,19 +1,25 @@
 # @package _global_
 # Case 4: train MULTIPLE models via a sweep, WITH LoRA (QLoRA).
 # Sweeps across whole base-model configs. Select with:
-#   bash egs/run.sh mmtc_fr-en_sft1_lora_modelsweep
+#   bash egs/run.sh mmtc/fr-en/sft1_lora_modelsweep.yaml
 #
 # 2 jobs (one per base-model config), each a 4-bit QLoRA fine-tune. Runs are labelled by
 # the selected YAML file name, e.g. basemodel-qwen2.5-0.5b / basemodel-qwen2.5-1.5b.
 defaults:
   - override /basemodel: qwen2.5-1.5b
-  - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
   - override /decode: default
   - override /hydra/launcher: slurm
 
 experiment: mmtc_fr-en_sft1_lora_modelsweep
+
+# Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
 
 train:
   seed: 37

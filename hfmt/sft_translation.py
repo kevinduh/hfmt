@@ -91,24 +91,32 @@ def resolve_dataset_template(data_cfg):
 def inflate_dataset_template(template_path, data_root, src, trg):
     """Parse a ``dataset.yaml`` template, substituting its ``$DATA_ROOT``/``$SRC``/``$TRG`` vars.
 
-    The template is plain text with shell-style ``$VAR`` placeholders (NOT a Hydra config), so we
-    substitute then parse -- consistent with "inflated during dataset creation" (feature 06).
-    Returns ``{split: {"src": [...], "trg": [...]}}`` for the splits present. Paths only, never
-    data content (CLAUDE.md).
+    The template uses shell-style ``$VAR`` placeholders (NOT a Hydra config). We parse the YAML
+    FIRST, then substitute only in the string *values* -- so stray ``$`` in comments (dropped by
+    the parse) can't trip the substitution. Returns ``{split: {"src": [...], "trg": [...]}}`` for
+    the splits present. Paths only, never data content (CLAUDE.md).
     """
     from string import Template
+    mapping = {"DATA_ROOT": str(data_root), "SRC": str(src), "TRG": str(trg)}
     with open(template_path) as f:
-        raw = f.read()
-    try:
-        inflated = Template(raw).substitute(
-            DATA_ROOT=str(data_root), SRC=str(src), TRG=str(trg)
-        )
-    except KeyError as e:
-        raise ValueError(
-            f"dataset template {template_path} references an unknown placeholder {e}; "
-            "only $DATA_ROOT, $SRC and $TRG are supported."
-        ) from e
-    return yaml.safe_load(inflated)
+        parsed = yaml.safe_load(f)
+
+    def _sub(node):
+        if isinstance(node, str):
+            try:
+                return Template(node).substitute(mapping)
+            except (KeyError, ValueError) as e:
+                raise ValueError(
+                    f"dataset template {template_path}: cannot inflate {node!r} ({e}); "
+                    "only $DATA_ROOT, $SRC and $TRG are supported."
+                ) from e
+        if isinstance(node, list):
+            return [_sub(x) for x in node]
+        if isinstance(node, dict):
+            return {k: _sub(v) for k, v in node.items()}
+        return node
+
+    return _sub(parsed)
 
 
 def populate_data_paths(cfg):

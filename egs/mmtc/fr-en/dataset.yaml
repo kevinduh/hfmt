@@ -1,0 +1,24 @@
+# MMTC French -> English dataset template (feature 06).
+#
+# A PLAIN template, not a Hydra config: the $DATA_ROOT/$SRC/$TRG placeholders (shell-style,
+# not Hydra interpolation syntax) are inflated in code (hfmt/sft_translation.py) from the
+# data.data_root / data.src / data.trg. The experiment names this file via data.dataset_file
+# (default dataset.yaml); egs/run.sh injects its directory as data.dataset_dir.
+#
+# Paths only, never data content (CLAUDE.md). test is optional -- if the test.src file(s) do
+# not exist at run time, the final held-out inference pass is skipped.
+train:
+  src:
+    - $DATA_ROOT/train.$SRC-$TRG.$SRC
+  trg:
+    - $DATA_ROOT/train.$SRC-$TRG.$TRG
+dev:
+  src:
+    - $DATA_ROOT/dev.$SRC-$TRG.$SRC
+  trg:
+    - $DATA_ROOT/dev.$SRC-$TRG.$TRG
+test:
+  src:
+    - $DATA_ROOT/test.$SRC-$TRG.$SRC
+  trg:
+    - $DATA_ROOT/test.$SRC-$TRG.$TRG

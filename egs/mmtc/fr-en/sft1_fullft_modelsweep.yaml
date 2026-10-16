@@ -1,7 +1,7 @@
 # @package _global_
 # Case 3: train MULTIPLE models via a sweep, WITHOUT LoRA (full fine-tune).
 # Sweeps across whole base-model configs with the adapter off. Select with:
-#   bash egs/run.sh mmtc_fr-en_sft1_fullft_modelsweep
+#   bash egs/run.sh mmtc/fr-en/sft1_fullft_modelsweep.yaml
 #
 # lora.enabled=false requires a non-quantized base, so basemodel.load_in_4bit=false is
 # set here -- and it SURVIVES the per-job basemodel group swap (verified), so every
@@ -12,13 +12,19 @@
 # it out of this grid unless you have the memory.
 defaults:
   - override /basemodel: qwen2.5-0.5b
-  - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
   - override /decode: default
   - override /hydra/launcher: slurm_fullft   # more host RAM + walltime for full FT
 
 experiment: mmtc_fr-en_sft1_fullft_modelsweep
+
+# Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
 
 lora:
   enabled: false          # full fine-tune: no adapter

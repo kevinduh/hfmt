@@ -1,6 +1,6 @@
 # @package _global_
 # Refinement sweep for MMTC fr-en (feature 04 successor to conf/sweep/mmtc_fr-en_refine1.yaml).
-# Select with:  bash egs/run.sh mmtc_fr-en_sft1_refine1
+# Select with:  bash egs/run.sh mmtc/fr-en/sft1_refine1.yaml
 #
 # Derived from analysis/2026-10-08/summary.md of the 24-run coarse sweep, which found:
 #   - lora_r is noise (r=8/16/32 within noise) -> fix r=8 (also makes alpha/r constant).
@@ -10,13 +10,19 @@
 # CONFIDENTIALITY (CLAUDE.md): only hyperparameters here, never data content.
 defaults:
   - override /basemodel: qwen2.5-7b
-  - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
   - override /decode: default
   - override /hydra/launcher: slurm
 
 experiment: mmtc_fr-en_sft1_refine1
+
+# Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
 
 # Fixed (not swept): the coarse winners + a longer budget.
 lora:

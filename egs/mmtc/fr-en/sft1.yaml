@@ -1,21 +1,30 @@
 # @package _global_
 # Default QLoRA SFT example. Based on egs/mmtc/fr-en/sft1.sh but on the smaller 1.5B
 # model for faster iteration (sft1.sh used 7B -- override /basemodel: qwen2.5-7b to match).
-# Select with:  +experiment=mmtc_fr-en_sft1
-# (Hydra "experiment" pattern: this file overrides group choices + values.)
+# Select with:  bash egs/run.sh mmtc/fr-en/sft1.yaml
+# (Hydra nested-group "experiment" pattern: this file overrides group choices + values.)
 #
-# Lives under egs/ (feature 04); Hydra finds it via hydra.searchpath in conf/config.yaml.
-# An experiment is a collection of atomistic components (basemodel/data/train/lora/decode)
-# plus inline wandb and (feature 04) an inline sweep block added in group E.
+# Lives at egs/<dataset>/<src>-<trg>/ (feature 06); Hydra finds it via hydra.searchpath in
+# conf/config.yaml, selected as the nested group +mmtc/fr-en=sft1. An experiment is a
+# collection of atomistic components (basemodel/train/lora/decode) + an inline data block,
+# wandb, and (feature 04) an inline sweep block.
 defaults:
   - override /basemodel: qwen2.5-1.5b
-  - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
   - override /decode: default
   - override /hydra/launcher: slurm
 
 experiment: mmtc_fr-en_sft1
+
+# Dataset (feature 06): data_root/src/trg + the dataset.yaml template beside this file. The
+# template is inflated into absolute train/dev/test paths at run time. data_root must hold the
+# {train,dev,test}.fr-en.{fr,en} files (confirm the layout). egs/run.sh injects dataset_dir.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
 
 # sft1.sh uses seed 37; every other value already matches the group defaults
 # (lr 2e-4, reduce_lr_on_plateau, max_steps 800, warmup 30, eval_steps 50,
@@ -28,8 +37,8 @@ wandb:
   tags: [sft, fr-en]
 
 # Inline, toggleable sweep (feature 04). Flip `enabled: true` (or override on the CLI,
-# `bash egs/run.sh mmtc_fr-en_sft1 sweep.enabled=true`) to fan out the grid below;
-# left off, `bash egs/run.sh mmtc_fr-en_sft1` is a single run. egs/run.sh reads this
+# `bash egs/run.sh mmtc/fr-en/sft1.yaml sweep.enabled=true`) to fan out the grid below;
+# left off, `bash egs/run.sh mmtc/fr-en/sft1.yaml` is a single run. egs/run.sh reads this
 # block via hfmt/sweep_probe.py and forwards the axes to --multirun.
 #
 # This is the former conf/sweep/mmtc_fr-en_coarse.yaml grid (24 jobs =

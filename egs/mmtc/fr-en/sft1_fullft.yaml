@@ -1,6 +1,6 @@
 # @package _global_
 # Case 1: train a SINGLE model WITHOUT LoRA (full fine-tune).
-# Select with:  bash egs/run.sh mmtc_fr-en_sft1_fullft
+# Select with:  bash egs/run.sh mmtc/fr-en/sft1_fullft.yaml
 #
 # Turning LoRA off trains every base-model parameter, which requires a NON-quantized
 # base (a 4-bit frozen base cannot be fully fine-tuned -- sft_translation.py fails fast
@@ -10,13 +10,19 @@
 # 7B full FT -- weights + fp32 optimizer state -- does NOT, so it is not an option here).
 defaults:
   - override /basemodel: qwen2.5-0.5b
-  - override /data: mmtc_fr-en
   - override /train: qlora_default
   - override /lora: default
   - override /decode: default
   - override /hydra/launcher: slurm_fullft   # more host RAM + walltime for full FT
 
 experiment: mmtc_fr-en_sft1_fullft
+
+# Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
 
 lora:
   enabled: false          # full fine-tune: no adapter

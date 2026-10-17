@@ -1,0 +1,32 @@
+# @package _global_
+# Single-run experiment: train ONE model with LoRA (standard QLoRA SFT).
+# Select with:  bash egs/run.sh mmtc/fr-en/sft_lora.yaml
+#
+# No grid here, so this always launches exactly one Slurm job. The sweep version of this
+# experiment is sft_lora.sweep.yaml (feature 07).
+#
+# Uses the 1.5B model for quick iteration (override /basemodel: qwen2.5-7b for the larger
+# model). The qlora_default train group sets finetune_mode=qlora and basemodel.load_in_4bit
+# defaults true, so this is a 4-bit QLoRA fine-tune.
+defaults:
+  - override /basemodel: qwen2.5-1.5b
+  - override /train: qlora_default
+  - override /lora: default
+  - override /decode: default
+  - override /hydra/launcher: slurm
+
+experiment: mmtc_fr-en_sft_lora
+
+# Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
+
+train:
+  seed: 37
+
+wandb:
+  group: mmtc_fr-en_sft_lora
+  tags: [sft, fr-en, lora]

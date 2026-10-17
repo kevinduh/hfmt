@@ -1,0 +1,40 @@
+# @package _global_
+# Sweep experiment: the sft_lora.yaml setup swept over a hyperparameter grid.
+# Select with:  bash egs/run.sh mmtc/fr-en/sft_lora.sweep.yaml
+#
+# Invoking this file ALWAYS runs the full grid below (feature 07): 2 learning_rate x 2 lora_r
+# = 4 Slurm jobs. Use sft_lora.yaml for a single run. The grid is Hydra's native
+# hydra.sweeper.params; the submitit launcher logs each job's overrides (#idx : ...) just
+# before submitting. Axes are ordinary overrides: leaf values, or whole component files
+# (e.g. `basemodel: qwen2.5-0.5b,qwen2.5-1.5b`). Ad-hoc CLI comma-lists add more axes; a
+# single-value CLI override of a swept key pins that axis.
+#
+# CONFIDENTIALITY (CLAUDE.md): axis names/values are hyperparameters only, never data content.
+defaults:
+  - override /basemodel: qwen2.5-1.5b
+  - override /train: qlora_default
+  - override /lora: default
+  - override /decode: default
+  - override /hydra/launcher: slurm
+
+experiment: mmtc_fr-en_sft_lora_sweep
+
+# Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
+
+train:
+  seed: 37
+
+wandb:
+  group: mmtc_fr-en_sft_lora_sweep
+  tags: [sft, fr-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,2e-4
+      lora.lora_r: 8,16

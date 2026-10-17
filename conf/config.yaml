@@ -2,7 +2,8 @@
 #
 # Composes the config groups below onto the structured schema (base_config,
 # registered from hfmt/hydra_config.py) so every value is type-validated.
-# Select a ready-made experiment with:  +experiment=mmtc_fr-en_sft1  (from egs/experiment/)
+# Select an experiment (normally via egs/run.sh) with the nested group:  +mmtc/fr-en=sft_lora
+# (egs/mmtc/fr-en/sft_lora.yaml; see egs/run.sh).
 # Override any knob on the CLI, e.g.:    train.learning_rate=2e-4 lora.lora_r=16
 
 defaults:
@@ -18,9 +19,9 @@ defaults:
   # The launcher is NOT defaulted here (feature 04): a primary-config launcher default
   # would block an experiment from selecting its own (Hydra ignores the experiment's
   # group override once the primary sets one). Instead every experiment SELECTS a
-  # launcher in its own defaults list (`- override /hydra/launcher: slurm` or a preset
-  # like slurm_fullft), keeping the experiment a flat list of component choices. Absent
-  # any selection Hydra falls back to its built-in `basic` (local) launcher.
+  # launcher in its own defaults list (`- override /hydra/launcher: slurm`), keeping the
+  # experiment a flat list of component choices. Absent any selection Hydra falls back to
+  # its built-in `basic` (local) launcher.
   # wandb is not a config group anymore (feature 04): its defaults come from the
   # WandbConfig dataclass and experiments set wandb.* inline.
 
@@ -28,9 +29,9 @@ experiment: default
 output_root: outputs
 
 hydra:
-  # Extend the config search path to egs/ so experiment presets can live there
-  # (feature 04). Resolved at compose time from HFMT_ROOT, the repo-wide path anchor,
-  # so +experiment=<name> finds egs/experiment/<name>.yaml under any launcher.
+  # Extend the config search path to egs/ so experiments can live there (feature 04/06).
+  # Resolved at compose time from HFMT_ROOT, the repo-wide path anchor, so
+  # +<dataset>/<src>-<trg>=<name> finds egs/<dataset>/<src>-<trg>/<name>.yaml under any launcher.
   searchpath:
     - file://${oc.env:HFMT_ROOT}/egs
   # Keep CWD at the launch dir (repo root) so relative paths / HFMT_ROOT still
@@ -43,7 +44,8 @@ hydra:
   # every submitit job of the launch and stable across a Slurm requeue) and <run_label> is this
   # job's swept hyperparameters, built by the hfmt_runlabel resolver (hfmt/sft_translation.py).
   # The run-dir basename == the W&B run name (single source of truth), so disk and W&B align.
-  # A PLAIN run through run.sh is still --multirun (submitit needs it) but has no swept params,
+  # A single-run experiment through run.sh is still --multirun (submitit needs it) but has no
+  # swept params (a sweep experiment's grid lives in its own hydra.sweeper.params, feature 07),
   # so <run_label> falls back to the <experiment> name (feature 04) -- so it reads as
   # outputs/<experiment>/sweep-<ts>/<experiment>/ and the W&B run is named <experiment>, grouped
   # under the base group (no -sweep-<ts>). A true in-process single run (no --multirun) lands at
@@ -56,8 +58,6 @@ hydra:
       override_dirname:
         exclude_keys:
           - experiment
-          - sweep
-          - sweep.enabled   # the sweep toggle may ride along as a passthrough override
           - hydra/launcher
   run:
     dir: ${output_root}/${experiment}/${now:%Y-%m-%d_%H-%M-%S}

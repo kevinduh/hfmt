@@ -308,7 +308,7 @@ def _label_pairs(override_dirname):
     for tok in filter(None, str(override_dirname).split(",")):
         key, _, val = tok.partition("=")
         key = key.lstrip("+~")
-        if key in ("experiment", "sweep") or key.startswith(("sweep.", "hydra")):
+        if key == "experiment" or key.startswith("hydra"):
             continue
         # Drop data *paths* and slash-bearing tokens: a dotted data.<leaf>, any "/"-bearing
         # value, and any "/"-bearing KEY. The last covers the nested experiment selector
@@ -330,8 +330,7 @@ def build_run_label(override_dirname, job_num="0", experiment=""):
     both the run *directory* name (via the ``hfmt_runlabel`` resolver in ``conf/config.yaml``)
     and the W&B run *name* (``derive_run_identity``), so disk and W&B line up. For each override:
 
-    - drop structural selectors (``experiment``/``sweep``/``sweep.*``/``hydra*``) -- no
-      hyperparameter info (``sweep.enabled`` may ride along as a passthrough override). This
+    - drop structural selectors (``experiment``/``hydra*``) -- no hyperparameter info. This
       includes the nested experiment group selector (feature 06): the experiment is chosen as
       ``+<dataset>/<lang>=<name>`` (e.g. ``+mmtc/fr-en=sft1``), whose KEY contains ``/`` and is
       dropped by the slash rule below -- it is a structural choice, not a hyperparameter;
@@ -485,8 +484,9 @@ def main(cfg: Config) -> None:
     # (is_multirun but no swept params) keeps the base group and is named by the experiment
     # (feature 04), so disk and W&B align and sweeps don't clobber or intermix.
     is_multirun = hydra_cfg.mode == RunMode.MULTIRUN
-    # A real sweep job carries distinguishing override tokens; a plain run via run.sh is
-    # --multirun but has none, so it is named/grouped like a single run (feature 04).
+    # A real sweep job carries distinguishing override tokens (from a sweep experiment's
+    # hydra.sweeper.params or CLI comma lists -- feature 07); a single-run experiment via run.sh
+    # is --multirun but has none, so it is named/grouped like a single run (feature 04).
     is_sweep = is_multirun and bool(_label_pairs(hydra_cfg.job.override_dirname))
     run_id, run_name, group, tags = derive_run_identity(
         cfg, outdir, is_multirun=is_multirun, is_sweep=is_sweep

@@ -10,15 +10,16 @@ Scope (feature 00_hydra): the ``sft_translation.py`` QLoRA SFT workflow only.
 Feature 04 reshaped the groups into atomistic, mix-and-match components:
 ``basemodel`` (the pretrained model + quantization), ``lora`` (the adapter, with an
 ``enabled`` toggle for full fine-tuning), ``data``, ``train``, ``decode``, plus
-``wandb`` and an inline ``sweep`` block. Experiments compose these and live under
-``egs/experiment/`` (reached via ``hydra.searchpath``).
+``wandb``. Experiments compose these and live under ``egs/<dataset>/<src>-<trg>/``
+(feature 06; reached via ``hydra.searchpath``). A sweep is not part of this schema: a sweep
+experiment carries its grid in Hydra's native ``hydra.sweeper.params`` (feature 07).
 
 Confidentiality note (see CLAUDE.md): config carries data *paths*, never data
 *content*. Keep it that way when logging config to W&B.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from omegaconf import MISSING
 
@@ -173,29 +174,6 @@ class WandbConfig:
 
 
 @dataclass
-class SweepConfig:
-    """Inline, toggleable parameter sweep (feature 04).
-
-    Lives in the experiment config (``egs/experiment/<name>.yaml``) so a sweep is a
-    self-contained part of the experiment. ``enabled`` is the on/off switch;
-    ``params`` maps each sweep axis to a comma-separated list of choices. Axes are
-    ordinary Hydra task overrides -- either a config-group choice (sweep over whole
-    component files, e.g. ``basemodel: "qwen2.5-7b,qwen2.5-1.5b"``) or a leaf value
-    (e.g. ``train.learning_rate: "2e-5,2e-4"``).
-
-    Hydra itself does not act on this block: ``egs/run.sh`` runs ``sweep_probe.py``,
-    which reads it and, only when ``enabled``, forwards the axes as bare
-    comma-list overrides to the ``--multirun`` launch (passing them under
-    ``hydra.sweeper.params`` on the CLI is rejected by Hydra). Confidentiality
-    (CLAUDE.md): axis names/values are hyperparameters or config-file names, never
-    data content, so this is safe to log to W&B.
-    """
-
-    enabled: bool = False
-    params: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass
 class Config:
     """Top-level experiment config."""
 
@@ -209,7 +187,6 @@ class Config:
     train: TrainConfig = field(default_factory=TrainConfig)
     decode: DecodeConfig = field(default_factory=DecodeConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
-    sweep: SweepConfig = field(default_factory=SweepConfig)
 
 
 def register_configs() -> None:

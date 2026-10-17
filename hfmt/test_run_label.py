@@ -83,8 +83,8 @@ def test_slash_bearing_value_dropped():
 
 
 def test_structural_selectors_dropped():
-    # experiment/sweep/sweep.enabled/hydra* carry no hyperparameter info.
-    tok = "experiment=mmtc_fr-en_sft1,sweep=coarse,sweep.enabled=true,hydra.launcher=slurm,lora.lora_r=8"
+    # experiment/hydra* carry no hyperparameter info.
+    tok = "experiment=mmtc_fr-en_sft1,hydra.launcher=slurm,lora.lora_r=8"
     assert S.build_run_label(tok) == "lora_r-8"
 
 

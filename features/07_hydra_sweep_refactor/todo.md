@@ -66,53 +66,71 @@ Out of scope / do not touch: untracked `egs/experiment/`, `data/`, `egs/mmtc/fr-
 
 ## C. Schema, label code, config, tests
 
-- [ ] `hfmt/hydra_config.py`: delete the `SweepConfig` dataclass and the `sweep` field on `Config`;
+- [x] `hfmt/hydra_config.py`: delete the `SweepConfig` dataclass and the `sweep` field on `Config`;
       drop the now-unused `Dict` import if nothing else uses it.
-- [ ] `hfmt/hydra_config.py`: refresh the module docstring (no inline `sweep` block; experiments
+- [x] `hfmt/hydra_config.py`: refresh the module docstring (no inline `sweep` block; experiments
       live in `egs/<dataset>/<pair>/`, not `egs/experiment/`).
-- [ ] `hfmt/sft_translation.py` `_label_pairs`: change the drop rule to
+- [x] `hfmt/sft_translation.py` `_label_pairs`: change the drop rule to
       `if key == "experiment" or key.startswith("hydra"):` (remove `"sweep"` / `"sweep."`).
-- [ ] `hfmt/sft_translation.py` `build_run_label` docstring + `main()` comments: remove
+- [x] `hfmt/sft_translation.py` `build_run_label` docstring + `main()` comments: remove
       `sweep`/`sweep.*`/`sweep.enabled` mentions; describe the plain-run vs sweep-file cases.
-- [ ] `conf/config.yaml`: remove `sweep` and `sweep.enabled` from
+- [x] `conf/config.yaml`: remove `sweep` and `sweep.enabled` from
       `hydra.job.config.override_dirname.exclude_keys`.
-- [ ] `conf/config.yaml`: refresh comments (header `+experiment=` usage → `+<dataset>/<pair>=<name>`;
+- [x] `conf/config.yaml`: refresh comments (header `+experiment=` usage → `+<dataset>/<pair>=<name>`;
       searchpath comment; launcher comment without `slurm_fullft`; "plain run" wording).
-- [ ] `hfmt/test_run_label.py`: update the structural-drop test (≈`:86-87`) to use only
+- [x] `hfmt/test_run_label.py`: update the structural-drop test (≈`:86-87`) to use only
       `experiment=…` and `hydra.launcher=…` tokens; remove the `sweep=…` / `sweep.enabled=…` tokens and
       their comment. Leave the other fixtures unless they reference the removed mechanism.
-- [ ] Check: `pytest hfmt/test_run_label.py hfmt/test_dataset_inflation.py` passes.
-- [ ] Check: `python -c "from hfmt.hydra_config import Config, register_configs; register_configs()"` OK.
+- [x] Check: `pytest hfmt/test_run_label.py hfmt/test_dataset_inflation.py` passes.
+      *(pytest is not installed in the `hfmt` env; ran both standalone instead:
+      `python hfmt/test_run_label.py` 25 passed, `python hfmt/test_dataset_inflation.py` 11 passed.)*
+- [x] Check: `python -c "from hfmt.hydra_config import Config, register_configs; register_configs()"` OK.
+- [x] Extra checks: both experiments compose with no `sweep` key; `sweep.enabled=true` now fails
+      with `Key 'sweep' not in 'Config'` (direct python + `--cfg job`, so nothing could submit;
+      the run.sh form is E3); `build_run_label` gives `lora_r-8__learning_rate-1e-4` for a
+      sweeper-style `override_dirname` (with or without the `+mmtc/fr-en=…` selector) and
+      falls back to `mmtc_fr-en_sft_lora` for a single run; `git grep` for
+      `sweep_probe|sweep.enabled|SweepConfig|sweep.params|slurm_fullft` over `hfmt conf egs/run.sh
+      egs/mmtc` is empty.
 
 ## D. Docs and comments
 
-- [ ] D1 `README.md` "Sweeping parameters" (≈`:91-126`): rewrite around the two kinds of file:
-  - [ ] A single-run experiment → 1 job; a sweep experiment with a `hydra.sweeper.params` example.
-  - [ ] Ad-hoc CLI sweeps still work on any experiment; a single-value CLI override pins a swept axis.
-  - [ ] Explain why: `run.sh` is always `--multirun` (submitit), and Hydra can't switch off a grid
+- [x] D1 `README.md` "Sweeping parameters" (≈`:91-126`): rewrite around the two kinds of file:
+  - [x] A single-run experiment → 1 job; a sweep experiment with a `hydra.sweeper.params` example.
+  - [x] Ad-hoc CLI sweeps still work on any experiment; a single-value CLI override pins a swept axis.
+  - [x] Explain why: `run.sh` is always `--multirun` (submitit), and Hydra can't switch off a grid
         stored in config, so a grid is its own file.
-  - [ ] Keep the cross-product / `array_parallelism` and output/W&B naming bullets; update the
+  - [x] Keep the cross-product / `array_parallelism` and output/W&B naming bullets; update the
         example names (`mmtc_fr-en_sft_lora_sweep`, `learning_rate-…__lora_r-…`).
-  - [ ] Mention that the launcher prints `#idx : overrides` per job before submission.
-- [ ] D2 `README.md` experiment bullet (≈`:47`) + every `sft1*` example (≈10 refs) →
+  - [x] Mention that the launcher prints `#idx : overrides` per job before submission.
+- [x] D2 `README.md` experiment bullet (≈`:47`) + every `sft1*` example (≈10 refs) →
       `sft_lora` / `sft_lora.sweep`; drop the `sweep` block from the bullet.
-- [ ] D3 `README.md`: add snippets that replace the deleted examples:
-  - [ ] Full fine-tune: `train.finetune_mode=full train.learning_rate=2e-5 basemodel=qwen2.5-0.5b`
+- [x] D3 `README.md`: add snippets that replace the deleted examples:
+  - [x] Full fine-tune: `train.finetune_mode=full train.learning_rate=2e-5 basemodel=qwen2.5-0.5b`
         plus the `hydra.launcher.*` resource overrides noted in A.
-  - [ ] A config-group sweep axis: `basemodel: qwen2.5-0.5b,qwen2.5-1.5b` under `hydra.sweeper.params`.
-- [ ] D4 `CLAUDE.md`: rewrite the "Parameter sweeps" bullet; fix the "Configuration" bullet
+  - [x] A config-group sweep axis: `basemodel: qwen2.5-0.5b,qwen2.5-1.5b` under `hydra.sweeper.params`.
+- [x] D4 `CLAUDE.md`: rewrite the "Parameter sweeps" bullet; fix the "Configuration" bullet
       (`egs/experiment/<name>.yaml` → `egs/<dataset>/<pair>/<name>.yaml`, the `run.sh` usage, and
       inline `sweep` mention); fix the tree comment for `conf/` (no `sweep`/`experiment`/`data` group).
-- [ ] D5 `decisions.md`: add a feature-07 entry: why the toggle and probe were dropped (fewer
+- [x] D5 `decisions.md`: add a feature-07 entry: why the toggle and probe were dropped (fewer
       moving parts; two kinds of file), that it supersedes "Sweep toggle via a compose probe", the
       CLI-rejection correction (only comma-lists on `hydra.*` are rejected), and that `slurm_fullft`
       was removed in favour of CLI resource overrides.
-- [ ] D6 `tools/run_on_free_gpu.sh`: usage examples (`:8,9,14`) →
+- [x] D6 `tools/run_on_free_gpu.sh`: usage examples (`:8,9,14`) →
       `mmtc/fr-en/sft_lora.sweep.yaml` / `mmtc/fr-en/sft_lora.yaml train.seed=37,42 …`.
-- [ ] D7 Launcher usage comments → current `run.sh` form: `conf/hydra/launcher/local.yaml:2`,
-      `conf/hydra/launcher/slurm.yaml:2-4` (**comment lines only**; keep the uncommitted edits).
-- [ ] Check: `git ls-files | xargs grep -n "sweep_probe\|sweep\.enabled\|SweepConfig\|sweep\.params\|slurm_fullft"`
-      matches only `features/0[0-6]/` and the historical text in `decisions.md`.
+- [x] D7a `conf/hydra/launcher/local.yaml:2` usage comment → `bash egs/run.sh mmtc/fr-en/sft_lora.yaml hydra/launcher=local`.
+- [ ] D7b `conf/hydra/launcher/slurm.yaml:2-4` usage comment: **left for the developer**, because the file
+      holds uncommitted WIP edits (`:5`, `:26`) and a plain `git add` would mix them. Suggested:
+      line 2 → `#   bash egs/run.sh mmtc/fr-en/sft_lora.yaml   (selects this launcher via its defaults)`;
+      line 4 `egs/mmtc/fr-en/sft1.sh` no longer exists (only `egs/mmtc/zh-en/sft1.sh`).
+- [x] Check: `git ls-files | xargs grep -n "sweep_probe\|sweep\.enabled\|SweepConfig\|sweep\.params\|slurm_fullft"`
+      matches only `features/0[0-7]/` and the historical text in `decisions.md`.
+      *(Also matches README's one-line "former `slurm_fullft`" note, which is intentional.)*
+- [x] Extra (found during D): README `:43`/`:83` and CLAUDE.md still said `lora.enabled=false` selects a
+      full fine-tune, but the code dispatches on `train.finetune_mode` since `ea6cfa0` and never reads
+      `lora.enabled`. Fixed in both while adding the full-FT snippet. (`LoraConfig.enabled` is still in
+      the schema, unused; left as is, out of scope.)
+- [x] Extra: marked the feature-04 "Sweep toggle via a compose probe" bullet in `decisions.md` as superseded.
 
 ## E. Validation
 

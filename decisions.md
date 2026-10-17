@@ -129,7 +129,8 @@ a run.
   `file://${oc.env:HFMT_ROOT}/egs` to the search path, so `+experiment=<name>` resolves from
   `egs/experiment/` under *any* launcher (`run.sh`, direct `python -m`, the compose API) — not
   just when `run.sh` passes a flag. Verified on the pinned Hydra (1.3.7).
-- **Sweep toggle via a compose probe, not `hydra.sweeper.params` on the CLI.** Hydra has no
+- **Sweep toggle via a compose probe, not `hydra.sweeper.params` on the CLI.** *(Superseded by
+  feature 07: two kinds of experiment, no toggle/probe — see below.)* Hydra has no
   native on/off for the basic sweeper and *rejects* `hydra.sweeper.params.*` as a CLI override
   ("Sweeping over Hydra's configuration is not supported"). So the grid lives in a typed
   `sweep: {enabled, params}` block and `egs/run.sh` runs `hfmt/sweep_probe.py` (compose-only, no
@@ -241,3 +242,34 @@ self-contained and self-describing.
 - **Scope.** Only the Hydra SFT workflow (`sft_translation.py`) is migrated; the other
   (unmigrated) entry points — seq2seq, inference, summarization — keep their plain-manifest/shell
   recipes.
+
+## Two kinds of experiment instead of a sweep toggle (feature 07_hydra_sweep_refactor)
+
+**Decision:** An experiment is either a **single-run** file (no grid → one job) or a **sweep** file
+whose grid lives in Hydra's native `hydra.sweeper.params` and always runs in full (example pair:
+`egs/mmtc/fr-en/sft_lora.yaml` / `sft_lora.sweep.yaml`). The feature-04 toggle — the typed
+`sweep: {enabled, params}` block, `hfmt/sweep_probe.py`, and `sweep.enabled=true` — is removed.
+This **supersedes** the feature-04 entry "Sweep toggle via a compose probe".
+
+- **Why.** The probe existed only to give an on/off switch: `run.sh` must always `--multirun`
+  (submitit), and Hydra can't switch off a config-stored grid from the CLI. With separate files the
+  switch is unnecessary, so the launch path is now just `run.sh → python -m hfmt.sft_translation
+  --multirun` with no intermediate compose. Goal: fewer lines and an easier-to-follow job start.
+- **Verified on Hydra 1.3.7.** `hydra.sweeper.params` in a `# @package _global_` experiment selected
+  via `+<dataset>/<pair>=<name>` is honoured (including config-group axes despite the file's own
+  `override /basemodel`); a dotted option name (`sft_lora.sweep`) works; CLI comma-lists add axes and
+  a single-value CLI override pins a swept axis; sweeper-generated overrides land in
+  `override_dirname`, so run labels / W&B identity are unchanged.
+- **Correction to the feature-04 rationale.** Hydra rejects only *comma-list* values on `hydra.*`
+  keys from the CLI ("Sweeping over Hydra's configuration is not supported");
+  `hydra.sweeper.params.<k>=<v>` with a single value is accepted. What the CLI really can't do is
+  remove the grid: `~hydra.sweeper.params` errors and `hydra.sweeper.params={}` is ignored.
+- **Trade-offs accepted.** Single-run and sweep files duplicate their data/wandb/component lines
+  (chosen over inheritance for readability). The login-node dataset fast-fail moved from the probe
+  to a one-line shell check in `run.sh` that only covers the default `dataset.yaml` name; `main()`
+  still validates `data.dataset_file` authoritatively. Grid info before submission comes from the
+  submitit launcher's existing per-job `#<idx> : <overrides>` log — no new code.
+- **Pruned examples.** The fr-en experiments were reduced to the `sft_lora` pair; the
+  `slurm_fullft` launcher was deleted. A full fine-tune is `train.finetune_mode=full` plus CLI
+  launcher overrides (`hydra.launcher.mem_gb=64 hydra.launcher.timeout_min=720`), documented in the
+  README.

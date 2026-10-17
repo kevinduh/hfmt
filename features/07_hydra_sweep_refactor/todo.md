@@ -134,21 +134,35 @@ Out of scope / do not touch: untracked `egs/experiment/`, `data/`, `egs/mmtc/fr-
 
 ## E. Validation
 
-- [ ] E1 Config-only compose (login node):
-  - [ ] `python -m hfmt.sft_translation +mmtc/fr-en=sft_lora data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en --cfg job`
+- [x] E1 Config-only compose (login node):
+  - [x] `python -m hfmt.sft_translation +mmtc/fr-en=sft_lora data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en --cfg job`
         composes cleanly; no `sweep` key.
-  - [ ] Same with `+mmtc/fr-en=sft_lora.sweep … --cfg hydra -p hydra.sweeper.params` shows
+  - [x] Same with `+mmtc/fr-en=sft_lora.sweep … --cfg hydra -p hydra.sweeper.params` shows
         the two axes.
-- [ ] E2 Fast-fail: running `run.sh` against a copy of the experiment in a scratch `egs/<x>/<y>/` with no
+- [x] E2 Fast-fail: running `run.sh` against a copy of the experiment in a scratch `egs/<x>/<y>/` with no
       `dataset.yaml` exits before Python with the new message (remove the scratch dir afterwards).
-- [ ] E3 Schema guard: `bash egs/run.sh mmtc/fr-en/sft_lora.yaml sweep.enabled=true` fails fast
+- [x] E3 Schema guard: `bash egs/run.sh mmtc/fr-en/sft_lora.yaml sweep.enabled=true` fails fast
       with a "Key 'sweep' not in 'Config'"-style error and submits nothing.
+      *(E1–E3 run 2026-10-16 after commit D (`cc4b39e`). E1: both compose (exit 0), no `sweep` key;
+      sweep file shows `train.learning_rate: 1e-4,2e-4` / `lora.lora_r: 8,16`. E2: temp experiment in
+      `egs/mmtc/zh-en/` → `dataset template not found`, exit 1, before Python (temp removed). E3: via
+      run.sh with guard overrides (`hydra/launcher=basic wandb.enabled=false
+      basemodel.checkpoint=/nonexistent/guard`) → `Key 'sweep' not in 'Config'`, exit 1; no outputs dir
+      and no new Slurm job.)*
+- [x] **Blocker for E4/E5 (pre-existing, feature 06):** `egs/mmtc/fr-en/dataset.yaml` names the dev split
+      `$DATA_ROOT/dev.$SRC-$TRG.*`, but `data/fr-en/` has `valid.fr-en.{fr,en}` (the old
+      `data/fr-en/train.yaml` manifest used `valid`). Any fr-en run would fail loading dev. Fix before E4.
+      *(Fixed (option a): the template's dev lines now point at `$DATA_ROOT/valid.$SRC-$TRG.*`; the split
+      key stays `dev`. Inflation verified: all 6 train/dev/test paths exist; tests 11 + 25 pass.)*
 - [ ] E4 Smoke (GPU node, `hydra/launcher=local`, `train.max_steps=2`-ish, `wandb.enabled=false` or a
       scratch project):
   - [ ] `sft_lora.yaml` → 1 job; run dir leaf `mmtc_fr-en_sft_lora`; `is_sweep` false (no `sweep` tag,
         base group).
   - [ ] `sft_lora.sweep.yaml` → 4 job dirs named `learning_rate-…__lora_r-…` under one
         `sweep-<ts>/`; W&B names `mmtc_fr-en_sft_lora_sweep-<label>`, group `…-sweep-<ts>` (R1).
+      *(Keep smoke-only overrides out of the run label with
+      `'hydra.job.config.override_dirname.exclude_keys=[experiment,hydra/launcher,train.max_steps,train.eval_steps,wandb.project]'`;
+      verified to leave only the selector + `data.dataset_dir`, which `_label_pairs` drops.)*
 - [ ] E5 Real Slurm (login node): `bash egs/run.sh mmtc/fr-en/sft_lora.sweep.yaml` prints the sweep dir
       and 4 `#idx : …` lines and submits a 4-task job array (cancel after confirming if not needed).
 - [ ] E6 Confidentiality: inspect a smoke run's W&B config/name/tags; only hyperparameters, paths,

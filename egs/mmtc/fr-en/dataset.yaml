@@ -14,9 +14,9 @@ train:
     - $DATA_ROOT/train.$SRC-$TRG.$TRG
 dev:
   src:
-    - $DATA_ROOT/dev.$SRC-$TRG.$SRC
+    - $DATA_ROOT/valid.$SRC-$TRG.$SRC
   trg:
-    - $DATA_ROOT/dev.$SRC-$TRG.$TRG
+    - $DATA_ROOT/valid.$SRC-$TRG.$TRG
 test:
   src:
     - $DATA_ROOT/test.$SRC-$TRG.$SRC

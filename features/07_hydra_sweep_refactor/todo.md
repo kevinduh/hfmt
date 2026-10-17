@@ -41,20 +41,28 @@ Out of scope / do not touch: untracked `egs/experiment/`, `data/`, `egs/mmtc/fr-
 
 ## B. Launcher path (`egs/run.sh`, `hfmt/sweep_probe.py`)
 
-- [ ] `egs/run.sh`: delete the probe block (`probe_overrides` loop + `sweep_axes=$(…)`, ≈`:76-95`)
+- [x] `egs/run.sh`: delete the probe block (`probe_overrides` loop + `sweep_axes=$(…)`, ≈`:76-95`)
       and the `${sweep_axes}` arg in the final `python` call.
-- [ ] `egs/run.sh`: add the dataset fast-fail after `dataset_dir` is set:
+- [x] `egs/run.sh`: add the dataset fast-fail after `dataset_dir` is set:
       `[ -f "${dataset_dir}/dataset.yaml" ] || { echo "egs/run.sh: dataset template not found: …" >&2; exit 1; }`
       with a one-line comment that only the default name is checked and `main()` validates fully.
-- [ ] `egs/run.sh`: rewrite the header comment:
-  - [ ] Two kinds of experiment (single run vs `hydra.sweeper.params` grid), with example invocations
+- [x] `egs/run.sh`: rewrite the header comment:
+  - [x] Two kinds of experiment (single run vs `hydra.sweeper.params` grid), with example invocations
         of `sft_lora.yaml` / `sft_lora.sweep.yaml`.
-  - [ ] Remove the `sweep.enabled=true` examples; keep the ad-hoc `lora.lora_r=8,16,32` example.
-  - [ ] Note that the launcher logs `#idx : overrides` for every job just before submitting.
-  - [ ] Update the in-process example to `+mmtc/fr-en=sft_lora`.
-- [ ] `egs/run.sh`: fix the launcher comment (drop "or a preset like slurm_fullft").
-- [ ] `git rm hfmt/sweep_probe.py`.
-- [ ] Check: `sh -n egs/run.sh` (syntax) passes; `grep -n "probe\|sweep_axes" egs/run.sh` is empty.
+  - [x] Remove the `sweep.enabled=true` examples; keep the ad-hoc `lora.lora_r=8,16,32` example.
+  - [x] Note that the launcher logs `#idx : overrides` for every job just before submitting.
+  - [x] Update the in-process example to `+mmtc/fr-en=sft_lora`.
+- [x] `egs/run.sh`: fix the launcher comment (drop "or a preset like slurm_fullft").
+- [x] `git rm hfmt/sweep_probe.py`.
+- [x] Check: `sh -n egs/run.sh` (syntax) passes; `grep -n "probe\|sweep_axes" egs/run.sh` is empty.
+      *(run.sh 105 -> 92 lines. Only remaining `sweep_probe` mention is the `SweepConfig` docstring,
+      removed in C.)*
+- [x] Extra checks: a temp experiment in `egs/mmtc/zh-en/` (no `dataset.yaml`) exits 1 with the new
+      fast-fail message before Python (temp file removed; covers E2); a missing experiment exits 1
+      with the `sft_lora.yaml` hint. Composing run.sh's exact args (selector + `dataset_dir` +
+      `output_root`) with `--cfg` works for both files. Note: `--cfg` can't be combined with
+      `--multirun` (Hydra: "Only one of --run, --multirun, --cfg ..."), so E1 must call python
+      directly, not via run.sh.
 
 ## C. Schema, label code, config, tests
 

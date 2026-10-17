@@ -1,29 +1,32 @@
 #!/bin/sh
 
-# Generic Hydra launcher for HFMT experiments (feature 00_hydra; egs/ layout + sweep
-# toggle in feature 04; per-dataset/lang directory hierarchy in feature 06). An experiment
-# recipe lives at egs/<dataset>/<src>-<trg>/<name>.yaml next to its dataset.yaml template;
-# this script activates the env, resolves the inline sweep toggle, and submits to Slurm via
-# the submitit launcher.
+# Generic Hydra launcher for HFMT experiments (feature 00_hydra; egs/ layout in feature 04;
+# per-dataset/lang directory hierarchy in feature 06; two kinds of experiment in feature 07).
+# An experiment recipe lives at egs/<dataset>/<src>-<trg>/<name>.yaml next to its dataset.yaml
+# template; this script activates the env and submits to Slurm via the submitit launcher.
 #
 # Run from a LOGIN node; submitit submits the Slurm job for you (do NOT sbatch this):
 #   export HFMT_ROOT=$(pwd)
-#   bash egs/run.sh mmtc/fr-en/sft1.yaml
+#   bash egs/run.sh mmtc/fr-en/sft_lora.yaml          # single-run experiment -> 1 job
+#   bash egs/run.sh mmtc/fr-en/sft_lora.sweep.yaml    # sweep experiment -> its full grid
 #
 # The sole positional arg is the experiment's path relative to egs/ (the .yaml file; a
 # trailing .yaml is optional). Its directory selects the nested Hydra config group and names
 # the dataset.yaml location; its basename is the experiment option (feature 06).
 #
+# Two kinds of experiment (feature 07): a single-run file has no grid; a sweep file carries
+# its grid in Hydra's native `hydra.sweeper.params` and always runs all of it. The submitit
+# launcher logs every job's overrides (`#<idx> : ...`) just before submitting.
+#
 # Override any knob on the CLI (forwarded via "$@"), e.g.:
-#   bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=16 train.learning_rate=2e-5
-# Turn the experiment's inline sweep on/off, or sweep ad hoc:
-#   bash egs/run.sh mmtc/fr-en/sft1.yaml sweep.enabled=true
-#   bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=8,16,32
+#   bash egs/run.sh mmtc/fr-en/sft_lora.yaml lora.lora_r=16 train.learning_rate=2e-5
+# Sweep ad hoc on any experiment with a comma list (adds an axis to any grid in the file):
+#   bash egs/run.sh mmtc/fr-en/sft_lora.yaml lora.lora_r=8,16,32
 #
 # Run locally/in-process instead of submitting (e.g. already on a GPU node) -- pass the same
 # nested selector + the dataset dir yourself:
 #   cd ${HFMT_ROOT} && python -m hfmt.sft_translation \
-#       +mmtc/fr-en=sft1 data.dataset_dir=${HFMT_ROOT}/egs/mmtc/fr-en
+#       +mmtc/fr-en=sft_lora data.dataset_dir=${HFMT_ROOT}/egs/mmtc/fr-en
 #
 # NOTE: we run as a module (python -m hfmt.sft_translation) with HFMT_ROOT on
 # PYTHONPATH so that submitit can re-import hfmt.* when it unpickles the job on the
@@ -33,7 +36,7 @@ set -e
 
 if [ -z "$1" ]; then
     echo "usage: bash egs/run.sh <experiment.yaml> [hydra overrides...]" >&2
-    echo "       <experiment.yaml> is a path under egs/, e.g. mmtc/fr-en/sft1.yaml" >&2
+    echo "       <experiment.yaml> is a path under egs/, e.g. mmtc/fr-en/sft_lora.yaml" >&2
     exit 1
 fi
 
@@ -59,7 +62,7 @@ fi
 exp_file="${HFMT_ROOT}/egs/${exp_rel_noext}.yaml"
 if [ ! -f "${exp_file}" ]; then
     echo "egs/run.sh: experiment not found: ${exp_file}" >&2
-    echo "       pass a path under egs/, e.g. mmtc/fr-en/sft1.yaml" >&2
+    echo "       pass a path under egs/, e.g. mmtc/fr-en/sft_lora.yaml" >&2
     exit 1
 fi
 
@@ -69,36 +72,21 @@ fi
 dataset_dir="${HFMT_ROOT}/egs/${exp_group}"
 output_root="egs/${exp_group}/outputs"
 
-# Sweep toggle (feature 04): the experiment carries an inline `sweep: {enabled, params}` block.
-# sweep_probe.py composes it and, when enabled, prints bare `<axis>=<csv>` overrides that the
-# basic sweeper fans out into the job grid (disabled -> nothing -> one job). We always launch
-# --multirun (the submitit Slurm launcher only runs in multirun), so the grid is what makes a
-# sweep, not the flag.
-#
-# Forward only the `sweep.enabled` toggle to the probe so it can be flipped from the CLI
-# (`sweep.enabled=true`). Everything else stays in "$@" and goes to the launch: ad-hoc
-# comma-list axes (e.g. lora.lora_r=8,16, or basemodel=qwen2.5-7b,qwen2.5-1.5b to sweep whole
-# component files) are expanded by the sweeper directly. We do NOT forward sweep.params.* here
-# -- a comma-list value breaks the probe's single-run, type-validated compose; author extra
-# axes in the experiment YAML or pass them as bare overrides instead.
-probe_overrides=""
-for arg in "$@"; do
-    case "$arg" in
-        sweep.enabled=*) probe_overrides="${probe_overrides} ${arg}" ;;
-    esac
-done
+# Fast-fail on the login node, before the Slurm submit, if the dataset template is missing.
+# Only the default name is checked; main() validates data.dataset_file authoritatively.
+if [ ! -f "${dataset_dir}/dataset.yaml" ]; then
+    echo "egs/run.sh: dataset template not found: ${dataset_dir}/dataset.yaml" >&2
+    exit 1
+fi
 
-# The probe composes the same experiment (nested selector + injected dataset_dir) and also
-# fast-fails here on the login node if the dataset.yaml template is missing, before the submit.
-sweep_axes=$(python -m hfmt.sweep_probe "${exp_group}=${exp_name}" "data.dataset_dir=${dataset_dir}" ${probe_overrides})
-
-# The launcher is a selectable component now (feature 04): each experiment SELECTS one in its
-# defaults list (`- override /hydra/launcher: slurm` or a preset like slurm_fullft), so we no
-# longer force it here. Override on the CLI if needed, e.g. hydra/launcher=local. (An experiment
-# that selects none falls back to Hydra's local `basic` launcher.)
+# Always --multirun: the submitit Slurm launcher only runs in multirun. A single-run experiment
+# yields one job; a sweep experiment's hydra.sweeper.params (plus any CLI comma lists) yields
+# the grid. Each experiment SELECTS its launcher in its defaults list
+# (`- override /hydra/launcher: slurm`); override on the CLI if needed, e.g.
+# hydra/launcher=local. (An experiment that selects none falls back to Hydra's local `basic`
+# launcher.)
 python -m hfmt.sft_translation --multirun \
     "+${exp_group}=${exp_name}" \
     data.dataset_dir="${dataset_dir}" \
     output_root="${output_root}" \
-    ${sweep_axes} \
     "$@"

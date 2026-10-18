@@ -58,19 +58,19 @@ def test_single_is_one_job_without_suffix():
 def test_sweep_runs_full_grid():
     out, dirs, _ = run(SWEEP)
     assert dirs == [f"sft_lora_sweep-{i}" for i in range(4)]
-    cfg = saved(out, "sft_lora_sweep-2")  # grid order: lr outer, lora_r inner
-    assert (cfg.train.learning_rate, cfg.peft.lora.lora_r) == (1e-5, 8)
+    cfg = saved(out, "sft_lora_sweep-2")  # grid order: lr outer, lora.r inner
+    assert (cfg.train.learning_rate, cfg.peft.lora.r) == (1e-5, 8)
     lines = open(os.path.join(out, "sft_lora_sweep.grid.txt")).read().splitlines()
-    assert lines[2] == "2: train.learning_rate=1e-05 peft.lora.lora_r=8"
+    assert lines[2] == "2: train.learning_rate=1e-05 peft.lora.r=8"
 
 
 def test_cli_value_pins_and_comma_list_adds_axis():
-    assert len(run(SWEEP, "peft.lora.lora_r=8")[1]) == 2
+    assert len(run(SWEEP, "peft.lora.r=8")[1]) == 2
     assert len(run(SWEEP, "train.seed=1,2")[1]) == 8
 
 
 def test_comma_list_on_single_file_makes_a_grid():
-    assert run(SINGLE, "peft.lora.lora_r=8,16")[1] == ["sft_lora-0", "sft_lora-1"]
+    assert run(SINGLE, "peft.lora.r=8,16")[1] == ["sft_lora-0", "sft_lora-1"]
 
 
 def test_zero_padding_above_ten_jobs():
@@ -95,12 +95,12 @@ def test_rerun_saved_config_reuses_its_folder_unless_renamed():
     run(rc, "train.max_steps=2000", out=out)
     assert saved(out, "sft_lora_sweep-1").train.max_steps == 2000
     _, dirs, _ = run(rc, "run_name=renamed", out=out)
-    assert "renamed" in dirs and saved(out, "renamed").peft.lora.lora_r == 16
+    assert "renamed" in dirs and saved(out, "renamed").peft.lora.r == 16
 
 
 def test_errors_fail_before_writing():
     assert fails(SINGLE, "train.lerning_rate=1")      # unknown key
-    assert fails(SWEEP, "peft.lora.lora_r=abc,8")          # bad value in one grid job
+    assert fails(SWEEP, "peft.lora.r=abc,8")          # bad value in one grid job
     assert fails(SINGLE, "slurm.gres=a,b")            # slurm can't be an axis
     tmp = tempfile.mkdtemp()
     cfg_named = os.path.join(tmp, "config.yaml")
@@ -117,7 +117,7 @@ def test_each_peft_option_composes():
 
 
 def test_peft_mode_must_match_blocks():
-    assert fails(SINGLE, "peft=full_finetune", "peft.lora.lora_r=16")  # partial lora block on full
+    assert fails(SINGLE, "peft=full_finetune", "peft.lora.r=16")  # partial lora block on full
     assert fails(SINGLE, "peft=qlora_default", "peft.mode=lora")       # lora with a quant block
     assert fails(SINGLE, "peft.mode=adapter")                          # unknown mode
 
@@ -137,6 +137,17 @@ def test_several_test_sets():
     out, _, _ = run(SINGLE, "data.test.src=[/a.fr,/b.fr]", "data.test.trg=null")    # no references
     assert saved(out, "sft_lora").data.test.trg is None
     assert fails(SINGLE, "data.test.src=[/a.fr,/b.fr]", "data.test.trg=[/a.en]")   # length mismatch
+
+
+def test_lora_target_modules():
+    out, _, _ = run(SINGLE, "peft.lora.target_modules=[q_proj,k_proj,v_proj,o_proj]")
+    assert list(saved(out, "sft_lora").peft.lora.target_modules) == ["q_proj", "k_proj", "v_proj", "o_proj"]
+    out, dirs, _ = run(SINGLE, "peft.lora.target_modules=[q_proj,v_proj],[q_proj,k_proj,v_proj,o_proj]")
+    assert dirs == ["sft_lora-0", "sft_lora-1"]                              # a list-valued grid axis
+    assert open(os.path.join(out, "sft_lora.grid.txt")).read().splitlines() == [
+        "0: peft.lora.target_modules=[q_proj,v_proj]", "1: peft.lora.target_modules=[q_proj,k_proj,v_proj,o_proj]"]
+    assert fails(SINGLE, "peft.lora.target_modules=[]")                     # empty
+    assert fails(SINGLE, "peft.lora.lora_r=8")                              # old key name
 
 
 def test_missing_value_fails():
@@ -241,7 +252,7 @@ def test_inf_on_experiment_decodes_base_checkpoint():
 
 
 def test_inf_on_experiment_refuses_grids():
-    for exp, overrides in [(SWEEP, ()), (SINGLE, ("peft.lora.lora_r=8,16",))]:
+    for exp, overrides in [(SWEEP, ()), (SINGLE, ("peft.lora.r=8,16",))]:
         out = tempfile.mkdtemp()
         try:
             inf(exp, *overrides, f"output_root={out}")

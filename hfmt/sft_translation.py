@@ -12,6 +12,7 @@ Heavy imports (torch, transformers, ...) live inside functions so config-only us
 import time
 import os
 import logging
+from collections import Counter
 from pprint import pformat
 
 import hydra
@@ -94,6 +95,7 @@ def main(cfg: Config) -> None:
     import datasets
     from datasets import load_dataset, concatenate_datasets, DatasetDict
     from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
+    from peft.tuners.lora import LoraLayer
     from trl import SFTConfig, SFTTrainer
 
     check_config(cfg)
@@ -171,31 +173,13 @@ def main(cfg: Config) -> None:
     ### Apply LoRA/QLoRA if needed
     lora_config = None
     if finetune_mode in ("lora", "qlora"):
-        # TODO: fix, this is brittle
-        if cfg.peft.lora.lora_target == "qv":
-            target_modules = ["q_proj", "v_proj"]
-        elif cfg.peft.lora.lora_target == "all-linear":
-            target_modules = "all-linear"
-        elif cfg.peft.lora.lora_target == "attention":
-            target_modules = ["q_proj", "v_proj", "k_proj", "out_proj"]
-        elif cfg.peft.lora.lora_target == "mlp":
-            target_modules = ["up_proj", "down_proj"]
-        else:
-            logging.error(
-                f"Invalid lora_target: {cfg.peft.lora.lora_target}. "
-                "Must be one of: qv | all-linear | attention | mlp."
-            )
-            exit(1)
-
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM, # type of task to train on
             inference_mode=False, # set to False for training
-            r=cfg.peft.lora.lora_r, # dimension of the smaller matrices
-            lora_alpha=cfg.peft.lora.lora_alpha, # scaling factor
-            lora_dropout=cfg.peft.lora.lora_dropout, # dropout of LoRA layers,
-            target_modules=target_modules,
-            #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
-            #bias="none"
+            r=cfg.peft.lora.r, # dimension of the smaller matrices
+            lora_alpha=cfg.peft.lora.alpha, # scaling factor
+            lora_dropout=cfg.peft.lora.dropout, # dropout of LoRA layers
+            target_modules=list(cfg.peft.lora.target_modules), # exact names, matched at the end of module names
         )
 
         if finetune_mode == "qlora":
@@ -203,8 +187,12 @@ def main(cfg: Config) -> None:
 
         model = get_peft_model(model, lora_config)
         model.config.use_cache = False
-        logging.info("LoRA/QLoRA adapter enabled:")
-        model.print_trainable_parameters()
+        # Which modules the list actually matched (by last name component), e.g. q_proj x28.
+        wrapped = Counter(name.rsplit(".", 1)[-1] for name, module in model.named_modules()
+                          if isinstance(module, LoraLayer))
+        logging.info("LoRA wraps: " + ", ".join(f"{k} x{v}" for k, v in sorted(wrapped.items())))
+        trainable, total = model.get_nb_trainable_parameters()
+        logging.info(f"LoRA/QLoRA adapter enabled: trainable params {trainable:,} of {total:,} ({100 * trainable / total:.4f}%)")
     else: # full fine-tune of all parameters
         model.config.use_cache = False
         logging.info(f"Full fine-tuning of base model. #param: {model.num_parameters()}")

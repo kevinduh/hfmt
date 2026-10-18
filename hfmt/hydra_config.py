@@ -28,10 +28,12 @@ from omegaconf import MISSING
 class LoraConfig:
     """LoRA adapter; required when ``peft.mode`` is ``lora`` or ``qlora``."""
 
-    lora_r: int = MISSING
-    lora_alpha: float = MISSING
-    lora_dropout: float = MISSING
-    lora_target: str = MISSING  # qv | all-linear | attention | mlp
+    r: int = MISSING                  # rank (PEFT: r)
+    alpha: float = MISSING            # scaling (PEFT: lora_alpha)
+    dropout: float = MISSING          # (PEFT: lora_dropout)
+    # Exact module names to wrap, each matched against the end of a module's full name (q_proj ->
+    # every layer's ...self_attn.q_proj). Find a model's names with tools/inspect_model.py.
+    target_modules: List[str] = MISSING
 
 
 @dataclass
@@ -171,8 +173,9 @@ class Config:
 
 
 def check_config(cfg) -> None:
-    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, on a negative
-    ``train.inference_callback_interval``, or if ``data.test.trg`` doesn't match ``data.test.src``."""
+    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, on an empty
+    ``peft.lora.target_modules``, on a negative ``train.inference_callback_interval``, or if
+    ``data.test.trg`` doesn't match ``data.test.src``."""
     if cfg.train.inference_callback_interval < 0:
         raise ValueError(f"train.inference_callback_interval={cfg.train.inference_callback_interval}: "
                          "must be >= 0 (0 = no dev decoding)")
@@ -187,6 +190,8 @@ def check_config(cfg) -> None:
     if (has_lora, has_quant) != need[mode]:
         state = lambda lora, quant: f"peft.lora {'set' if lora else 'unset'}, peft.quant {'set' if quant else 'unset'}"
         raise ValueError(f"peft.mode={mode} needs {state(*need[mode])}; got {state(has_lora, has_quant)}")
+    if has_lora and not cfg.peft.lora.target_modules:
+        raise ValueError("peft.lora.target_modules is empty: list the module names to wrap, e.g. [q_proj,v_proj]")
 
 
 def register_configs() -> None:

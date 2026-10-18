@@ -13,7 +13,7 @@
 # to <experiment folder>/outputs)
 #   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml                 # 1 job
 #   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml           # its full grid
-#   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.lora_r=8,16   # comma list -> grid
+#   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.r=8,16       # comma list -> grid
 #   bash egs/launch.sh sft <run folder>/run_config.yaml [overrides]     # re-run a saved job
 #
 # inf: decode the test sets with one model per call -> test<i>.pred.trg per test file, scores.json

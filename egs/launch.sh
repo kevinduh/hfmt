@@ -12,9 +12,9 @@
 # (untracked; copy local_setting.sh.example). Only needed here: saved configs hold resolved paths.
 #
 # Inference:  bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]   (one run folder per call)
-#   e.g. decode.num_beams=5 inf_name=beam5, or another test set:
-#        'data.test.src=[/path/x.fr]' 'data.test.trg=[/path/x.en]' inf_name=x
-# Output: <run folder>/inf/<inf_name>/ (pred.trg, scores.json when references are given,
+#   e.g. decode.num_beams=5 inf_name=beam5, or other test sets (null = no reference):
+#        'data.test.src=[/path/x.fr,/path/y.fr]' 'data.test.trg=[/path/x.en,null]' inf_name=xy
+# Output: <run folder>/inf/<inf_name>/ (test<i>.pred.trg per test file, scores.json,
 # inf_config.yaml); run_config.yaml is never changed. The job runs egs/inf_job.sh. A whole sweep:
 #   for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; done
 #

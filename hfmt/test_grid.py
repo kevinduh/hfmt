@@ -130,6 +130,15 @@ def test_inference_callback_interval():
     assert fails(SINGLE, "train.inference_callback_interval=-1")
 
 
+def test_several_test_sets():
+    out, _, _ = run(SINGLE, "data.test.src=[/a.fr,/b.fr]", "data.test.trg=[/a.en,null]")
+    test = saved(out, "sft_lora").data.test
+    assert list(test.src) == ["/a.fr", "/b.fr"] and list(test.trg) == ["/a.en", None]
+    out, _, _ = run(SINGLE, "data.test.src=[/a.fr,/b.fr]", "data.test.trg=null")    # no references
+    assert saved(out, "sft_lora").data.test.trg is None
+    assert fails(SINGLE, "data.test.src=[/a.fr,/b.fr]", "data.test.trg=[/a.en]")   # length mismatch
+
+
 def test_missing_value_fails():
     tmp = tempfile.mkdtemp()                           # experiment that sets no checkpoint
     shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)

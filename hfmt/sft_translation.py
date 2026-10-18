@@ -19,7 +19,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
 from hfmt.hydra_config import Config, check_config, register_configs
-from hfmt.mt_model import format_input_prompt, inference_on_eval_data, load_base_model, load_tokenizer, score
+from hfmt.mt_model import decode_test_sets, format_input_prompt, inference_on_eval_data, load_base_model, load_tokenizer, score
 
 
 DECODE_METRICS = ("eval_bleu", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
@@ -314,8 +314,13 @@ def main(cfg: Config) -> None:
     logging.info(f"======== Testing ========")
     model = trainer.accelerator.unwrap_model(model, keep_fp32_wrapper=False)
     if cfg.data.test is not None and cfg.data.test.src:
-        test_data = load_dataset("text", data_files=list(cfg.data.test.src), streaming=False, split="train")
-        inference_on_eval_data(tokenizer, model, test_data, os.path.join(outdir,"eval.pred.trg"), device, instruction_prefix, cfg.decode)
+        results = decode_test_sets(cfg, tokenizer, model, outdir, device)   # test<i>.pred.trg + scores.json
+        import wandb
+        if wandb.run is not None:                                          # numbers only, no paths (CLAUDE.md)
+            for name, r in results.items():
+                for k in ("bleu", "chrf", "ter"):
+                    if k in r:
+                        wandb.run.summary[f"test/{name}/{k}"] = r[k]
     else:
         logging.info("No test files (data.test.src) -- skipping test decoding.")
 

@@ -61,6 +61,15 @@ class Bitext:
 
 
 @dataclass
+class TestSet:
+    """Test files, each decoded and scored on its own (``test<i>.pred.trg``, i from 1). ``trg``
+    omitted: nothing is scored; otherwise one entry per ``src`` file, ``null`` = no reference."""
+
+    src: List[str] = MISSING
+    trg: Optional[List[Optional[str]]] = None
+
+
+@dataclass
 class DataConfig:
     """Parallel text, from the experiment folder's ``dataset.yaml``. ``data_root``/``src``/``trg`` are
     optional helpers for building the file paths (``data_root`` usually from ``$HFMT_DATA_ROOT``, set
@@ -72,7 +81,7 @@ class DataConfig:
     trg: Optional[str] = None
     train: Bitext = MISSING
     dev: Bitext = MISSING
-    test: Optional[Bitext] = None
+    test: Optional[TestSet] = None
 
 
 @dataclass
@@ -162,11 +171,15 @@ class Config:
 
 
 def check_config(cfg) -> None:
-    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, or on a negative
-    ``train.inference_callback_interval``."""
+    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, on a negative
+    ``train.inference_callback_interval``, or if ``data.test.trg`` doesn't match ``data.test.src``."""
     if cfg.train.inference_callback_interval < 0:
         raise ValueError(f"train.inference_callback_interval={cfg.train.inference_callback_interval}: "
                          "must be >= 0 (0 = no dev decoding)")
+    test = cfg.data.test
+    if test is not None and test.trg is not None and len(test.trg) != len(test.src):
+        raise ValueError(f"data.test.trg has {len(test.trg)} entries for {len(test.src)} data.test.src files: "
+                         "give one per src file (null = no reference), or omit trg")
     mode, has_lora, has_quant = cfg.peft.mode, cfg.peft.lora is not None, cfg.peft.quant is not None
     need = {"full": (False, False), "lora": (True, False), "qlora": (True, True)}
     if mode not in need:

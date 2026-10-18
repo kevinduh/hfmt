@@ -121,6 +121,34 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
     return all_testout
 
 
+def decode_test_sets(cfg, tokenizer, model, outdir, device):
+    """Decode each ``cfg.data.test.src`` file on its own into ``<outdir>/test<i>.pred.trg`` (i from 1)
+    and score it when it has a reference. Writes ``<outdir>/scores.json``
+    (``{"test<i>": {"src", "trg", "bleu", "chrf", "ter"}}``; no scores for a set without reference)
+    and returns it. Used by both training and inference, so their outputs match."""
+    import json
+    import os
+    from datasets import load_dataset
+
+    test = cfg.data.test
+    trgs = list(test.trg) if test.trg is not None else [None] * len(test.src)
+    results = {}
+    for i, (src, trg) in enumerate(zip(test.src, trgs), start=1):
+        name = f"test{i}"
+        logging.info(f"Decoding {name}: {src}")
+        data = load_dataset("text", data_files=[src], streaming=False, split="train")
+        preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir, f"{name}.pred.trg"), device,
+                                       cfg.instruction, cfg.decode)
+        results[name] = {"src": src, "trg": trg}
+        if trg is not None:
+            refs = load_dataset("text", data_files=[trg], streaming=False, split="train")["text"]
+            results[name].update(score(preds, refs))
+            logging.info(f"{name} scores: {results[name]}")
+    with open(os.path.join(outdir, "scores.json"), "w") as f:
+        json.dump(results, f, indent=2)
+    return results
+
+
 def score(preds, refs):
     """Corpus BLEU (flores200 tokenization), chrF and TER, rounded to 2 decimals.
     Aggregate numbers only: safe to log anywhere (CLAUDE.md)."""

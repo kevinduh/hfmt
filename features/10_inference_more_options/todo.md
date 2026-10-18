@@ -56,38 +56,38 @@ Ground rules for every phase:
 ## B. Several test sets (request 2)
 
 ### B1. Schema and checks
-- [ ] Add `TestSet` dataclass: `src: List[str] = MISSING`, `trg: Optional[List[Optional[str]]] = None`;
+- [x] Add `TestSet` dataclass: `src: List[str] = MISSING`, `trg: Optional[List[Optional[str]]] = None`;
       `DataConfig.test: Optional[TestSet] = None`.
-- [ ] `check_config`: if `test.trg` is given, `len(trg) == len(src)`, with a clear message.
-- [ ] Check that `'data.test.trg=[a,null]'` composes (OmegaConf `List[Optional[str]]`).
-- [ ] Update the `dataset.yaml` header comment (several test files, one output each, `null` = no reference).
+- [x] `check_config`: if `test.trg` is given, `len(trg) == len(src)`, with a clear message.
+- [x] Check that `'data.test.trg=[a,null]'` composes (OmegaConf `List[Optional[str]]`).
+- [x] Update the `dataset.yaml` header comment (several test files, one output each, `null` = no reference).
 
 ### B2. Shared helper (`hfmt/mt_model.py`)
-- [ ] `decode_test_sets(cfg, tokenizer, model, outdir, device)`. For each `i` (from 1):
+- [x] `decode_test_sets(cfg, tokenizer, model, outdir, device)`. For each `i` (from 1):
       load `test.src[i-1]`, decode with `inference_on_eval_data` into `<outdir>/test<i>.pred.trg`,
       and score it if it has a reference.
-- [ ] Write `<outdir>/scores.json`: `{"test<i>": {"src", "trg", ["bleu", "chrf", "ter"]}}`.
+- [x] Write `<outdir>/scores.json`: `{"test<i>": {"src", "trg", ["bleu", "chrf", "ter"]}}`.
       Return the scores dict.
 
 ### B3. Callers
-- [ ] `sft_translation.py` test step: replace the single `eval.pred.trg` decode with
+- [x] `sft_translation.py` test step: replace the single `eval.pred.trg` decode with
       `decode_test_sets(...)` (still after `unwrap_model` and the model save).
-- [ ] Training: if a W&B run is active, put each scored set's numbers in `wandb.run.summary` as
+- [x] Training: if a W&B run is active, put each scored set's numbers in `wandb.run.summary` as
       `test/test<i>/{bleu,chrf,ter}`. Numbers only.
-- [ ] `inf_translation.py`: replace the single decode/score with `decode_test_sets(...)`. Update the
+- [x] `inf_translation.py`: replace the single decode/score with `decode_test_sets(...)`. Update the
       docstring (outputs).
-- [ ] Update stale `pred.trg`/`eval.pred.trg` mentions in `launch.sh` comments.
+- [x] Update stale `pred.trg`/`eval.pred.trg` mentions in `launch.sh` comments.
 
 ### B4. Tests
-- [ ] `test_grid.py`: two test files with a `null` reference compose; mismatched `trg` length fails.
+- [x] `test_grid.py`: two test files with a `null` reference compose; mismatched `trg` length fails.
 
 ### Done when
-- [ ] Tests pass.
-- [ ] GPU: 20-step lora and qlora runs with `data.test.src=[test, valid]`, `data.test.trg=[test_ref, null]`.
+- [x] Tests pass.
+- [x] GPU: 20-step lora and qlora runs with `data.test.src=[test, valid]`, `data.test.trg=[test_ref, null]`.
       - Training writes `test1.pred.trg`, `test2.pred.trg` and `scores.json` (test2 unscored).
       - The W&B summary has `test/test1/*` only.
-- [ ] `launch.sh inf` on both runs reproduces both `.pred.trg` files exactly (0 differing lines) with the same `scores.json`.
-- [ ] `todo.md` B ticked; commit message presented.
+- [x] `launch.sh inf` on both runs reproduces both `.pred.trg` files exactly (0 differing lines) with the same `scores.json`.
+- [x] `todo.md` B ticked; commit message presented.
 
 ## C. Base-model inference (request 1)
 

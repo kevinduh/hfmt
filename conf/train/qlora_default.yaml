@@ -1,0 +1,26 @@
+# Default training settings (hydra2's fr-en values, feature 08 A2).
+finetune_mode: qlora   # full | lora | qlora
+max_steps: 800
+learning_rate: 2e-4
+train_batch_size: 16
+eval_batch_size: 16
+gradient_accumulation_steps: 1
+weight_decay: 0.01
+logging_steps: 10
+eval_steps: 50
+save_steps: ${train.eval_steps}   # checkpoint at every evaluation
+save_total_limit: 3
+lr_scheduler_type: reduce_lr_on_plateau
+warmup_steps: 30
+label_smoothing_factor: 0.0
+seed: 42
+optim: adamw_torch_fused
+completion_only_loss: true
+packing: false
+gradient_checkpointing: true
+# Best-checkpoint selection and early stopping (patience 100 effectively never stops).
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+greater_is_better: false
+early_stopping_patience: 100
+early_stopping_threshold: 0.05

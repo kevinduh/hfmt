@@ -1,0 +1,23 @@
+# Single-run experiment: QLoRA SFT of Qwen2.5-1.5B on MMTC fr-en (one job).
+# Launch:  bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml [overrides]
+# Debug:   python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lora
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: train/dev/test file lists
+  - override basemodel: qwen2.5-1.5b
+  - override train: qlora_default
+  - _self_
+
+run_name: sft_lora
+
+data:
+  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
+  src: fr
+  trg: en
+  instruction: "Translate French to English"
+
+train:
+  seed: 37
+
+wandb:
+  tags: [sft, fr-en, lora]

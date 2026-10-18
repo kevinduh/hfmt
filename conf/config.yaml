@@ -1,0 +1,25 @@
+# Base config for SFT experiments (feature 08_hydra_redo). Components only, never experiments.
+# An experiment (egs/<dataset>/<pair>/<name>.yaml) starts its defaults with `- config` to pull
+# this in, then `- dataset` and `override <group>: <option>` lines. Schema: hfmt/hydra_config.py.
+defaults:
+  - base_config            # typed schema: validates everything below
+  - basemodel: qwen2.5-1.5b
+  - lora: default
+  - train: qlora_default
+  - decode: default
+  - _self_
+
+# sbatch resources, read by hfmt/grid.py (override per experiment or e.g. slurm.gres=gpu:l40s:1).
+# a100 is bf16-capable and allowed by our GPU tier; 4h fits the ~80 min 800-step QLoRA runs
+# while staying short enough to backfill.
+slurm:
+  partition: gpu
+  gres: gpu:a100:1
+  time: "4:00:00"
+  mem_gb: 25
+  cpus: 1
+  array_parallelism: 4
+
+hydra:
+  job:
+    chdir: false            # stay in the launch dir; the code writes to the run dir explicitly

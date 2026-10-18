@@ -94,8 +94,13 @@ def main():
     ## Set arguments
     parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
     parser.add_argument("-e", "--eval", help="Eval source text")
-    parser.add_argument("-c", "--checkpoint", required=True, help="Checkpoint")
-    parser.add_argument("-p", "--peft", type=str, default="", help="If specified, use PEFT adaptor")
+    # Two load modes (feature 04):
+    #   QLoRA/LoRA: -c <base checkpoint>  -p <run_dir>/model   (adapter on a 4-bit base)
+    #   Full FT   : -c <run_dir>/model    (no -p)              (a fully fine-tuned model)
+    parser.add_argument("-c", "--checkpoint", required=True,
+                        help="Base model id (with --peft), or a full fine-tuned model dir (without --peft)")
+    parser.add_argument("-p", "--peft", type=str, default="",
+                        help="PEFT adapter dir (e.g. <run_dir>/model from a LoRA run); omit for a full fine-tuned model")
     parser.add_argument("-o", "--outdir", required=True, help="Output directory")
     parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
     parser.add_argument("--max_steps", type=int, default=10000, help="Max number of train steps")

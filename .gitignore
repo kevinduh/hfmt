@@ -2,3 +2,7 @@ egs/models
 *.sh.o*
 wandb/
 *~
+# Run outputs (prediction dumps are data-derived; never commit). feature 08
+outputs/
+egs/**/outputs/
+__pycache__/

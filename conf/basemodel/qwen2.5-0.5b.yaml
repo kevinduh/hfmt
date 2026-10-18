@@ -1,0 +1,2 @@
+# Qwen2.5-0.5B-Instruct. 4-bit settings (used in qlora mode) default in hfmt/hydra_config.py.
+checkpoint: Qwen/Qwen2.5-0.5B-Instruct

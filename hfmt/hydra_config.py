@@ -53,7 +53,7 @@ class PeftConfig:
 
 
 @dataclass
-class DataSplit:
+class Bitext:
     """Parallel file lists for one split; ``src[i]`` and ``trg[i]`` are line-aligned files."""
 
     src: List[str] = MISSING
@@ -70,9 +70,9 @@ class DataConfig:
     data_root: Optional[str] = None
     src: Optional[str] = None
     trg: Optional[str] = None
-    train: DataSplit = MISSING
-    dev: DataSplit = MISSING
-    test: Optional[DataSplit] = None
+    train: Bitext = MISSING
+    dev: Bitext = MISSING
+    test: Optional[Bitext] = None
 
 
 @dataclass
@@ -136,6 +136,8 @@ class SlurmConfig:
     mem_gb: int = MISSING
     cpus: int = MISSING
     array_parallelism: int = MISSING
+    constraint: Optional[str] = None  # e.g. "--constraint=80gb"
+    exclude: Optional[str] = None  # e.g. "--exclude=node[01-05]"
 
 
 @dataclass

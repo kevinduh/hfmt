@@ -90,6 +90,7 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
     logging.info(f"inference_on_eval_data: {eval_data}")
     eval_dataloader = DataLoader(eval_data, batch_size=decode.batch_size, shuffle=False)
     all_testout = []
+    n_cut, longest = 0, 0
     start_time = time.time()
     with open(predictions_file, "w") as O:
         for i, eval_batch in enumerate(eval_dataloader):
@@ -107,8 +108,14 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
                 O.write(f"{testout}\n")
                 all_testout.append(testout)
 
+            # check if prompts get cut off by max_length
+            lengths = [len(ids) for ids in tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, return_dict=True)["input_ids"]]
+            n_cut += sum(n > decode.max_length for n in lengths)
+            longest = max(longest, *lengths)
+
     end_time = time.time()
     logging.info(f"Testing - Elapsed time for {len(eval_data)} sentences in {i+1} batches: {end_time-start_time:.1f}s")
+    logging.info(f"Testing - {n_cut} prompts were cut off by max_length={decode.max_length}, longest prompt length={longest}")
     tokenizer.padding_side = original_padding_side
     tokenizer.truncation_side = original_truncation_side
     return all_testout

@@ -1,20 +1,16 @@
-# Sweep experiment: sft_lora.yaml over a learning-rate x LoRA-rank grid (2 x 2 = 4 jobs).
+# Sweep experiment
 # Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml [overrides]
 # Always runs the full grid; a command-line comma list adds an axis, a single value pins one.
 # Jobs land in outputs/sft_lora_sweep-<idx>/; outputs/sft_lora_sweep.grid.txt maps idx -> values.
-# Change run_name when you change the grid's shape (indexes are positions in the grid).
 defaults:
   - config
   - dataset
-  - override peft: qlora_default
+  - override peft: lora_default
   - _self_
 
 run_name: sft_lora_sweep
 checkpoint: Qwen/Qwen2.5-1.5B-Instruct
 instruction: "Translate French to English"
-
-train:
-  seed: 37
 
 wandb:
   tags: [sft, fr-en, lora]
@@ -22,5 +18,5 @@ wandb:
 hydra:
   sweeper:
     params:
-      train.learning_rate: 1e-4,2e-4
+      train.learning_rate: 1e-4,1e-5
       peft.lora.lora_r: 8,16

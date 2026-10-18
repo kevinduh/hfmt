@@ -59,9 +59,9 @@ def test_sweep_runs_full_grid():
     out, dirs, _ = run(SWEEP)
     assert dirs == [f"sft_lora_sweep-{i}" for i in range(4)]
     cfg = saved(out, "sft_lora_sweep-2")  # grid order: lr outer, lora_r inner
-    assert (cfg.train.learning_rate, cfg.peft.lora.lora_r) == (2e-4, 8)
+    assert (cfg.train.learning_rate, cfg.peft.lora.lora_r) == (1e-5, 8)
     lines = open(os.path.join(out, "sft_lora_sweep.grid.txt")).read().splitlines()
-    assert lines[2] == "2: train.learning_rate=0.0002 peft.lora.lora_r=8"
+    assert lines[2] == "2: train.learning_rate=1e-05 peft.lora.lora_r=8"
 
 
 def test_cli_value_pins_and_comma_list_adds_axis():
@@ -118,7 +118,7 @@ def test_each_peft_option_composes():
 
 def test_peft_mode_must_match_blocks():
     assert fails(SINGLE, "peft=full_finetune", "peft.lora.lora_r=16")  # partial lora block on full
-    assert fails(SINGLE, "peft.mode=lora")                             # lora with a quant block
+    assert fails(SINGLE, "peft=qlora_default", "peft.mode=lora")       # lora with a quant block
     assert fails(SINGLE, "peft.mode=adapter")                          # unknown mode
 
 

@@ -94,6 +94,10 @@ def _print_jobs(job_dirs, s, job_name, log):
     sbatch = [f"--array=0-{len(job_dirs) - 1}%{s.array_parallelism}", f"--partition={s.partition}",
               f"--gres={s.gres}", f"--time={s.time}", f"--mem={s.mem_gb}G", f"--cpus-per-task={s.cpus}",
               f"--job-name={job_name}", f"--output={log}"]
+    if s.constraint:
+        sbatch.append(f"--constraint={s.constraint}")
+    if s.exclude:
+        sbatch.append(f"--exclude={s.exclude}")
     print("JOBS=(" + " ".join(shlex.quote(d) for d in job_dirs) + ")")
     print("SBATCH_ARGS=(" + " ".join(shlex.quote(a) for a in sbatch) + ")")
 

@@ -1,0 +1,32 @@
+# optimizer and learning rate
+max_steps: 2000
+lr_scheduler_type: cosine
+learning_rate: 2e-5
+warmup_steps: 30
+optim: adamw_torch_fused
+seed: 42
+
+# loss function
+weight_decay: 0.01
+label_smoothing_factor: 0.0
+completion_only_loss: true
+
+# batch size
+train_batch_size: 32
+eval_batch_size: 32
+gradient_accumulation_steps: 2
+gradient_checkpointing: true
+packing: false
+
+# logging
+logging_steps: 10
+eval_steps: 50
+save_steps: ${train.eval_steps}   
+save_total_limit: 3
+
+# early stopping
+load_best_model_at_end: true
+metric_for_best_model: eval_bleu
+greater_is_better: true
+early_stopping_patience: 50
+early_stopping_threshold: 0.05

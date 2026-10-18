@@ -11,8 +11,6 @@ defaults:
   - _self_
 
 # sbatch resources, read by hfmt/grid.py (override per experiment or e.g. slurm.gres=gpu:l40s:1).
-# a100 is bf16-capable and allowed by our GPU tier; 4h fits the ~80 min 800-step QLoRA runs
-# while staying short enough to backfill.
 slurm:
   partition: gpu
   gres: gpu:a100:1

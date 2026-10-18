@@ -1,26 +1,32 @@
-# Default training settings (hydra2's fr-en values, feature 08 A2). The fine-tuning method is the
-# peft group (conf/peft/); a full fine-tune may want its own train option (e.g. a lower learning rate).
-max_steps: 800
+# optimizer and learning rate
+max_steps: 200
+lr_scheduler_type: reduce_lr_on_plateau
 learning_rate: 2e-4
+warmup_steps: 0
+optim: adamw_torch_fused
+seed: 42
+
+# loss function
+weight_decay: 0.01
+label_smoothing_factor: 0.0
+completion_only_loss: true
+
+# batch size
 train_batch_size: 16
 eval_batch_size: 16
 gradient_accumulation_steps: 1
-weight_decay: 0.01
-logging_steps: 10
-eval_steps: 50
-save_steps: ${train.eval_steps}   # checkpoint at every evaluation
-save_total_limit: 3
-lr_scheduler_type: reduce_lr_on_plateau
-warmup_steps: 30
-label_smoothing_factor: 0.0
-seed: 42
-optim: adamw_torch_fused
-completion_only_loss: true
-packing: false
 gradient_checkpointing: true
-# Best-checkpoint selection and early stopping (patience 100 effectively never stops).
+packing: false
+
+# logging
+logging_steps: 10
+eval_steps: 20
+save_steps: ${train.eval_steps}   
+save_total_limit: 3
+
+# early stopping
 load_best_model_at_end: true
 metric_for_best_model: eval_loss
 greater_is_better: false
-early_stopping_patience: 100
+early_stopping_patience: 50
 early_stopping_threshold: 0.05

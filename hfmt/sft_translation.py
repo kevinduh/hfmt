@@ -56,7 +56,8 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
                 if wandb.run is not None:
                     wandb.log({"eval/bleu": kwargs["metrics"]["eval_bleu"],
                                "eval/chrf": kwargs["metrics"]["eval_chrf"],
-                               "eval/ter": kwargs["metrics"]["eval_ter"]}, step=state.global_step)
+                               "eval/ter": kwargs["metrics"]["eval_ter"], 
+                               "train/global_step": state.global_step})
 
             super().on_evaluate(args, state, control, **kwargs)
 

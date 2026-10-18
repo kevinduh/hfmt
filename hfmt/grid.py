@@ -1,7 +1,7 @@
 """Expand an experiment into jobs and prepare their run folders (login node; features 08, 09).
 
 Called by egs/launch.sh sft:  python -m hfmt.grid <experiment.yaml> [overrides...]
-     and egs/launch.sh inf:  python -m hfmt.grid --inf <run folder>/run_config.yaml [overrides...]
+     and egs/launch.sh inf:  python -m hfmt.grid --inf <run folder>/run_config.yaml | <experiment.yaml> [overrides...]
 
 Training:
 - Grid = the experiment's ``hydra.sweeper.params`` plus command-line comma lists, expanded with
@@ -12,9 +12,12 @@ Training:
   more; ``output_root`` defaults to ``<experiment folder>/outputs``. Re-running a saved
   ``run_config.yaml`` without a new ``run_name`` uses the folder it's in.
 
-Inference (``--inf``): always one job on one trained run folder. Its saved ``run_config.yaml`` +
-overrides + ``model_dir=<run folder>/model`` are checked the same way and saved as
-``<run folder>/inf/<inf_name>/inf_config.yaml``; ``run_config.yaml`` is never written.
+Inference (``--inf``): always one job, one model; the yaml kind decides which model.
+- A trained run's ``run_config.yaml``: its saved config + overrides + ``model_dir=<run folder>/model``
+  are checked the same way and saved as ``<run folder>/inf/<inf_name>/inf_config.yaml``;
+  ``run_config.yaml`` is never written.
+- An experiment yaml (not a sweep): the downloaded ``checkpoint`` as is, no adapter (``model_dir``
+  unset); saved as ``<output_root>/<run_name>/base_ckpt_inf/<inf_name>/inf_config.yaml``.
 
 Human-readable output goes to stderr; stdout is bash for egs/launch.sh to eval
 (``JOBS=(...)`` and ``SBATCH_ARGS=(...)``).
@@ -103,18 +106,37 @@ def _print_jobs(job_dirs, s, job_name, log):
 
 
 def main_inf(exp_dir, exp_name, args, parsed):
-    if exp_name != SAVED:
-        sys.exit(f"grid --inf: give a trained run folder's {SAVED}.yaml, not {exp_name}.yaml")
+    """``--inf``: prepare one inference job. The yaml kind decides which model is decoded:
+    a trained run's ``run_config.yaml`` -> its ``model/``; an experiment yaml -> its plain ``checkpoint``."""
+    # 1. One model per call: no grids (loop over run folders in the shell instead).
     if any(o.is_sweep_override() for o in parsed):
-        sys.exit("grid --inf: comma lists aren't allowed (one run folder per call; loop in the shell)")
-    model_dir = os.path.join(exp_dir, "model")
-    if not os.path.isdir(model_dir):
-        sys.exit(f"grid --inf: no trained model in {model_dir}")
-    cfg = _compose_checked(exp_dir, exp_name, [f"model_dir={model_dir}"] + args)
-    inf_dir = os.path.join(exp_dir, "inf", cfg.inf_name)
+        sys.exit("grid --inf: comma lists aren't allowed (one model per call; loop in the shell)")
+
+    if exp_name == SAVED:
+        # 2a. Trained run: decode <run>/model; output goes inside the run folder.
+        model_dir = os.path.join(exp_dir, "model")
+        if not os.path.isdir(model_dir):
+            sys.exit(f"grid --inf: no trained model in {model_dir}")
+        cfg = _compose_checked(exp_dir, exp_name, [f"model_dir={model_dir}"] + args)
+        inf_dir = os.path.join(exp_dir, "inf", cfg.inf_name)
+        job_name = f"{cfg.run_name}-inf"
+    else:
+        # 2b. Experiment: decode the checkpoint as downloaded (model_dir stays unset; the peft
+        # option only sets the load precision). A sweep file would silently use its base values,
+        # so refuse it. Output: <output_root>/<run_name>/base_ckpt_inf/<inf_name>, separate from
+        # any trained run's inf/ in the same folder.
+        if _compose(exp_dir, exp_name, args, with_hydra=True).hydra.sweeper.params:
+            sys.exit(f"grid --inf: {exp_name}.yaml is a sweep; use a single-run experiment")
+        cfg = _compose_checked(exp_dir, exp_name, args)
+        if cfg.output_root is None:
+            cfg.output_root = os.path.join(exp_dir, "outputs")
+        inf_dir = os.path.join(cfg.output_root, cfg.run_name, "base_ckpt_inf", cfg.inf_name)
+        job_name = f"{cfg.run_name}-base-inf"
+
+    # 3. Save the checked config where the job will read it, then print the bash for launch.sh.
     _save(inf_dir, INF_SAVED, cfg, _git_rev())
     _log(f"  0: {inf_dir}")
-    _print_jobs([inf_dir], cfg.slurm, f"{cfg.run_name}-inf", os.path.join(inf_dir, "slurm-%A.out"))
+    _print_jobs([inf_dir], cfg.slurm, job_name, os.path.join(inf_dir, "slurm-%A.out"))
 
 
 def main(argv):

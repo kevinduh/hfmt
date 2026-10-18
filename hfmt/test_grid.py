@@ -1,4 +1,4 @@
-"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg). No GPU or training deps needed.
+"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options). No GPU or training deps needed.
 
 Runs grid.main() in-process on the real fr-en experiments, with output_root pointed at a temp
 dir, and checks the job folders and saved configs it writes. HFMT_DATA_ROOT is a dummy path
@@ -216,12 +216,11 @@ def test_inf_errors_fail_before_writing():
             assert False, bad
         except SystemExit:
             pass
-    for exp in [SINGLE, os.path.join(trained_run()[0], "missing.yaml")]:   # not a run_config
-        try:
-            inf(exp)
-            assert False, exp
-        except SystemExit:
-            pass
+    try:
+        inf(os.path.join(trained_run()[0], "missing.yaml"))   # no such file
+        assert False
+    except SystemExit:
+        pass
     shutil.rmtree(os.path.join(run_dir, "model"))         # no trained model
     try:
         inf(rc)
@@ -229,6 +228,27 @@ def test_inf_errors_fail_before_writing():
     except SystemExit:
         pass
     assert not os.path.exists(os.path.join(run_dir, "inf"))
+
+
+def test_inf_on_experiment_decodes_base_checkpoint():
+    out = tempfile.mkdtemp()
+    stdout = inf(SINGLE, "peft=lora_default", f"output_root={out}")
+    inf_dir = os.path.join(out, "sft_lora", "base_ckpt_inf", "test")
+    cfg = OmegaConf.load(os.path.join(inf_dir, "inf_config.yaml"))
+    assert cfg.model_dir is None and cfg.peft.mode == "lora"
+    assert f"JOBS=({inf_dir})" in stdout and "--job-name=sft_lora-base-inf" in stdout
+    assert os.listdir(out) == ["sft_lora"] and os.listdir(os.path.join(out, "sft_lora")) == ["base_ckpt_inf"]
+
+
+def test_inf_on_experiment_refuses_grids():
+    for exp, overrides in [(SWEEP, ()), (SINGLE, ("peft.lora.lora_r=8,16",))]:
+        out = tempfile.mkdtemp()
+        try:
+            inf(exp, *overrides, f"output_root={out}")
+            assert False, exp
+        except SystemExit:
+            pass
+        assert os.listdir(out) == []
 
 
 if __name__ == "__main__":

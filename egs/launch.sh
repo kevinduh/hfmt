@@ -11,7 +11,11 @@
 # Machine-specific settings (HFMT_DATA_ROOT) come from <experiment folder>/local_setting.sh
 # (untracked; copy local_setting.sh.example). Only needed here: saved configs hold resolved paths.
 #
-# Inference:  bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]   (one run folder per call)
+# Inference:  bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]   (one model per call)
+#   decodes the run's trained model/. Or, with an experiment yaml, the downloaded checkpoint as is
+#   (zero-shot; the peft option sets the precision, e.g. peft=lora_default = bf16):
+#        bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml peft=lora_default
+#   output then goes to <output_root>/<run_name>/base_ckpt_inf/<inf_name>/.
 #   e.g. decode.num_beams=5 inf_name=beam5, or other test sets (null = no reference):
 #        'data.test.src=[/path/x.fr,/path/y.fr]' 'data.test.trg=[/path/x.en,null]' inf_name=xy
 # Output: <run folder>/inf/<inf_name>/ (test<i>.pred.trg per test file, scores.json,
@@ -36,14 +40,12 @@ else
     exit 1
 fi
 shift
-if [ "$kind" = sft ]; then
-    # Unset first so a value left in your shell can't point this experiment at another folder's data.
-    unset HFMT_DATA_ROOT
-    if [ -f "$(dirname "$yaml")/local_setting.sh" ]; then source "$(dirname "$yaml")/local_setting.sh"; fi
-    grid_args=("$yaml")
-else
-    grid_args=(--inf "$yaml")
-fi
+# Machine-specific settings (HFMT_DATA_ROOT) from the yaml's folder, for any kind. An experiment
+# folder has local_setting.sh; a run folder doesn't and needs none (its saved paths are resolved).
+# Unset first so a value left in your shell can't point this experiment at another folder's data.
+unset HFMT_DATA_ROOT
+if [ -f "$(dirname "$yaml")/local_setting.sh" ]; then source "$(dirname "$yaml")/local_setting.sh"; fi
+if [ "$kind" = sft ]; then grid_args=("$yaml"); else grid_args=(--inf "$yaml"); fi
 source "${HFMT_ROOT}/install/path.sh"
 export PYTHONPATH="${HFMT_ROOT}:${PYTHONPATH}"
 cd "${HFMT_ROOT}"

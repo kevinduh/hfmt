@@ -92,31 +92,31 @@ Ground rules for every phase:
 ## C. Base-model inference (request 1)
 
 ### C1. `grid.py --inf`
-- [ ] `main_inf`: branch on the input name.
+- [x] `main_inf`: branch on the input name.
   - **`run_config`:** unchanged path; `model_dir=<run>/model`, output `<run>/inf/<inf_name>/`.
   - **Anything else (an experiment):** refuse a sweep (`hydra.sweeper.params` set) and comma lists;
     compose and check without `model_dir`; output
     `<output_root or <exp dir>/outputs>/<run_name>/base_ckpt_inf/<inf_name>/`; job name `<run_name>-base-inf`.
-- [ ] Numbered step comments in `main_inf`; module docstring lists the flows.
+- [x] Numbered step comments in `main_inf`; module docstring lists the flows.
 
 ### C2. Launcher and inference
-- [ ] `launch.sh`: unset `HFMT_DATA_ROOT` and source `local_setting.sh` for every kind, with a comment
+- [x] `launch.sh`: unset `HFMT_DATA_ROOT` and source `local_setting.sh` for every kind, with a comment
       (a run folder has none, so trained runs are unaffected).
-- [ ] `inf_translation.py`: `model_dir` unset → `load_base_model(cfg, device)` + `eval()`; a set but
+- [x] `inf_translation.py`: `model_dir` unset → `load_base_model(cfg, device)` + `eval()`; a set but
       missing `model_dir` still fails. Docstring: the two modes.
 
 ### C3. Tests
-- [ ] `test_grid.py`:
+- [x] `test_grid.py`:
   - `--inf` on an experiment saves `base_ckpt_inf/test/inf_config.yaml` with `model_dir: null`;
   - `--inf` on a sweep experiment fails;
   - `--inf` on an experiment with a comma list fails;
   - the existing `run_config` tests still pass.
 
 ### Done when
-- [ ] Tests pass. `DRYRUN=1` on an experiment prints the expected folder and job name.
-- [ ] GPU: zero-shot `launch.sh inf egs/mmtc/fr-en/sft_lora.yaml run_name=p10c peft=lora_default`.
+- [x] Tests pass. `DRYRUN=1` on an experiment prints the expected folder and job name.
+- [x] GPU: zero-shot `launch.sh inf egs/mmtc/fr-en/sft_lora.yaml run_name=p10c peft=lora_default`.
       `base_ckpt_inf/test/` has `test1.pred.trg` and `scores.json`; the log shows bf16 and no adapter.
-- [ ] `todo.md` C ticked; commit message presented.
+- [x] `todo.md` C ticked; commit message presented.
 
 ## D. Merging and a second round (request 3)
 

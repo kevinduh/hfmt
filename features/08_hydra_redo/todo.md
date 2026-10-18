@@ -146,39 +146,45 @@ Depends on A (schema, `conf/`, example).
 - [x] `grid.py` dry checks on a login node: single → 1 job; sweep → 4; `lora.lora_r=8`
       pins → 2; `train.seed=1,2` adds → 8; bad value (`lora.lora_r=abc`) fails before writing.
 - [x] `run_config.yaml` contains no `${` and absolute paths.
-- [ ] `LOCAL=1 bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml train.max_steps=20
+- [x] `LOCAL=1 bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml train.max_steps=20
       train.eval_steps=20` on a GPU node → `egs/mmtc/fr-en/outputs/sft_lora/`.
-- [ ] Slurm: single (20 steps) → `outputs/sft_lora/`; sweep (20 steps) → `outputs/sft_lora_sweep-{0..3}/`
+- [x] Slurm: single (20 steps) → `outputs/sft_lora/`; sweep (20 steps) → `outputs/sft_lora_sweep-{0..3}/`
       with the right values in each `run_config.yaml`; `sft_lora_sweep.grid.txt` written.
 - [x] Re-run from a saved config with a new `run_name` → new folder; without → same folder
       (checked with `DRYRUN=1`; the saved config composes for `job.sh` with `--cfg job`).
 - [x] `bash egs/sft.sh` with a file named `config.yaml` is refused.
-- [ ] Present commit message `08_hydra_redo-B: …`.
+- [x] Present commit message `08_hydra_redo-B: …`.
 
 ## C. W&B and GPU tools
 
 Depends on B (job folders and `run_name`).
 
 ### C1. W&B
-- [ ] `init_wandb` in `main()` (main process only): `project`, `entity`, `name` = run-folder
+- [x] `init_wandb` in `main()` (main process only): `project`, `entity`, `name` = run-folder
       basename, `group` = `cfg.run_name`, `tags`, `dir` = run folder, `config` = resolved cfg
       (data-free); `WANDB_LOG_MODEL=false`; no `id`/`resume` (Q6 #5).
-- [ ] Keep `report_to="wandb"` reusing that run; remove any duplicate init.
-- [ ] Confidentiality review: list every W&B call and what it sends; nothing data-bearing
-      (no samples, tables, artifacts, predictions).
+- [x] Keep `report_to="wandb"` reusing that run; remove any duplicate init.
+- [x] Confidentiality review: list every W&B call and what it sends; nothing data-bearing
+      (no samples, tables, artifacts, predictions). Found: W&B's default console capture
+      uploaded the run's stdout/stderr (`output.log`), which contains example text ("Example
+      data", decoded batches). Fixed with `WANDB_CONSOLE=off` + `Settings(console="off")`.
+      Calls now: `wandb.init` (config nested under `hfmt`, `run_dir`), `wandb.log` of
+      eval BLEU/chrF/TER, the Trainer's WandbCallback (metrics, trainer args, model config).
 
 ### C2. GPU tools
-- [ ] `tools/gpu_free.sh` from hydra2, as is.
-- [ ] `tools/run_on_free_gpu.sh` from hydra2, calling `egs/sft.sh` and appending
-      `slurm.gres=gpu:<type>:1`; update its usage comments.
+- [x] `tools/gpu_free.sh` from hydra2, as is.
+- [x] `tools/run_on_free_gpu.sh` from hydra2, calling `egs/sft.sh` and appending
+      `slurm.gres=gpu:<type>:1`; update its usage comments. (`gpu_free.sh`: two hint lines
+      updated from `egs/run.sh`/`hydra.launcher.gres` to `egs/sft.sh`/`slurm.gres`.)
 
 ### C3. Done when
 - [ ] A 20-step Slurm sweep shows 4 W&B runs named `sft_lora_sweep-{0..3}` in group
       `sft_lora_sweep`; a single run named `sft_lora`.
 - [ ] W&B run pages contain only config, aggregate metrics and system stats; no text, tables or
-      files with examples.
-- [ ] `bash tools/gpu_free.sh` prints counts; `bash tools/run_on_free_gpu.sh
-      egs/mmtc/fr-en/sft_lora.yaml train.max_steps=20` submits with the chosen gres.
+      files with examples; **no `output.log` under Files / no Logs tab content**.
+- [x] `bash tools/gpu_free.sh` prints counts; `bash tools/run_on_free_gpu.sh
+      egs/mmtc/fr-en/sft_lora.yaml train.max_steps=20` submits with the chosen gres
+      (checked with `DRYRUN=1`: picked l40s, `--gres=gpu:l40s:1`).
 - [ ] Present commit message `08_hydra_redo-C: …`.
 
 ## D. Docs and tests

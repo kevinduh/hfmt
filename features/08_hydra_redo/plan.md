@@ -383,6 +383,10 @@ Deferred: #10, `egs/mmtc/fr-en/inf.sh` (assumes the old layout; rewritten in 09,
 ### W&B
 - Own the run in `main()`; log the resolved (data-free) config and aggregate metrics only;
   `WANDB_LOG_MODEL=false`. Re-check every W&B call against CLAUDE.md.
+- **Console capture off** (found in phase C): by default W&B uploads the run's stdout/stderr as
+  `output.log`, and our logs contain example text ("Example data", decoded training batches,
+  "Decoded predictions"). hydra2's runs (and `main`'s `report_to="wandb"` runs) uploaded it.
+  08 sets `WANDB_CONSOLE=off` and `wandb.Settings(console="off")`.
 
 ## Open questions (all decided)
 

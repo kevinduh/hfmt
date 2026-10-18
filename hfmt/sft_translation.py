@@ -133,8 +133,18 @@ def main(cfg: Config) -> None:
     outdir = HydraConfig.get().runtime.output_dir
     logging.info(f"Run folder: {outdir}")
     logging.info(f"Config:\n{OmegaConf.to_yaml(cfg, resolve=True)}")
-    os.environ["WANDB_PROJECT"] = cfg.wandb.project
     os.environ["WANDB_LOG_MODEL"] = "false"  # never upload models to W&B
+    os.environ["WANDB_CONSOLE"] = "off"      # never upload console output (it has example text)
+
+    # W&B (main process only): name = run folder, group = run_name. Only the data-free config
+    # (paths, hyperparameters, instruction) and aggregate metrics go to W&B (CLAUDE.md); the
+    # Trainer's report_to="wandb" reuses this run.
+    if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
+        import wandb
+        wandb.init(project=cfg.wandb.project, entity=cfg.wandb.entity, name=os.path.basename(outdir),
+                   group=cfg.run_name, tags=list(cfg.wandb.tags), dir=outdir,
+                   config={"hfmt": OmegaConf.to_container(cfg, resolve=True), "run_dir": outdir},
+                   settings=wandb.Settings(console="off"))
 
     ###################################
     ## User settings

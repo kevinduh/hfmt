@@ -8,6 +8,7 @@
 #   bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml
 #   bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=37,42 train.max_steps=20
 #   bash tools/run_on_free_gpu.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml
+#   bash tools/run_on_free_gpu.sh merge egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml
 #
 # All args are forwarded to egs/launch.sh verbatim; this wrapper only appends the chosen
 # `slurm.gres=gpu:<type>:1`. So do NOT pass your own slurm.gres (that

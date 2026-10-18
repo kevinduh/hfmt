@@ -2,6 +2,7 @@
 
 Called by egs/launch.sh sft:  python -m hfmt.grid <experiment.yaml> [overrides...]
      and egs/launch.sh inf:  python -m hfmt.grid --inf <run folder>/run_config.yaml | <experiment.yaml> [overrides...]
+     and egs/launch.sh merge: python -m hfmt.grid --merge <run folder>/run_config.yaml [slurm.* overrides...]
 
 Training:
 - Grid = the experiment's ``hydra.sweeper.params`` plus command-line comma lists, expanded with
@@ -18,6 +19,9 @@ Inference (``--inf``): always one job, one model; the yaml kind decides which mo
   ``run_config.yaml`` is never written.
 - An experiment yaml (not a sweep): the downloaded ``checkpoint`` as is, no adapter (``model_dir``
   unset); saved as ``<output_root>/<run_name>/base_ckpt_inf/<inf_name>/inf_config.yaml``.
+
+Merge (``--merge``): one job on one trained lora/qlora run folder; checks it and prints the job
+(the run folder itself), writing nothing. The job writes ``<run folder>/model_merged/``.
 
 Human-readable output goes to stderr; stdout is bash for egs/launch.sh to eval
 (``JOBS=(...)`` and ``SBATCH_ARGS=(...)``).
@@ -139,9 +143,32 @@ def main_inf(exp_dir, exp_name, args, parsed):
     _print_jobs([inf_dir], cfg.slurm, job_name, os.path.join(inf_dir, "slurm-%A.out"))
 
 
+def main_merge(exp_dir, exp_name, args, parsed):
+    """``--merge``: prepare one job that merges a trained run's adapter (``hfmt/merge_model.py``).
+    Writes no config: the job reads the run's ``run_config.yaml`` as is."""
+    # 1. Only a trained lora/qlora run folder; only slurm.* overrides (the job ignores anything else).
+    if exp_name != SAVED:
+        sys.exit(f"grid --merge: give a trained run folder's {SAVED}.yaml, not {exp_name}.yaml")
+    if any(o.is_sweep_override() for o in parsed):
+        sys.exit("grid --merge: comma lists aren't allowed (one run folder per call; loop in the shell)")
+    if any(not o.get_key_element().startswith("slurm.") for o in parsed):
+        sys.exit("grid --merge: only slurm.* overrides apply (the merge uses the run's saved config)")
+    if not os.path.isdir(os.path.join(exp_dir, "model")):
+        sys.exit(f"grid --merge: no trained model in {exp_dir}/model")
+    cfg = _compose_checked(exp_dir, exp_name, args)
+    if cfg.peft.mode == "full":
+        sys.exit("grid --merge: peft.mode=full has no adapter; its model/ already holds full weights "
+                 "(usable as a checkpoint directly)")
+
+    # 2. Print the bash for launch.sh: the job folder is the run folder itself.
+    _log(f"  0: {exp_dir} -> {exp_dir}/model_merged")
+    _print_jobs([exp_dir], cfg.slurm, f"{cfg.run_name}-merge", os.path.join(exp_dir, "merge-slurm-%A.out"))
+
+
 def main(argv):
-    inf = argv[:1] == ["--inf"]
-    if inf:
+    # Which flow: sft (default), --inf or --merge (see the module docstring).
+    mode = argv[0] if argv[:1] in (["--inf"], ["--merge"]) else None
+    if mode:
         argv = argv[1:]
     exp_path, args = os.path.abspath(argv[0]), argv[1:]
     exp_dir, exp_name = os.path.dirname(exp_path), os.path.basename(exp_path).removesuffix(".yaml")
@@ -153,8 +180,10 @@ def main(argv):
 
     parser = OverridesParser.create()
     parsed = parser.parse_overrides(args)
-    if inf:
+    if mode == "--inf":
         return main_inf(exp_dir, exp_name, args, parsed)
+    if mode == "--merge":
+        return main_merge(exp_dir, exp_name, args, parsed)
 
     # Grid: file axes first, command-line overrides after (a later value for a key replaces it).
     plain = [a for a, o in zip(args, parsed) if not o.is_sweep_override()]

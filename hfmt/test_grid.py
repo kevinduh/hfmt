@@ -251,6 +251,45 @@ def test_inf_on_experiment_refuses_grids():
         assert os.listdir(out) == []
 
 
+def merge(rc, *overrides):
+    """Run grid.main --merge; return stdout. SystemExit propagates."""
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main(["--merge", rc, *overrides])
+    return stdout.getvalue()
+
+
+def test_merge_prints_run_folder_and_writes_nothing():
+    run_dir, rc = trained_run()
+    before = sorted(os.listdir(run_dir))
+    stdout = merge(rc, "slurm.gres=gpu:l40s:1")
+    assert f"JOBS=({run_dir})" in stdout and "--job-name=sft_lora-merge" in stdout
+    assert f"--output={run_dir}/merge-slurm-%A.out" in stdout and "--gres=gpu:l40s:1" in stdout
+    assert sorted(os.listdir(run_dir)) == before
+
+
+def test_merge_refusals():
+    run_dir, rc = trained_run()
+    for bad in [(rc, "decode.num_beams=5"),              # only slurm.* overrides apply
+                (rc, "slurm.gres=a,b"),                  # comma list
+                (SINGLE,)]:                              # an experiment, not a run
+        try:
+            merge(*bad)
+            assert False, bad
+        except SystemExit:
+            pass
+    out, _, _ = run(SINGLE, "peft=full_finetune")        # full fine-tune: nothing to merge
+    full_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(full_dir, "model"))
+    shutil.rmtree(os.path.join(run_dir, "model"))        # no trained model
+    for rc_bad in [os.path.join(full_dir, "run_config.yaml"), rc]:
+        try:
+            merge(rc_bad)
+            assert False, rc_bad
+        except SystemExit:
+            pass
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

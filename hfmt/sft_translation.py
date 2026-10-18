@@ -97,7 +97,7 @@ def main(cfg: Config) -> None:
     from trl import SFTConfig, SFTTrainer
 
     check_config(cfg)
-    # Run folder chosen by Hydra (hydra.run.dir, set by egs/sft_job.sh); everything is written here.
+    # Run folder chosen by Hydra (hydra.run.dir, set by egs/job.sh); everything is written here.
     outdir = HydraConfig.get().runtime.output_dir
     logging.info(f"Run folder: {outdir}")
     logging.info(f"Config:\n{OmegaConf.to_yaml(cfg, resolve=True)}")
@@ -308,6 +308,7 @@ def main(cfg: Config) -> None:
     max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024)
     logging.info(f"GPU = {gpu_stats.name}. Peak reserved memory = {used_memory} GB. {round(used_memory / max_memory * 100)}% of max ({max_memory} GB)")
     model.save_pretrained(os.path.join(outdir, "model"))
+    tokenizer.save_pretrained(os.path.join(outdir, "model"))   # so a full fine-tune's model/ works as a checkpoint
 
     ###################################
     ## Inference on the test set (skipped when the dataset has no test split)

@@ -78,6 +78,35 @@ def load_trained_model(cfg, model_dir, device):
     return model
 
 
+QLORA_MERGE_WARNING = ("qlora merge: the adapter was merged into the 4-bit base dequantized to bf16 (the "
+                       "weights it was trained against), so the merged weights carry the 4-bit rounding of "
+                       "the original checkpoint")
+
+
+def merge_trained_model(cfg, model_dir, out_dir, device):
+    """Fold the ``lora``/``qlora`` adapter in ``model_dir`` into its base and save a full bf16
+    checkpoint (weights + tokenizer) in ``out_dir``, usable as ``checkpoint`` for another round.
+    ``lora``: merged into the bf16 base. ``qlora``: the 4-bit base is dequantized to bf16 first, so
+    the merged model is the one that was trained and evaluated; logs ``QLORA_MERGE_WARNING``.
+    Returns the warning text, or None."""
+    import torch
+    from peft import PeftModel
+
+    if cfg.peft.mode not in ("lora", "qlora"):
+        raise ValueError(f"peft.mode={cfg.peft.mode}: only lora/qlora adapters are merged "
+                         "(a full fine-tune's model/ already holds full weights)")
+    base, _ = load_base_model(cfg, device)   # bf16 for lora, 4-bit for qlora
+    warning = None
+    if cfg.peft.mode == "qlora":
+        base = base.dequantize(dtype=torch.bfloat16)
+        warning = QLORA_MERGE_WARNING
+        logging.warning(warning)
+    model = PeftModel.from_pretrained(base, model_dir).merge_and_unload()
+    model.save_pretrained(out_dir)
+    load_tokenizer(cfg.checkpoint).save_pretrained(out_dir)
+    return warning
+
+
 def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, decode, text_field='text'):
     from torch.utils.data import DataLoader
     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")

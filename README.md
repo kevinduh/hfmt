@@ -22,6 +22,7 @@ Before running the scripts, please set the `HFMT_ROOT` variable, e.g. `export HF
 Currently implemented: 
 * `hfmt/train_seq2seq.py`: Trains a Seq2Seq model (either by fine-tuning a pretrained model or training from scratch)
 * `hfmt/decode_summarization.py`: Runs inference on CausalLM models, with prompts for summarization
+* `hfmt/sft_translation.py`: Supervised fine-tuning (QLoRA, LoRA or full) of decoder-only LLMs for MT, configured with Hydra (see below)
 * todo: cascading of models, ...
 
 Scripts that perform training integrate with (Weights & Biases)[https://wandb.ai/] for logging purposes, so it is recommended that you set up a free account on that service. 
@@ -75,6 +76,62 @@ cmdarg="--max_steps 5000 ..." # various additional hyperparameters
 ```
 
 See `egs/translation/train_seq2seq_marian.sh` for a different example.
+
+## Running SFT experiments (decoder-only MT, Hydra)
+
+`hfmt/sft_translation.py` is configured with [Hydra](https://hydra.cc). Components (base model,
+LoRA, training, decoding settings) live in `conf/`; an experiment is a yaml file next to its data
+description, e.g. `egs/mmtc/fr-en/`:
+
+* `dataset.yaml`: train/dev/test file lists (several files per split are concatenated in order).
+* `sft_lora.yaml`: a **single-run** experiment (one job). It sets `run_name`, the data location
+  and languages, and picks components with `override basemodel: ...` lines.
+* `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
+  learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
+
+Launch from a login node; jobs go to Slurm as one array, and the command returns right away:
+
+```bash
+export HFMT_ROOT=`pwd`
+bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml                       # 1 job
+bash egs/sft.sh egs/mmtc/fr-en/sft_lora.sweep.yaml                 # 4 jobs
+bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml lora.lora_r=16 train.max_steps=2000   # overrides
+bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml lora.lora_r=8,16      # a comma list makes a grid
+bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml slurm.gres=gpu:l40s:1 # Slurm resources: slurm.*
+bash tools/run_on_free_gpu.sh egs/mmtc/fr-en/sft_lora.yaml         # pick the freest GPU type
+LOCAL=1 bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml               # run here (e.g. on a GPU node)
+DRYRUN=1 bash egs/sft.sh egs/mmtc/fr-en/sft_lora.sweep.yaml        # prepare, print sbatch, don't submit
+```
+
+Before submitting, every job's config is built and checked (typos fail immediately) and saved,
+fully resolved, in the job's **run folder**:
+
+* one job: `egs/mmtc/fr-en/outputs/<run_name>/`
+* grid: `egs/mmtc/fr-en/outputs/<run_name>-<idx>/`, with `<run_name>.grid.txt` listing each
+  index's values. Change `run_name` when you change a grid's shape.
+
+A run folder holds `run_config.yaml`, `git_rev`, the Slurm log, the training log,
+`dev.step_*.pred`, `eval.pred.trg` (test set) and `model/`. The W&B run has the same name as the
+folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
+into an existing folder prints a warning and reuses it (training restarts from scratch).
+
+Re-run a finished job from its saved config, in the same folder or under a new name:
+
+```bash
+bash egs/sft.sh egs/mmtc/fr-en/outputs/sft_lora_sweep-1/run_config.yaml train.max_steps=2000
+bash egs/sft.sh egs/mmtc/fr-en/outputs/sft_lora_sweep-1/run_config.yaml train.seed=1 run_name=sft_lora-seed1
+```
+
+To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass
+`hydra.run.dir=...`; add `--cfg job` to only print the config):
+
+```bash
+python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lora train.max_steps=20
+```
+
+`train.finetune_mode` selects `qlora` (default), `lora` or `full`. A full fine-tune needs a lower
+learning rate and more memory and time, e.g.
+`train.finetune_mode=full train.learning_rate=2e-5 basemodel=qwen2.5-0.5b slurm.mem_gb=64 slurm.time=12:00:00`.
 
 ## Usage example: decoding with a Summarization model
 

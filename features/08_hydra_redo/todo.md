@@ -178,42 +178,43 @@ Depends on B (job folders and `run_name`).
       updated from `egs/run.sh`/`hydra.launcher.gres` to `egs/sft.sh`/`slurm.gres`.)
 
 ### C3. Done when
-- [ ] A 20-step Slurm sweep shows 4 W&B runs named `sft_lora_sweep-{0..3}` in group
+- [x] A 20-step Slurm sweep shows 4 W&B runs named `sft_lora_sweep-{0..3}` in group
       `sft_lora_sweep`; a single run named `sft_lora`.
-- [ ] W&B run pages contain only config, aggregate metrics and system stats; no text, tables or
+- [x] W&B run pages contain only config, aggregate metrics and system stats; no text, tables or
       files with examples; **no `output.log` under Files / no Logs tab content**.
 - [x] `bash tools/gpu_free.sh` prints counts; `bash tools/run_on_free_gpu.sh
       egs/mmtc/fr-en/sft_lora.yaml train.max_steps=20` submits with the chosen gres
       (checked with `DRYRUN=1`: picked l40s, `--gres=gpu:l40s:1`).
-- [ ] Present commit message `08_hydra_redo-C: …`.
+- [x] Present commit message `08_hydra_redo-C: …`. (Smoke test with W&B on: developer reports OK.)
 
 ## D. Docs and tests
 
 Depends on A–C (documents the final behaviour).
 
 ### D1. Tests
-- [ ] `hfmt/test_grid.py` (standalone-runnable, no GPU): grid counts (single, sweep, pin, add
+- [x] `hfmt/test_grid.py` (standalone-runnable, no GPU): grid counts (single, sweep, pin, add
       axis), folder naming (n = 1, n > 1, zero-padding), saved-config rule, resolved save,
       typo rejected.
-- [ ] Run tests standalone (`python hfmt/test_grid.py`); report results.
+- [x] Run tests standalone (`python hfmt/test_grid.py`); report results. (8 passed.)
 
 ### D2. Docs
-- [ ] CLAUDE.md: rewrite the Configuration / Parameter sweeps conventions and the project tree
+- [x] CLAUDE.md: rewrite the Configuration / Parameter sweeps conventions and the project tree
       for the 08 design (Q12).
-- [ ] `decisions.md`: copy `git show hydra2:decisions.md` as is, then append an 08 entry
+- [x] `decisions.md`: copy `git show hydra2:decisions.md` as is, then append an 08 entry
       (key decisions + why; which hydra2 decisions it supersedes) (Q12).
-- [ ] README: section on running SFT experiments (`egs/sft.sh`, single vs sweep, `LOCAL=1`,
+- [x] README: section on running SFT experiments (`egs/sft.sh`, single vs sweep, `LOCAL=1`,
       output folders, re-run from a saved config) (Q12).
-- [ ] Headers/usage comments in `conf/*.yaml`, example experiments, `sft.sh`, `job.sh`,
+- [x] Headers/usage comments in `conf/*.yaml`, example experiments, `sft.sh`, `job.sh`,
       `grid.py` match the behaviour.
 
 ### D3. Done when
-- [ ] Tests pass.
-- [ ] Line budget (Q10, soft): net added lines (`git diff --numstat main` + new files) over
+- [x] Tests pass.
+- [x] Line budget (Q10, soft): net added lines (`git diff --numstat main` + new files) over
       `hfmt/` (minus tests), `conf/`, `egs/sft.sh`, `egs/job.sh` around 400; explain if well over.
-- [ ] Grep docs for stale terms (`run.sh`, `submitit`, `hydra.launcher`, `+mmtc/`, `sweep_probe`,
+      (Result: +625 / −228 = net +397.)
+- [x] Grep docs for stale terms (`run.sh`, `submitit`, `hydra.launcher`, `+mmtc/`, `sweep_probe`,
       `lora.enabled`, `dataset_dir`) outside `decisions.md` history.
-- [ ] Present commit message `08_hydra_redo-D: …`.
+- [x] Present commit message `08_hydra_redo-D: …`.
 
 ## E. Full-length validation
 

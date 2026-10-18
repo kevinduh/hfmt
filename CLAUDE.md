@@ -23,6 +23,9 @@ hypotheses/translations — anything derived from the data.
 - **Config may be logged to W&B** because it holds only hyperparameters, data *paths*, and
   the instruction string — never data content. The Hydra SFT path logs the resolved config
   to `wandb.config`; keep it data-free and leave `WANDB_LOG_MODEL=false` (no model artifacts).
+- **Keep W&B console capture off** (`WANDB_CONSOLE=off`, `wandb.Settings(console="off")`): by
+  default W&B uploads the run's stdout/stderr as `output.log`, and our local logs contain
+  example text. Any new W&B entry point must turn it off too.
 - When adding or changing code, check every W&B call against this rule before running it,
   and make sure nothing data-bearing is routed to W&B (directly or via `report_to`).
 
@@ -32,46 +35,57 @@ hypotheses/translations — anything derived from the data.
 hfmt/
 ├── hfmt/                    # Python entry-point scripts (not yet a package)
 │   ├── train_seq2seq.py     # encoder–decoder MT (T5, Marian) via Seq2SeqTrainer
-│   ├── sft_translation.py   # decoder-only MT via QLoRA SFT — Hydra-driven (@hydra.main)
+│   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
 │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore) for the SFT workflow
+│   ├── grid.py              # login-node grid expansion + per-job saved configs (egs/sft.sh)
 │   ├── inf_translation.py   # inference for decoder-only MT (optional PeftModel)
 │   └── decode_summarization.py  # zero/few-shot summarization
-├── conf/                    # Hydra config for the SFT workflow (model/data/train/decode/wandb/experiment/sweep/launcher)
+├── conf/                    # SFT base config.yaml + components (basemodel/lora/train/decode); never experiments
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
-├── egs/                     # recipes; run.sh <experiment> launches the Hydra SFT workflow
+├── egs/                     # recipes; sft.sh <experiment.yaml> launches the Hydra SFT workflow
+│   ├── sft.sh  job.sh       # launcher (sbatch array or LOCAL=1) and one job
 │   ├── data/                # example bitext, YAML/JSONL manifests
-│   ├── translation/  summarization/  mmtc/<lang-pair>/  synth_lrl/<lang>-eng/
-├── outputs/                 # Hydra run outputs (gitignored)
+│   ├── mmtc/<src>-<trg>/    # SFT experiments + dataset.yaml; outputs/<run_name>[-<idx>]/ (gitignored)
+│   ├── translation/  summarization/  synth_lrl/<lang>-eng/
+├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type)
+├── outputs/                 # direct (non-sft.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
 ```
 
 ## Key conventions
 
-- **Configuration (Hydra)** — for the `sft_translation.py` QLoRA SFT workflow: `conf/` holds
-  only atomistic, mix-and-match components (`basemodel`, `lora`, `data`, `train`, `decode`;
-  typed schema in `hfmt/hydra_config.py`). An experiment composes them (plus inline `wandb`
-  and `sweep`) and lives under `egs/experiment/<name>.yaml`, found via `hydra.searchpath`.
-  Launch with `bash egs/run.sh <name>` (submits to Slurm via the submitit launcher; run from a
-  login node, don't `sbatch` it). Override on the CLI, e.g.
-  `bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=16`. Set `lora.enabled=false` (with
-  `basemodel.load_in_4bit=false`) to fully fine-tune instead of LoRA. See README and `decisions.md`.
-- **Parameter sweeps (inline, toggleable)** — each experiment carries a `sweep: {enabled, params}`
-  block. `egs/run.sh` always runs `--multirun` and reads the block via `hfmt/sweep_probe.py`,
-  forwarding the axes only when `sweep.enabled` (toggle with `sweep.enabled=true`; off → one job).
-  Axes are ordinary overrides — leaf values or whole component files
-  (`basemodel: "qwen2.5-7b,qwen2.5-1.5b"`). Ad-hoc comma-list overrides still fan out directly
-  (`bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=8,16,32`). Sweep runs share a per-sweep W&B group
-  and are named/tagged by their swept values — component-file axes by the selected YAML file name
-  (data paths/content never go in labels); `hydra.launcher.array_parallelism` caps concurrency.
-  See README "Sweeping parameters".
+- **Configuration (Hydra)** — for the `sft_translation.py` SFT workflow (feature 08):
+  `conf/` holds `config.yaml` plus mix-and-match components (`basemodel`, `lora`, `train`,
+  `decode`); typed schema in `hfmt/hydra_config.py`, where every field must be read by code.
+  An experiment is a yaml in `egs/<dataset>/<src>-<trg>/` whose defaults start with `- config`
+  and `- dataset` (the `dataset.yaml` next to it, OmegaConf `${data.*}` paths), then
+  `override <group>: <option>` lines; it sets `run_name` (required) and `data.*`. Launch with
+  `bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
+  `lora.lora_r=16`, `slurm.gres=gpu:l40s:1`. `train.finetune_mode` (`qlora` | `lora` | `full`)
+  selects the fine-tuning method. See README "Running SFT experiments" and `decisions.md`.
+- **Launch path (no submitit)** — `hfmt/grid.py` expands the grid, composes and checks every
+  job's config, and saves it fully resolved as `<run folder>/run_config.yaml` (+ `git_rev`);
+  `egs/sft.sh` then submits one Slurm array of `egs/job.sh` (each job a plain single Hydra run
+  of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
+  sbatch command. Run folders: `<output_root>/<run_name>` (1 job) or `<run_name>-<idx>` (grid);
+  `output_root` defaults to `<experiment folder>/outputs`. No timestamps: an existing folder
+  only warns. W&B run name = run folder name, group = `run_name`. Re-run a saved job with
+  `bash egs/sft.sh <run folder>/run_config.yaml [overrides]` (same folder unless `run_name=`).
+- **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a
+  `.sweep.yaml` carries its grid in `hydra.sweeper.params` and always runs all of it. Axes are
+  leaf values or component files (`basemodel: qwen2.5-0.5b,qwen2.5-1.5b`). Command-line comma
+  lists add an axis on either kind; a single value pins one. `<run_name>.grid.txt` maps idx →
+  values; change `run_name` when changing a grid's shape. `slurm.array_parallelism` caps
+  concurrency.
 - **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
   still plain shell scripts that source `install/path.sh`, set shell vars, and call an
   `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable.
 - **Pinned Transformers submodule** for reproducibility — the HF training APIs change often.
-- **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed in a YAML manifest and
-  loaded via `datasets.load_dataset("text", ...)`. Summarization uses JSONL (`text`/`summary`).
+- **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed per split (SFT: in the
+  experiment's `dataset.yaml`; other recipes: a YAML manifest) and loaded via
+  `datasets.load_dataset("text", ...)`. Summarization uses JSONL (`text`/`summary`).
 - **Prompting**: seq2seq uses an instruction prefix; causal LM uses `apply_chat_template`
   (with a plain-concat fallback).
 - **Tracking/metrics**: W&B (`WANDB_PROJECT="hfmt"`); `sacrebleu` (BLEU/CHRF/TER), ROUGE.

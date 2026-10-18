@@ -295,6 +295,9 @@ def main(cfg: Config) -> None:
     used_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024)
     max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024)
     logging.info(f"GPU = {gpu_stats.name}. Peak reserved memory = {used_memory} GB. {round(used_memory / max_memory * 100)}% of max ({max_memory} GB)")
+    # Allocated = what tensors actually used; reserved also counts what the caching allocator kept.
+    # Compare with tools/inspect_model.py's estimate.
+    logging.info(f"Peak allocated memory = {torch.cuda.max_memory_allocated() / 1024 ** 3:.2f} GiB")
     model.save_pretrained(os.path.join(outdir, "model"))
     tokenizer.save_pretrained(os.path.join(outdir, "model"))   # so a full fine-tune's model/ works as a checkpoint
 

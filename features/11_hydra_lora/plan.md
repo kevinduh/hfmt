@@ -167,7 +167,7 @@ Values come from the model's config and the meta-device model. Equations (bytes)
 | activations, saved | 2·b·s·h·L | gradient checkpointing on: each decoder layer keeps only its bf16 input |
 | activations, one layer recomputed | 2·b·s·(6·h + 2·n_kv·d + 4·I) | during backward one layer's activations exist again: attention (norm output, q, k, v, attention output, o_proj input) and SwiGLU MLP (norm output, gate, up, activation, product); fused/SDPA attention, so no b·a·s² score matrix; bf16. Follows the per-layer accounting of Korthikanti et al. 2022, adapted to GQA + SwiGLU, no dropout |
 | logits + loss | 14·b·s·V | bf16 logits (2) + fp32 copy for cross-entropy (4) + its gradient (4) + TRL's entropy/token-accuracy metrics on the logits (4); cf. Wijmans et al. 2024 ("Cut your losses…") on logits dominating with large vocabularies |
-| CUDA context | 1.5 GB | constant; allocator fragmentation is not included |
+| CUDA context | 1.5 GiB | printed separately, not in the allocated total: it lives outside PyTorch's allocator (phase B finding) |
 
 Notes:
 - **The logits term is large for big vocabularies.** For Aya (V = 262k) at b=16, s=515 (2.2e9 logit values) it is about
@@ -199,6 +199,26 @@ Measured so far (reserved only; not a reliable target, see above):
 | longrun | Qwen2.5-1.5B | lora r8 qv | 32 × 118 | A100 80GB | 78 GB |
 | aya_tuk_lora | tiny-aya-global | qlora r8 qv | 16 × 515 | A100 80GB | 75 GB |
 | aya_tuk_lora2/3 | tiny-aya-global | qlora r8 qv | 16 × 515 | H200 | 136–138 GB |
+
+**Result (phase B, 2026-10-18).** A100s, 20 steps, batch 16, dev/test decoding off. The estimate
+is at the dataset's longest training example (prompt + target with chat template: fr-en 150 tokens,
+tuk-eng 667), without the CUDA context:
+
+| run | mode | s | fixed | activations | logits | estimate | measured allocated | measured / estimate | measured reserved |
+|---|---|---|---|---|---|---|---|---|---|
+| Qwen2.5-1.5B | lora qv r8 | 150 | 2.89 | 0.40 | 4.75 | 8.04 GiB | 7.70 GiB | 0.96 | 32 GB (A100 40GB) |
+| Qwen2.5-1.5B | qlora qv r8 | 150 | 1.52 | 0.40 | 4.75 | 6.67 GiB | 6.93 GiB | 1.04 | 31 GB (A100 40GB) |
+| tiny-aya-global | qlora qv r8 | 667 | 3.38 | 2.61 | 36.48 | 42.46 GiB | 43.71 GiB | 1.03 | 74 GB (A100 80GB) |
+| Qwen2.5-0.5B | full | 150 | 7.36 | 0.21 | 4.75 | 12.32 GiB | 10.60 GiB | 0.86 | 32 GB (A100 80GB) |
+
+- **All within ±15%.** The first version counted the 1.5 GiB CUDA context inside "allocated",
+  giving 0.77–0.99. The script now prints the context separately.
+- **Logits dominate for Aya.** 36.5 of 42.5 GiB, from its 262k vocabulary × 667-token sequences.
+  The 365-token chat-template preamble is more than half of every sequence.
+- **Reserved is 2–4× allocated.** It is not a usable measure of need.
+- **Totals match training exactly.** Parameter totals and LoRA counts from the script match
+  training: Qwen-1.5B qv r8 1,089,536; Aya qv r8 1,916,928 and total 3,349,227,520; Qwen-0.5B
+  494,032,768.
 
 ### 5. Docs
 

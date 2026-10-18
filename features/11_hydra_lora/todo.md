@@ -52,9 +52,9 @@ Ground rules for every phase:
 ## B. `tools/inspect_model.py` + memory estimate (request 3)
 
 ### B1. Script
-- [ ] `tools/inspect_model.py <checkpoint>` (Hub id or local folder, no flags). Builds the model on
+- [x] `tools/inspect_model.py <checkpoint>` (Hub id or local folder, no flags). Builds the model on
       the meta device from its config (no weights) and loads the tokenizer.
-- [ ] Sections, in order:
+- [x] Sections, in order:
   1. the model;
   2. module types with counts;
   3. LoRA candidates (name, count, in→out, adapter params at r=8), ready-to-paste `target_modules:`
@@ -64,26 +64,26 @@ Ground rules for every phase:
   5. training memory estimate;
   6. config highlights;
   7. tokenizer + chat-template overhead (tokens around a one-word user message).
-- [ ] Memory estimate (plan 4b equations, constants as documented, nothing fitted):
+- [x] Memory estimate (plan 4b equations, constants as documented, nothing fitted):
   - each term printed with its equation and the numbers plugged in, for 16 × 512 per mode;
   - per-token cost per mode;
   - the table: rows full, lora qv r8, qlora qv r8, lora all-linear r16; columns 16×128, 16×512,
     32×512, 8×2048; gradient checkpointing on;
   - a header line: estimate of peak *allocated* training memory, ±30–50%.
-- [ ] Clear failure message if the meta-device build fails (remote code, pre-quantized checkpoints
+- [x] Clear failure message if the meta-device build fails (remote code, pre-quantized checkpoints
       are out of scope).
 
 ### B2. Training log
-- [ ] `sft_translation.py`: log `torch.cuda.max_memory_allocated()` next to the reserved line.
+- [x] `sft_translation.py`: log `torch.cuda.max_memory_allocated()` next to the reserved line.
 
 ### Done when
-- [ ] Runs on the login node for Qwen2.5-1.5B-Instruct, tiny-aya-global, Qwen2.5-0.5B-Instruct, and
-      a local `model_merged/` if one exists.
-- [ ] Parameter totals and LoRA adapter counts match what training reports. The Aya template
+- [x] Runs on the login node for Qwen2.5-1.5B-Instruct, tiny-aya-global, Qwen2.5-0.5B-Instruct, and
+      a local `model_merged/` if one exists (none existed: the feature-10 checks were deleted).
+- [x] Parameter totals and LoRA adapter counts match what training reports. The Aya template
       overhead shows the long preamble.
-- [ ] Ballpark runs (20 steps, dev decoding off): Qwen lora and qlora b=16, Aya qlora b=16, and
+- [x] Ballpark runs (20 steps, dev decoding off): Qwen lora and qlora b=16, Aya qlora b=16, and
       Qwen2.5-0.5B full if time allows. Estimate vs allocated recorded in the plan (no fitting).
-- [ ] `todo.md` B ticked; commit message presented.
+- [x] `todo.md` B ticked; commit message presented.
 
 ## C. Docs
 

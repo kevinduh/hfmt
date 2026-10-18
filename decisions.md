@@ -322,3 +322,52 @@ template filled in by code (06). Feature 07's two kinds of experiment are kept.
 - **Scope.** Only `sft_translation.py` uses Hydra; `inf_translation.py` and the other recipes keep
   their command-line arguments. Hydra inference from a saved job config is the planned next
   feature (09). Resume-from-checkpoint is deferred.
+
+---
+
+## Types-only schema, peft group, local data location, Hydra inference (feature 09_hydra_detailed_reorg)
+
+**Decision:** Each config key has exactly one home, and the code is split so training and
+inference share model handling.
+
+- **The schema holds types only, no default values.** Every value field in `hfmt/hydra_config.py`
+  is `MISSING`; optional blocks and keys are `Optional[...] = None` (absent). Every default lives in
+  exactly one yaml: `conf/config.yaml` (defaults list; project-wide `slurm`, `wandb`, `inf_name`),
+  `conf/<group>/<option>.yaml` (`train`, `peft`, `decode`), or the experiment folder. 08 gave every
+  field a default *and* repeated most of them in `conf/`, so there were two sources of truth, and a
+  yaml quietly overrode a misleading dataclass default. Now a key that no yaml sets fails in
+  `grid.py`. Cost: default values are read in `conf/`, not in the schema.
+- **`peft` is both the group and the key.** `peft/{qlora_default,lora_default,full_finetune}` set
+  `peft.mode` plus optional `peft.lora` / `peft.quant` blocks (a full fine-tune has neither);
+  `check_config` rejects a mode that disagrees with the blocks. This replaces the `basemodel` and
+  `lora` groups and `train.finetune_mode`. The alternative (keep old key paths, `@package
+  _global_` option files writing into three nodes) was rejected because the group name would no
+  longer match a key. `checkpoint` and `instruction` became top-level experiment keys;
+  `load_in_4bit` was kept, in `peft.quant`. Sweep/override keys changed (`lora.lora_r` →
+  `peft.lora.lora_r`); 08 saved configs no longer validate and were deleted, not migrated.
+- **Data location is a per-folder, untracked `local_setting.sh`** (`export HFMT_DATA_ROOT=...`),
+  sourced by `egs/launch.sh sft` after unsetting the variable; `dataset.yaml` reads
+  `${oc.env:HFMT_DATA_ROOT}` and also holds `src`/`trg` (fixed per folder, the same on every
+  machine, so tracked). A single machine-wide data variable and an untracked Hydra paths group were
+  considered; the per-folder file keeps tracked yamls generic and switches automatically with the
+  experiment folder. Only needed at launch: saved configs hold resolved paths. `data_root/src/trg`
+  are optional, so a dataset yaml may list absolute paths instead.
+- **Inference runs on a trained run folder's saved config**, one folder per call:
+  `egs/launch.sh inf <run folder>/run_config.yaml [overrides]` → `grid.py --inf` checks it and
+  saves `<run folder>/inf/<inf_name>/inf_config.yaml` (with `model_dir`), never touching
+  `run_config.yaml`. Accepting experiments and sweeps too (mapping them back to run folders) was
+  planned and dropped as too much code for a shell loop's worth of convenience. `inf_translation.py`
+  moved to Hydra in place; its old argparse CLI (used by the zh-en and synth_lrl recipes) is gone.
+  No W&B in inference. One launcher, `egs/launch.sh <sft|inf>`, replaces `egs/sft.sh`; job scripts
+  are `egs/sft_job.sh` (was `egs/job.sh`) and `egs/inf_job.sh`.
+- **Inference reproduces training's test predictions exactly** (checked on full, lora and qlora:
+  0/2000 lines differ). `hfmt/mt_model.py` holds model loading, prompting, decoding and scoring for
+  both. Two causes of mismatch were found and fixed: (1) training leaves Accelerate's bf16 autocast
+  wrapper on `model.forward` (it patches the model object in place and the Trainer never removes
+  it), so full fine-tune test decoding ran under autocast; `sft_translation.py` now calls
+  `accelerator.unwrap_model(model, keep_fp32_wrapper=False)` after training, before test decoding
+  (dev decoding during training stays bf16). PEFT models were unaffected because
+  `PeftModel.generate` bypasses the patched forward. (2) `prepare_model_for_kbit_training` casts a
+  qlora base's non-quantized parameters to fp32; inference now applies it too
+  (`use_gradient_checkpointing=False`). The model is saved before test decoding so a crash there
+  doesn't lose it.

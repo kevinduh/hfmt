@@ -36,52 +36,71 @@ hfmt/
 ├── hfmt/                    # Python entry-point scripts (not yet a package)
 │   ├── train_seq2seq.py     # encoder–decoder MT (T5, Marian) via Seq2SeqTrainer
 │   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
-│   ├── hydra_config.py      # typed Hydra config schema (ConfigStore) for the SFT workflow
-│   ├── grid.py              # login-node grid expansion + per-job saved configs (egs/sft.sh)
-│   ├── inf_translation.py   # inference for decoder-only MT (optional PeftModel)
+│   ├── inf_translation.py   # decoder-only MT inference on a trained run folder — Hydra-driven
+│   ├── mt_model.py          # model loading, prompting, decoding, scoring shared by SFT + inference
+│   ├── hydra_config.py      # typed Hydra config schema (ConfigStore): types only, no defaults
+│   ├── grid.py              # login-node grid expansion + per-job saved configs (egs/launch.sh)
 │   └── decode_summarization.py  # zero/few-shot summarization
-├── conf/                    # SFT base config.yaml + components (basemodel/lora/train/decode); never experiments
+├── conf/                    # SFT base config.yaml + groups train/ peft/ decode/; never experiments
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
-├── egs/                     # recipes; sft.sh <experiment.yaml> launches the Hydra SFT workflow
-│   ├── sft.sh  job.sh       # launcher (sbatch array or LOCAL=1) and one job
+├── egs/                     # recipes; launch.sh <sft|inf> <yaml> launches the Hydra SFT workflow
+│   ├── launch.sh            # launcher (sbatch array, LOCAL=1 or DRYRUN=1) for training and inference
+│   ├── sft_job.sh  inf_job.sh   # one training job / one inference job
 │   ├── data/                # example bitext, YAML/JSONL manifests
-│   ├── mmtc/<src>-<trg>/    # SFT experiments + dataset.yaml; outputs/<run_name>[-<idx>]/ (gitignored)
+│   ├── mmtc/<src>-<trg>/    # SFT experiments, dataset.yaml, local_setting.sh (untracked);
+│   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
 │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type)
-├── outputs/                 # direct (non-sft.sh) Hydra run outputs (gitignored)
+├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
 ```
 
 ## Key conventions
 
-- **Configuration (Hydra)** — for the `sft_translation.py` SFT workflow (feature 08):
-  `conf/` holds `config.yaml` plus mix-and-match components (`basemodel`, `lora`, `train`,
-  `decode`); typed schema in `hfmt/hydra_config.py`, where every field must be read by code.
+- **Configuration (Hydra)** — for the `sft_translation.py`/`inf_translation.py` workflow
+  (features 08, 09). **The schema (`hfmt/hydra_config.py`) holds types only, no default values;
+  every default lives in exactly one yaml:** `conf/config.yaml` (defaults list + project-wide
+  `slurm`, `wandb`, `inf_name`), `conf/<group>/<option>.yaml` for the groups `train`, `peft`
+  (`qlora_default` | `lora_default` | `full_finetune`: `peft.mode`, `peft.lora`, `peft.quant`) and
+  `decode`, or the experiment folder. A key no yaml sets fails before launch. Every schema field
+  must be read by code (or, for the optional `data.data_root/src/trg`, by `dataset.yaml`).
   An experiment is a yaml in `egs/<dataset>/<src>-<trg>/` whose defaults start with `- config`
-  and `- dataset` (the `dataset.yaml` next to it, OmegaConf `${data.*}` paths), then
-  `override <group>: <option>` lines; it sets `run_name` (required) and `data.*`. Launch with
-  `bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
-  `lora.lora_r=16`, `slurm.gres=gpu:l40s:1`. `train.finetune_mode` (`qlora` | `lora` | `full`)
-  selects the fine-tuning method. See README "Running SFT experiments" and `decisions.md`.
+  and `- dataset` (the `dataset.yaml` next to it: `data_root`, `src`, `trg`, split file lists),
+  then `override <group>: <option>` lines; it sets `run_name`, `checkpoint` and `instruction`.
+  `data_root` comes from `$HFMT_DATA_ROOT`, set in the folder's untracked `local_setting.sh`
+  (copy `local_setting.sh.example`); a dataset yaml may instead list absolute paths. Launch with
+  `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
+  `peft.lora.lora_r=16`, `peft=lora_default`, `slurm.gres=gpu:l40s:1`. Avoid `+key`/`~key`
+  overrides: they add or delete keys and so bypass the schema. See README "Running SFT
+  experiments" and `decisions.md`.
 - **Launch path (no submitit)** — `hfmt/grid.py` expands the grid, composes and checks every
   job's config, and saves it fully resolved as `<run folder>/run_config.yaml` (+ `git_rev`);
-  `egs/sft.sh` then submits one Slurm array of `egs/job.sh` (each job a plain single Hydra run
-  of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
+  `egs/launch.sh sft` then submits one Slurm array of `egs/sft_job.sh` (each job a plain single
+  Hydra run of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
   sbatch command. Run folders: `<output_root>/<run_name>` (1 job) or `<run_name>-<idx>` (grid);
   `output_root` defaults to `<experiment folder>/outputs`. No timestamps: an existing folder
   only warns. W&B run name = run folder name, group = `run_name`. Re-run a saved job with
-  `bash egs/sft.sh <run folder>/run_config.yaml [overrides]` (same folder unless `run_name=`).
+  `bash egs/launch.sh sft <run folder>/run_config.yaml [overrides]` (same folder unless `run_name=`).
+- **Inference** — `bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]`, one trained
+  run folder per call (loop in the shell for a sweep). `grid.py --inf` checks the saved config +
+  overrides (e.g. `decode.num_beams=5`, `'data.test.src=[...]'`, `inf_name=beam5`) and saves
+  `<run folder>/inf/<inf_name>/inf_config.yaml`; `egs/inf_job.sh` writes `pred.trg` and
+  `scores.json` there. `run_config.yaml` is never changed; no W&B. Inference reproduces training's
+  `eval.pred.trg` exactly: both use `mt_model.py`, and training unwraps Accelerate's autocast
+  wrapper before its test decoding (and qlora bases get the same fp32 preparation).
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a
   `.sweep.yaml` carries its grid in `hydra.sweeper.params` and always runs all of it. Axes are
-  leaf values or component files (`basemodel: qwen2.5-0.5b,qwen2.5-1.5b`). Command-line comma
+  leaf values or component files (`peft: lora_default,qlora_default`). Command-line comma
   lists add an axis on either kind; a single value pins one. `<run_name>.grid.txt` maps idx →
   values; change `run_name` when changing a grid's shape. `slurm.array_parallelism` caps
   concurrency.
 - **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
   still plain shell scripts that source `install/path.sh`, set shell vars, and call an
-  `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable.
+  `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable. Those calling `sft_translation.py` or
+  `inf_translation.py` (`egs/mmtc/zh-en/`, `egs/synth_lrl/*/inf*.sh`) use the old argparse CLIs
+  and are stale.
 - **Pinned Transformers submodule** for reproducibility — the HF training APIs change often.
 - **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed per split (SFT: in the
   experiment's `dataset.yaml`; other recipes: a YAML manifest) and loaded via

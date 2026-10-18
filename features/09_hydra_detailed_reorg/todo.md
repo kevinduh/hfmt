@@ -161,14 +161,18 @@ Ground rules for every phase:
 - [x] Present the commit message.
 
 ## D. Docs
-- [ ] CLAUDE.md: structure (`conf/` groups `train`/`peft`/`decode`, `launch.sh`, `sft_job.sh`/`inf_job.sh`,
-      `mt_model.py`),
-      the Rule, `local_setting.sh`, renamed keys, inference.
-- [ ] README "Running SFT experiments": new keys and groups, `local_setting.sh` setup, inference.
-- [ ] `decisions.md`: 09 entry (the Rule, H2 `peft` group, `local_setting.sh`, inference from saved
-      run configs).
-- [ ] Check `overview.md` for stale references.
-- [ ] Measure net added lines (not strict). Present the commit message.
+- [x] CLAUDE.md: structure (`conf/` groups `train`/`peft`/`decode`, `launch.sh`, `sft_job.sh`/`inf_job.sh`,
+      `mt_model.py`), the Rule, `local_setting.sh`, renamed keys, inference; avoid `+key`/`~key`;
+      the zh-en/synth_lrl recipes calling the old CLIs are stale.
+- [x] README "Running SFT experiments": schema/defaults layout, `local_setting.sh` setup, training
+      with `egs/launch.sh sft`, new "Inference" subsection.
+- [x] `decisions.md`: 09 entry (the Rule, H2 `peft` group, `local_setting.sh`, single-run inference,
+      one launcher, exact reproduction: autocast unwrap + qlora preparation).
+- [x] Check `overview.md` for stale references: the file doesn't exist on this branch (CLAUDE.md
+      refers to it; left for the developer).
+- [x] Measure net added lines (not strict): code/config/tests since 08 (`15d5324`, `hfmt conf egs
+      tools .gitignore`) +640/−486 = +154; docs +148/−46.
+- [x] Present the commit message.
 
 ## E. Validation (developer)
 - [ ] Short Slurm sweep with `peft: lora_default,qlora_default`, then `launch.sh inf` on each run

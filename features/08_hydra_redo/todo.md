@@ -87,67 +87,72 @@ Ground rules for every phase:
 - [x] Every schema field is read somewhere (grep each field name in `hfmt/`). Still pending:
       `slurm.*`, `output_root` (B: grid.py); `run_name`, `wandb.entity`/`tags` (C); `data.data_root/src/trg`
       are read by `dataset.yaml` interpolation.
-- [ ] On a GPU node: direct run with `train.max_steps=20 train.eval_steps=20
+- [x] On a GPU node: direct run with `train.max_steps=20 train.eval_steps=20
       hydra.run.dir=<tmp>` finishes; `<tmp>` holds `dev.step_20.pred`, `eval.pred.trg`, `model/`,
       the log.
-- [ ] Same 20-step run with `train.finetune_mode=lora` and `=full` (full with
+- [x] Same 20-step run with `train.finetune_mode=lora` and `=full` (full with
       `basemodel=qwen2.5-0.5b`) start training without error.
-- [ ] `git status` shows no outputs or prediction files as untracked-to-add.
-- [ ] Present commit message `08_hydra_redo-A: …`.
+      (Smoke runs started on a GPU node; developer judged them fine before they finished.)
+- [x] `git status` shows no outputs or prediction files as untracked-to-add.
+- [x] Present commit message `08_hydra_redo-A: …`.
 
 ## B. Launch path (`grid.py`, `sft.sh`, `job.sh`)
 
 Depends on A (schema, `conf/`, example).
 
 ### B1. `hfmt/grid.py`
-- [ ] CLI: `python -m hfmt.grid <exp_dir> <exp_name> [overrides…]`; imports only
+- [x] CLI: `python -m hfmt.grid <experiment.yaml> [overrides…]` (takes the path; splits it itself); imports only
       `hfmt.hydra_config` (+ Hydra/OmegaConf).
-- [ ] Split overrides into sweep (comma) and plain with `OverridesParser`; compose once
+- [x] Split overrides into sweep (comma) and plain with `OverridesParser`; compose once
       (`initialize_config_dir(<exp_dir>)`, `hydra.searchpath=[file://$HFMT_ROOT/conf]`,
       `return_hydra_config=True`) to read `hydra.sweeper.params`.
-- [ ] Cross product via `BasicSweeper.split_arguments(params + overrides)`.
-- [ ] For each job: compose its config (fails on typo/bad value before anything is written).
-- [ ] `output_root`: if unset, `<exp_dir>/outputs`.
-- [ ] Job folders: n = 1 → `<output_root>/<run_name>`; n > 1 → `<output_root>/<run_name>-<idx>`,
+- [x] Cross product via `BasicSweeper.split_arguments(params + overrides)`.
+- [x] For each job: compose its config (fails on typo/bad value before anything is written).
+- [x] `output_root`: if unset, `<exp_dir>/outputs`.
+- [x] Job folders: n = 1 → `<output_root>/<run_name>`; n > 1 → `<output_root>/<run_name>-<idx>`,
       zero-padded when n > 10 (Q2d, Q7).
-- [ ] Saved-config rule: if `<exp_name>` is `run_config` and `run_name` isn't overridden, the job
+- [x] Saved-config rule: if `<exp_name>` is `run_config` and `run_name` isn't overridden, the job
       folder is `<exp_dir>` itself.
-- [ ] Existing folder → print a warning and proceed (Q2a).
-- [ ] Write `<job_dir>/run_config.yaml`: `defaults: [base_config, _self_]` + the job config with
+- [x] Existing folder → print a warning and proceed (Q2a).
+- [x] Write `<job_dir>/run_config.yaml`: `defaults: [base_config, _self_]` + the job config with
       `OmegaConf.resolve` applied (fully resolved; no `hydra:` section).
-- [ ] Write `<job_dir>/git_rev` (`git rev-parse HEAD`, plus `-dirty` if the tree has changes).
-- [ ] Write `<output_root>/<run_name>.grid.txt` (`idx: overrides` per job).
-- [ ] Emit for `sft.sh`: job count, the job-folder list file, and sbatch flags from `slurm:`.
+- [x] Write `<job_dir>/git_rev` (`git rev-parse HEAD`, plus `-dirty` if the tree has changes).
+- [x] Write `<output_root>/<run_name>.grid.txt` (`idx: overrides` per job).
+- [x] Emit for `sft.sh` (bash to eval): `JOBS=(...)` job folders and `SBATCH_ARGS=(...)` from `slurm:`
+      (no list file: job folders are passed to `job.sh` as arguments). Also: errors print
+      Hydra's message, not a traceback; `slurm.*` can't be a grid axis; missing values fail.
 
 ### B2. `egs/sft.sh`
-- [ ] Usage check; resolve the path with `realpath` (repo-relative, cwd-relative or absolute);
+- [x] Usage check; resolve the path with `realpath` (repo-relative, cwd-relative or absolute);
       split into folder + stem; refuse a file named `config.yaml`.
-- [ ] `source install/path.sh`; `PYTHONPATH=$HFMT_ROOT`; run `grid.py`; stop on its error.
-- [ ] Print the grid lines and warnings.
-- [ ] Slurm: `sbatch --array=0-$((n-1))%<array_parallelism> <flags> -o <job_dir>/slurm.out …
-      egs/job.sh <job list file>`; print the job id; return.
-- [ ] `LOCAL=1`: loop `i=0..n-1`, `SLURM_ARRAY_TASK_ID=$i bash egs/job.sh <list>`, log per job,
+- [x] `source install/path.sh`; `PYTHONPATH=$HFMT_ROOT`; run `grid.py`; stop on its error.
+- [x] Print the grid lines and warnings.
+- [x] Slurm: `sbatch --array=0-$((n-1))%<array_parallelism> <flags> -o <job_dir>/slurm.out …
+      egs/job.sh <job folders>` (log: `<job folder>/slurm-%A[_%a].out`); return. `DRYRUN=1`
+      prints the sbatch command instead.
+- [x] `LOCAL=1`: loop `i=0..n-1`, `SLURM_ARRAY_TASK_ID=$i bash egs/job.sh <job folders>`, log to `<job folder>/local.log`,
       report failures, continue.
 
 ### B3. `egs/job.sh`
-- [ ] `source install/path.sh`; pick line `$SLURM_ARRAY_TASK_ID` of the job list; run
+- [x] `source install/path.sh`; pick argument number `$SLURM_ARRAY_TASK_ID` (a job folder); run
       `python -m hfmt.sft_translation --config-dir <job_dir> --config-name run_config
       hydra.run.dir=<job_dir>`.
 
 ### B4. Sweep example
-- [ ] `egs/mmtc/fr-en/sft_lora.sweep.yaml` (standalone; `run_name: sft_lora_sweep`; grid lr
+- [x] `egs/mmtc/fr-en/sft_lora.sweep.yaml` (standalone; `run_name: sft_lora_sweep`; grid lr
       1e-4,2e-4 × lora_r 8,16).
 
 ### B5. Done when
-- [ ] `grid.py` dry checks on a login node: single → 1 job; sweep → 4; `lora.lora_r=8`
+- [x] `grid.py` dry checks on a login node: single → 1 job; sweep → 4; `lora.lora_r=8`
       pins → 2; `train.seed=1,2` adds → 8; bad value (`lora.lora_r=abc`) fails before writing.
-- [ ] `run_config.yaml` contains no `${` and absolute paths.
+- [x] `run_config.yaml` contains no `${` and absolute paths.
 - [ ] `LOCAL=1 bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml train.max_steps=20
       train.eval_steps=20` on a GPU node → `egs/mmtc/fr-en/outputs/sft_lora/`.
 - [ ] Slurm: single (20 steps) → `outputs/sft_lora/`; sweep (20 steps) → `outputs/sft_lora_sweep-{0..3}/`
       with the right values in each `run_config.yaml`; `sft_lora_sweep.grid.txt` written.
-- [ ] Re-run from a saved config with a new `run_name` → new folder; without → same folder.
-- [ ] `bash egs/sft.sh` with a file named `config.yaml` is refused.
+- [x] Re-run from a saved config with a new `run_name` → new folder; without → same folder
+      (checked with `DRYRUN=1`; the saved config composes for `job.sh` with `--cfg job`).
+- [x] `bash egs/sft.sh` with a file named `config.yaml` is refused.
 - [ ] Present commit message `08_hydra_redo-B: …`.
 
 ## C. W&B and GPU tools
@@ -198,8 +203,8 @@ Depends on A–C (documents the final behaviour).
 
 ### D3. Done when
 - [ ] Tests pass.
-- [ ] Line budget (Q10): `git diff --shortstat main -- hfmt conf egs/sft.sh egs/job.sh`
-      minus `hfmt/test_*.py` ≤ 400 added lines, or the commit message explains the excess.
+- [ ] Line budget (Q10, soft): net added lines (`git diff --numstat main` + new files) over
+      `hfmt/` (minus tests), `conf/`, `egs/sft.sh`, `egs/job.sh` around 400; explain if well over.
 - [ ] Grep docs for stale terms (`run.sh`, `submitit`, `hydra.launcher`, `+mmtc/`, `sweep_probe`,
       `lora.enabled`, `dataset_dir`) outside `decisions.md` history.
 - [ ] Present commit message `08_hydra_redo-D: …`.

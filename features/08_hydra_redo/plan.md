@@ -405,12 +405,12 @@ the next feature, 09 (see "Out of scope / deferred").
 Q9. **Feature breakdown.** ✅ **Decided:** one feature 08, with phases A–E (see "Phases"),
 each validated before moving on. Feature 09 stays Hydra inference.
 
-Q10. **Simplicity budget.** ✅ **Decided:** ≤ 400 added lines as a soft acceptance criterion,
-measured as `git diff --shortstat main -- hfmt conf egs/sft.sh egs/job.sh` excluding tests
-(`hfmt/test_*.py`). Not counted: tests, docs, `features/`, `tools/`, example experiments under
-`egs/<dataset>/`. Ported code (fine-tuning modes, Q6 items) counts. Rough estimate: schema ~120,
-`conf/` ~60, `grid.py` ~60, `sft.sh` ~40, `job.sh` ~10, net `sft_translation.py` change
-~+60–100. If the final count exceeds 400, the commit message says why.
+Q10. **Simplicity budget.** ✅ **Decided:** about 400 **net** added lines (insertions minus
+deletions) as a soft guide, not a strict limit, over `hfmt/` (excluding `hfmt/test_*.py`),
+`conf/`, `egs/sft.sh`, `egs/job.sh`, measured with `git diff --numstat main`. Insertions alone
+would count rewritten lines (phase A's `sft_translation.py`: +220/−226, net −6). Not counted:
+tests, docs, `features/`, `tools/`, example experiments under `egs/<dataset>/`. After phase A:
+net ≈ +213.
 
 Q11. **Untracked hydra2 leftovers.** ✅ **Decided: ignore them.** Claude doesn't read, move,
 build on or commit `conf/hydra/launcher/slurm_{h100,v100}.yaml`, `egs/experiment/`,

@@ -1,7 +1,8 @@
-"""Tests for hfmt/grid.py (feature 08_hydra_redo). No GPU or training deps needed.
+"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg). No GPU or training deps needed.
 
 Runs grid.main() in-process on the real fr-en experiments, with output_root pointed at a temp
-dir, and checks the job folders and saved configs it writes.
+dir, and checks the job folders and saved configs it writes. HFMT_DATA_ROOT is a dummy path
+(grid.py doesn't open data files), so no local_setting.sh is needed.
 
 Run standalone (pytest isn't installed in the hfmt env):
     HFMT_ROOT=$(pwd) python hfmt/test_grid.py
@@ -10,12 +11,14 @@ Run standalone (pytest isn't installed in the hfmt env):
 import contextlib
 import io
 import os
+import shutil
 import sys
 import tempfile
 
 from omegaconf import OmegaConf
 
 ROOT = os.environ.setdefault("HFMT_ROOT", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ["HFMT_DATA_ROOT"] = "/dummy/data/fr-en"
 sys.path.insert(0, ROOT)
 from hfmt import grid  # noqa: E402
 
@@ -56,18 +59,18 @@ def test_sweep_runs_full_grid():
     out, dirs, _ = run(SWEEP)
     assert dirs == [f"sft_lora_sweep-{i}" for i in range(4)]
     cfg = saved(out, "sft_lora_sweep-2")  # grid order: lr outer, lora_r inner
-    assert (cfg.train.learning_rate, cfg.lora.lora_r) == (2e-4, 8)
+    assert (cfg.train.learning_rate, cfg.peft.lora.lora_r) == (2e-4, 8)
     lines = open(os.path.join(out, "sft_lora_sweep.grid.txt")).read().splitlines()
-    assert lines[2] == "2: train.learning_rate=0.0002 lora.lora_r=8"
+    assert lines[2] == "2: train.learning_rate=0.0002 peft.lora.lora_r=8"
 
 
 def test_cli_value_pins_and_comma_list_adds_axis():
-    assert len(run(SWEEP, "lora.lora_r=8")[1]) == 2
+    assert len(run(SWEEP, "peft.lora.lora_r=8")[1]) == 2
     assert len(run(SWEEP, "train.seed=1,2")[1]) == 8
 
 
 def test_comma_list_on_single_file_makes_a_grid():
-    assert run(SINGLE, "lora.lora_r=8,16")[1] == ["sft_lora-0", "sft_lora-1"]
+    assert run(SINGLE, "peft.lora.lora_r=8,16")[1] == ["sft_lora-0", "sft_lora-1"]
 
 
 def test_zero_padding_above_ten_jobs():
@@ -92,17 +95,64 @@ def test_rerun_saved_config_reuses_its_folder_unless_renamed():
     run(rc, "train.max_steps=2000", out=out)
     assert saved(out, "sft_lora_sweep-1").train.max_steps == 2000
     _, dirs, _ = run(rc, "run_name=renamed", out=out)
-    assert "renamed" in dirs and saved(out, "renamed").lora.lora_r == 16
+    assert "renamed" in dirs and saved(out, "renamed").peft.lora.lora_r == 16
 
 
 def test_errors_fail_before_writing():
     assert fails(SINGLE, "train.lerning_rate=1")      # unknown key
-    assert fails(SWEEP, "lora.lora_r=abc,8")          # bad value in one grid job
+    assert fails(SWEEP, "peft.lora.lora_r=abc,8")          # bad value in one grid job
     assert fails(SINGLE, "slurm.gres=a,b")            # slurm can't be an axis
     tmp = tempfile.mkdtemp()
     cfg_named = os.path.join(tmp, "config.yaml")
     open(cfg_named, "w").write(open(SINGLE).read())
     assert fails(cfg_named)                            # clashes with conf/config.yaml
+
+
+def test_each_peft_option_composes():
+    for opt, mode in [("full_finetune", "full"), ("lora_default", "lora"), ("qlora_default", "qlora")]:
+        out, _, _ = run(SINGLE, f"peft={opt}")
+        peft = saved(out, "sft_lora").peft
+        assert peft.mode == mode
+        assert (peft.lora is not None, peft.quant is not None) == (mode != "full", mode == "qlora")
+
+
+def test_peft_mode_must_match_blocks():
+    assert fails(SINGLE, "peft=full_finetune", "peft.lora.lora_r=16")  # partial lora block on full
+    assert fails(SINGLE, "peft.mode=lora")                             # lora with a quant block
+    assert fails(SINGLE, "peft.mode=adapter")                          # unknown mode
+
+
+def test_missing_value_fails():
+    tmp = tempfile.mkdtemp()                           # experiment that sets no checkpoint
+    shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)
+    exp = os.path.join(tmp, "no_ckpt.yaml")
+    open(exp, "w").write("".join(l for l in open(SINGLE) if not l.startswith("checkpoint:")))
+    assert fails(exp)
+
+
+def test_missing_data_root_gives_hint():
+    os.environ.pop("HFMT_DATA_ROOT")
+    try:
+        run(SINGLE)
+        assert False, "should have failed"
+    except SystemExit as e:
+        assert "local_setting.sh" in str(e.code)
+    finally:
+        os.environ["HFMT_DATA_ROOT"] = "/dummy/data/fr-en"
+
+
+def test_dataset_with_absolute_paths_needs_no_data_root():
+    tmp = tempfile.mkdtemp()                           # no data_root/src/trg, no local_setting.sh
+    open(os.path.join(tmp, "dataset.yaml"), "w").write(
+        "# @package data\n" + "".join(f"{s}: {{src: [/abs/{s}.fr], trg: [/abs/{s}.en]}}\n" for s in ("train", "dev")))
+    shutil.copy(SINGLE, tmp)
+    saved_root = os.environ.pop("HFMT_DATA_ROOT")
+    try:
+        out, dirs, _ = run(os.path.join(tmp, "sft_lora.yaml"))
+    finally:
+        os.environ["HFMT_DATA_ROOT"] = saved_root
+    data = saved(out, "sft_lora").data
+    assert data.data_root is None and data.test is None and list(data.train.src) == ["/abs/train.fr"]
 
 
 if __name__ == "__main__":

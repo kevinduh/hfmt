@@ -1,0 +1,3 @@
+# Full fine-tune of all base-model parameters (fp32 weights, mixed-precision training). Usually
+# wants a lower learning rate and more memory/time, e.g. train.learning_rate=2e-5 slurm.mem_gb=64.
+mode: full

@@ -1,0 +1,7 @@
+# LoRA: adapter on a bf16/fp16 base model (no quantization).
+mode: lora
+lora:
+  lora_r: 8
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target: qv   # qv | all-linear | attention | mlp

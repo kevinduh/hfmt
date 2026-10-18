@@ -6,17 +6,12 @@
 defaults:
   - config
   - dataset
-  - override basemodel: qwen2.5-1.5b
-  - override train: qlora_default
+  - override peft: qlora_default
   - _self_
 
 run_name: sft_lora_sweep
-
-data:
-  data_root: ${oc.env:HFMT_ROOT}/data/fr-en
-  src: fr
-  trg: en
-  instruction: "Translate French to English"
+checkpoint: Qwen/Qwen2.5-1.5B-Instruct
+instruction: "Translate French to English"
 
 train:
   seed: 37
@@ -28,4 +23,4 @@ hydra:
   sweeper:
     params:
       train.learning_rate: 1e-4,2e-4
-      lora.lora_r: 8,16
+      peft.lora.lora_r: 8,16

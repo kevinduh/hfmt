@@ -1,5 +1,5 @@
-# Default training settings (hydra2's fr-en values, feature 08 A2).
-finetune_mode: qlora   # full | lora | qlora
+# Default training settings (hydra2's fr-en values, feature 08 A2). The fine-tuning method is the
+# peft group (conf/peft/); a full fine-tune may want its own train option (e.g. a lower learning rate).
 max_steps: 800
 learning_rate: 2e-4
 train_batch_size: 16

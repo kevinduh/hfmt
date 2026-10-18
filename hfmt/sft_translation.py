@@ -1,7 +1,8 @@
 """Supervised fine-tuning of a decoder-only LM for MT (Hydra-driven, feature 08_hydra_redo).
 
 Normally launched by egs/sft.sh. Direct single run (debugging; output goes to Hydra's default
-folder unless hydra.run.dir=... is given):
+folder unless hydra.run.dir=... is given; local_setting.sh provides the data location):
+    source egs/mmtc/fr-en/local_setting.sh
     python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lora [overrides]
 Inspect the composed config without training: add --cfg job.
 
@@ -17,7 +18,7 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
-from hfmt.hydra_config import Config, register_configs
+from hfmt.hydra_config import Config, check_config, register_configs
 
 
 def format_input_prompt(instruction_prefix, content):
@@ -129,6 +130,7 @@ def main(cfg: Config) -> None:
     from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTConfig, SFTTrainer
 
+    check_config(cfg)
     # Run folder chosen by Hydra (hydra.run.dir, set by egs/job.sh); everything is written here.
     outdir = HydraConfig.get().runtime.output_dir
     logging.info(f"Run folder: {outdir}")
@@ -148,10 +150,10 @@ def main(cfg: Config) -> None:
 
     ###################################
     ## User settings
-    instruction_prefix = cfg.data.instruction
+    instruction_prefix = cfg.instruction
     logging.info(f"instruction: '{instruction_prefix}'")
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.basemodel.checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.checkpoint)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -199,26 +201,26 @@ def main(cfg: Config) -> None:
     logging.info(f"======== Model Configuration ========")
 
     ### Load Base Model
-    finetune_mode = cfg.train.finetune_mode  # one of: full | lora | qlora
+    finetune_mode = cfg.peft.mode  # one of: full | lora | qlora
     use_bf16 = torch.cuda.is_bf16_supported(including_emulation=False)
     compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
     logging.info(f"finetune_mode: {finetune_mode}, use_bf16: {use_bf16}, compute_dtype: {compute_dtype}")
     if finetune_mode in ("full", "lora"):
         model_dtype = torch.float32 if finetune_mode == "full" else compute_dtype
         model = AutoModelForCausalLM.from_pretrained(
-            cfg.basemodel.checkpoint,
+            cfg.checkpoint,
             dtype=model_dtype,
         ).to(device)
     elif finetune_mode == "qlora":
         model_dtype = compute_dtype
         bnb_config = BitsAndBytesConfig(
-            load_in_4bit=cfg.basemodel.load_in_4bit,
-            bnb_4bit_use_double_quant=cfg.basemodel.bnb_4bit_use_double_quant,
-            bnb_4bit_quant_type=cfg.basemodel.bnb_4bit_quant_type,
+            load_in_4bit=cfg.peft.quant.load_in_4bit,
+            bnb_4bit_use_double_quant=cfg.peft.quant.bnb_4bit_use_double_quant,
+            bnb_4bit_quant_type=cfg.peft.quant.bnb_4bit_quant_type,
             bnb_4bit_compute_dtype=compute_dtype
         )
         model = AutoModelForCausalLM.from_pretrained(
-            cfg.basemodel.checkpoint,
+            cfg.checkpoint,
             dtype=model_dtype,
             quantization_config=bnb_config,
             device_map = {"": torch.cuda.current_device()}
@@ -230,17 +232,17 @@ def main(cfg: Config) -> None:
     lora_config = None
     if finetune_mode in ("lora", "qlora"):
         # TODO: fix, this is brittle
-        if cfg.lora.lora_target == "qv":
+        if cfg.peft.lora.lora_target == "qv":
             target_modules = ["q_proj", "v_proj"]
-        elif cfg.lora.lora_target == "all-linear":
+        elif cfg.peft.lora.lora_target == "all-linear":
             target_modules = "all-linear"
-        elif cfg.lora.lora_target == "attention":
+        elif cfg.peft.lora.lora_target == "attention":
             target_modules = ["q_proj", "v_proj", "k_proj", "out_proj"]
-        elif cfg.lora.lora_target == "mlp":
+        elif cfg.peft.lora.lora_target == "mlp":
             target_modules = ["up_proj", "down_proj"]
         else:
             logging.error(
-                f"Invalid lora_target: {cfg.lora.lora_target}. "
+                f"Invalid lora_target: {cfg.peft.lora.lora_target}. "
                 "Must be one of: qv | all-linear | attention | mlp."
             )
             exit(1)
@@ -248,9 +250,9 @@ def main(cfg: Config) -> None:
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM, # type of task to train on
             inference_mode=False, # set to False for training
-            r=cfg.lora.lora_r, # dimension of the smaller matrices
-            lora_alpha=cfg.lora.lora_alpha, # scaling factor
-            lora_dropout=cfg.lora.lora_dropout, # dropout of LoRA layers,
+            r=cfg.peft.lora.lora_r, # dimension of the smaller matrices
+            lora_alpha=cfg.peft.lora.lora_alpha, # scaling factor
+            lora_dropout=cfg.peft.lora.lora_dropout, # dropout of LoRA layers,
             target_modules=target_modules,
             #target_modules=["k_proj", "v_proj", "q_proj", "out_proj"]
             #bias="none"

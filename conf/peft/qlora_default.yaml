@@ -1,0 +1,11 @@
+# QLoRA: LoRA adapter on a 4-bit (bitsandbytes) base model.
+mode: qlora
+lora:
+  lora_r: 8
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target: qv   # qv | all-linear | attention | mlp
+quant:
+  load_in_4bit: true
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_quant_type: nf4

@@ -1,8 +1,12 @@
 # @package data
-# MMTC French-English file lists (feature 08). Loaded by Hydra through an experiment's
-# `- dataset` default; ${data.*} refer to the experiment's data_root/src/trg. Each split may list
-# several files per side (loaded in order, src[i] aligned with trg[i]). Remove `test` to skip
-# the final test decoding. Paths only, never data content (CLAUDE.md).
+# MMTC French-English data (features 08, 09). Loaded by Hydra through an experiment's
+# `- dataset` default. data_root is machine-specific: it comes from $HFMT_DATA_ROOT, set in the
+# untracked local_setting.sh next to this file (see local_setting.sh.example). Each split may list
+# several files per side (loaded in order, src[i] aligned with trg[i]). Remove `test` to skip the
+# final test decoding. Paths only, never data content (CLAUDE.md).
+data_root: ${oc.env:HFMT_DATA_ROOT}
+src: fr
+trg: en
 train:
   src:
     - ${data.data_root}/train.${data.src}-${data.trg}.${data.src}

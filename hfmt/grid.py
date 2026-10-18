@@ -25,7 +25,7 @@ from hydra._internal.core_plugins.basic_sweeper import BasicSweeper
 from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import OmegaConf
 
-from hfmt.hydra_config import register_configs
+from hfmt.hydra_config import check_config, register_configs
 
 SAVED = "run_config"
 
@@ -41,7 +41,9 @@ def _compose(exp_dir, exp_name, overrides, with_hydra=False):
             return compose(exp_name, overrides=overrides + [f"hydra.searchpath=[file://{conf_dir}]"],
                            return_hydra_config=with_hydra)
     except Exception as e:  # Hydra/OmegaConf errors: show the message, not a traceback
-        sys.exit(f"grid: {' '.join(overrides)}\n{e}")
+        hint = "\n(a key inside a block this config leaves unset, e.g. peft.lora with peft=full_finetune)" \
+            if "NoneType" in str(e) else ""
+        sys.exit(f"grid: {' '.join(overrides)}\n{e}{hint}")
 
 
 def _git_rev():
@@ -78,7 +80,13 @@ def main(argv):
     cfgs = []
     for job in jobs:
         cfg = _compose(exp_dir, exp_name, job)
-        OmegaConf.resolve(cfg)
+        try:
+            OmegaConf.resolve(cfg)
+            check_config(cfg)
+        except Exception as e:
+            hint = (f"\nCreate {exp_dir}/local_setting.sh (see local_setting.sh.example)"
+                    if "HFMT_DATA_ROOT" in str(e) else "")
+            sys.exit(f"grid: {' '.join(job)}\n{e}{hint}")
         missing = OmegaConf.missing_keys(cfg)
         if missing:
             sys.exit(f"grid: missing values: {sorted(missing)}")

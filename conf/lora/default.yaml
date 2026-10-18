@@ -1,5 +1,0 @@
-# LoRA adapter, used when train.finetune_mode is lora or qlora.
-lora_r: 8
-lora_alpha: 32
-lora_dropout: 0.1
-lora_target: qv   # qv | all-linear | attention | mlp

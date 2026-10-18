@@ -1,11 +1,12 @@
-# Base config for SFT experiments (feature 08_hydra_redo). Components only, never experiments.
+# Base config for SFT experiments (features 08, 09). Components only, never experiments.
 # An experiment (egs/<dataset>/<pair>/<name>.yaml) starts its defaults with `- config` to pull
-# this in, then `- dataset` and `override <group>: <option>` lines. Schema: hfmt/hydra_config.py.
+# this in, then `- dataset` and `override <group>: <option>` lines.
+# Schema (types only, no values): hfmt/hydra_config.py. Every default lives in exactly one yaml:
+# project-wide settings here, swappable bundles in conf/<group>/, the rest in the experiment folder.
 defaults:
   - base_config            # typed schema: validates everything below
-  - basemodel: qwen2.5-1.5b
-  - lora: default
-  - train: qlora_default
+  - train: default
+  - peft: qlora_default    # full_finetune | lora_default | qlora_default
   - decode: default
   - _self_
 
@@ -19,6 +20,15 @@ slurm:
   mem_gb: 25
   cpus: 1
   array_parallelism: 4
+
+# W&B: config and aggregate metrics only, never data (CLAUDE.md). Experiments set tags.
+wandb:
+  enabled: true
+  project: hfmt
+  entity: null
+  tags: []
+
+inf_name: test              # egs/inf.sh output subfolder: <run folder>/inf/<inf_name>/
 
 hydra:
   job:

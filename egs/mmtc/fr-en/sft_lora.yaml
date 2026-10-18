@@ -1,6 +1,6 @@
 # Single-run experiment: QLoRA SFT of Qwen2.5-1.5B on MMTC fr-en (one job).
 # Data: dataset.yaml + this machine's local_setting.sh (copy local_setting.sh.example).
-# Launch:  bash egs/sft.sh egs/mmtc/fr-en/sft_lora.yaml [overrides]
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]
 # Debug:   source egs/mmtc/fr-en/local_setting.sh &&
 #          python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lora
 defaults:

@@ -1,6 +1,6 @@
 """Supervised fine-tuning of a decoder-only LM for MT (Hydra-driven, feature 08_hydra_redo).
 
-Normally launched by egs/sft.sh. Direct single run (debugging; output goes to Hydra's default
+Normally launched by `egs/launch.sh sft`. Direct single run (debugging; output goes to Hydra's default
 folder unless hydra.run.dir=... is given; local_setting.sh provides the data location):
     source egs/mmtc/fr-en/local_setting.sh
     python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lora [overrides]
@@ -72,7 +72,7 @@ def main(cfg: Config) -> None:
     from trl import SFTConfig, SFTTrainer
 
     check_config(cfg)
-    # Run folder chosen by Hydra (hydra.run.dir, set by egs/job.sh); everything is written here.
+    # Run folder chosen by Hydra (hydra.run.dir, set by egs/sft_job.sh); everything is written here.
     outdir = HydraConfig.get().runtime.output_dir
     logging.info(f"Run folder: {outdir}")
     logging.info(f"Config:\n{OmegaConf.to_yaml(cfg, resolve=True)}")

@@ -155,6 +155,65 @@ def test_dataset_with_absolute_paths_needs_no_data_root():
     assert data.data_root is None and data.test is None and list(data.train.src) == ["/abs/train.fr"]
 
 
+
+def inf(rc, *overrides):
+    """Run grid.main --inf; return stdout. SystemExit propagates."""
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main(["--inf", rc, *overrides])
+    return stdout.getvalue()
+
+
+def trained_run():
+    """A saved single run folder with a (fake) trained model/; returns (run folder, run_config path)."""
+    out, _, _ = run(SINGLE)
+    run_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(run_dir, "model"))
+    return run_dir, os.path.join(run_dir, "run_config.yaml")
+
+
+def test_inf_saves_its_own_config_and_leaves_run_config():
+    run_dir, rc = trained_run()
+    before = open(rc).read()
+    stdout = inf(rc, "decode.num_beams=5", "inf_name=beam5")
+    inf_dir = os.path.join(run_dir, "inf", "beam5")
+    cfg = OmegaConf.load(os.path.join(inf_dir, "inf_config.yaml"))
+    assert cfg.model_dir == os.path.join(run_dir, "model") and cfg.decode.num_beams == 5
+    assert open(rc).read() == before and os.path.isfile(os.path.join(inf_dir, "git_rev"))
+    assert "--array=0-0%4" in stdout and "--job-name=sft_lora-inf" in stdout
+    assert f"--output={inf_dir}/slurm-%A.out" in stdout and f"JOBS=({inf_dir})" in stdout
+
+
+def test_inf_default_name_is_test():
+    run_dir, rc = trained_run()
+    inf(rc)
+    assert os.path.isfile(os.path.join(run_dir, "inf", "test", "inf_config.yaml"))
+
+
+def test_inf_errors_fail_before_writing():
+    run_dir, rc = trained_run()
+    for bad in [("decode.num_beams=1,5",),                # comma list
+                ("decode.num_bems=5",)]:                  # unknown key
+        try:
+            inf(rc, *bad)
+            assert False, bad
+        except SystemExit:
+            pass
+    for exp in [SINGLE, os.path.join(trained_run()[0], "missing.yaml")]:   # not a run_config
+        try:
+            inf(exp)
+            assert False, exp
+        except SystemExit:
+            pass
+    shutil.rmtree(os.path.join(run_dir, "model"))         # no trained model
+    try:
+        inf(rc)
+        assert False
+    except SystemExit:
+        pass
+    assert not os.path.exists(os.path.join(run_dir, "inf"))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

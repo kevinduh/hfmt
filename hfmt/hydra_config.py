@@ -128,7 +128,7 @@ class WandbConfig:
 
 @dataclass
 class SlurmConfig:
-    """sbatch resources, read by ``grid.py``/``egs/sft.sh`` (not by training code)."""
+    """sbatch resources, read by ``grid.py``/``egs/launch.sh`` (not by training code)."""
 
     partition: str = MISSING
     gres: str = MISSING

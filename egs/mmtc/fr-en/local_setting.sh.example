@@ -1,3 +1,3 @@
 # Copy to local_setting.sh (untracked) and point at this machine's MMTC fr-en folder.
-# egs/sft.sh and egs/inf.sh source it; dataset.yaml reads ${oc.env:HFMT_DATA_ROOT}.
+# egs/launch.sh sft sources it; dataset.yaml reads ${oc.env:HFMT_DATA_ROOT}.
 export HFMT_DATA_ROOT=/path/to/data/fr-en

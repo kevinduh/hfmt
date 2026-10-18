@@ -128,36 +128,41 @@ Ground rules for every phase:
 ## C. Inference launcher (single run: one `run_config.yaml` per call, Q4a revised)
 
 ### C1. Job scripts
-- [ ] `git mv egs/job.sh egs/sft_job.sh`; update `sft.sh` (sbatch, `LOCAL=1`, `DRYRUN=1`) and the
+- [x] `git mv egs/job.sh egs/sft_job.sh`; update the launcher (sbatch, `LOCAL=1`, `DRYRUN=1`) and the
       comment in `sft_translation.py`.
-- [ ] `egs/inf_job.sh`: like `sft_job.sh`, but `python -m hfmt.inf_translation --config-name inf_config`.
+- [x] `egs/inf_job.sh`: like `sft_job.sh`, but `python -m hfmt.inf_translation --config-name inf_config`.
 
 ### C2. `grid.py --inf`
-- [ ] Accept only an input named `run_config.yaml`; refuse command-line comma lists (exactly 1 job).
-- [ ] Require `<run folder>/model`.
-- [ ] Compose `<run>/run_config` + overrides + `model_dir=<run>/model`; `check_config`; resolve;
-      MISSING check; all before writing anything.
-- [ ] Save `<run>/inf/<inf_name>/inf_config.yaml` (+ `git_rev`); warn if the folder exists; never
-      write `run_config.yaml`.
-- [ ] Print `JOBS` (the inference folder) and `SBATCH_ARGS` (job name `<run_name>-inf`, log in the
-      inference folder), reusing the training code path.
+- [x] Accept only an input named `run_config.yaml`; refuse command-line comma lists (exactly 1 job).
+- [x] Require `<run folder>/model`.
+- [x] Compose `<run>/run_config` + overrides + `model_dir=<run>/model`; `check_config`; resolve;
+      MISSING check; all before writing anything (shared `_compose_checked`).
+- [x] Save `<run>/inf/<inf_name>/inf_config.yaml` (+ `git_rev`); warn if the folder exists; never
+      write `run_config.yaml` (shared `_save`).
+- [x] Print `JOBS` (the inference folder) and `SBATCH_ARGS` (job name `<run_name>-inf`, log in the
+      inference folder), reusing the training code path (shared `_print_jobs`).
 
-### C3. `egs/inf.sh`
-- [ ] Same path resolution, `LOCAL=1`, `DRYRUN=1` as `sft.sh` (no `local_setting.sh`: saved configs
-      hold resolved paths); share code with `sft.sh` rather than duplicating it.
-- [ ] Calls `grid.py --inf`, then submits (or runs, `LOCAL=1`) `egs/inf_job.sh <dir>`.
+### C3. One launcher: `egs/launch.sh <sft|inf>` (developer: no separate `sft.sh`/`inf.sh`)
+- [x] Merge `egs/sft.sh` and the inference launcher into `egs/launch.sh <sft|inf> <yaml> [overrides]`:
+      same path resolution, `LOCAL=1`, `DRYRUN=1`; `sft` sources `local_setting.sh` and runs
+      `sft_job.sh`; `inf` calls `grid.py --inf` and runs `inf_job.sh`.
+- [x] Update references (experiment headers, `local_setting.sh.example`, `conf/config.yaml`,
+      `.gitignore`, docstrings, `tools/gpu_free.sh`, `tools/run_on_free_gpu.sh`, which now forwards
+      `<sft|inf> ...`). README/CLAUDE.md in phase D.
 
 ### C4. Tests and checks
-- [ ] `test_grid.py`: inference on a saved run folder (fake `model/`) writes
+- [x] `test_grid.py`: inference on a saved run folder (fake `model/`) writes
       `inf/<inf_name>/inf_config.yaml` with `model_dir` set; `run_config.yaml` unchanged; a comma
-      list, a non-`run_config` input, a missing `model/` and a key typo fail before writing.
-- [ ] `LOCAL=1 bash egs/inf.sh` on a B4 run folder (GPU node or Slurm) matches B4's predictions.
-- [ ] `DRYRUN=1` prints a 1-task array with logs in the inference folder.
-- [ ] Present the commit message.
+      list, a non-`run_config` input, a missing `model/` and a key typo fail before writing (16 pass).
+- [x] On GPU: Slurm submission on `p09c-2` (qlora) and `LOCAL=1` on `p09c-0` (full) each reproduce
+      the run's `eval.pred.trg` (0/2000 lines differ).
+- [x] `DRYRUN=1` prints a 1-task array with logs in the inference folder; training dry runs,
+      `run_on_free_gpu.sh sft|inf` and the error cases checked.
+- [x] Present the commit message.
 
 ## D. Docs
-- [ ] CLAUDE.md: structure (`conf/` groups `train`/`peft`/`decode`, `inf.sh`/`inf_job.sh`,
-      `sft_job.sh`, `mt_model.py`),
+- [ ] CLAUDE.md: structure (`conf/` groups `train`/`peft`/`decode`, `launch.sh`, `sft_job.sh`/`inf_job.sh`,
+      `mt_model.py`),
       the Rule, `local_setting.sh`, renamed keys, inference.
 - [ ] README "Running SFT experiments": new keys and groups, `local_setting.sh` setup, inference.
 - [ ] `decisions.md`: 09 entry (the Rule, H2 `peft` group, `local_setting.sh`, inference from saved
@@ -166,6 +171,6 @@ Ground rules for every phase:
 - [ ] Measure net added lines (not strict). Present the commit message.
 
 ## E. Validation (developer)
-- [ ] Short Slurm sweep with `peft: lora_default,qlora_default`, then `inf.sh` on each run folder
-      (shell loop).
+- [ ] Short Slurm sweep with `peft: lora_default,qlora_default`, then `launch.sh inf` on each run
+      folder (shell loop).
 - [ ] Present the commit message.

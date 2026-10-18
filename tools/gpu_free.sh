@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # gpu_free.sh -- how many GPUs of each type are free right now, so you can pick the
-# least-contended type before launching a run (e.g. choose a100 vs l40s for egs/sft.sh).
+# least-contended type before launching a run (e.g. choose a100 vs l40s for egs/launch.sh).
 #
 # Usage (run on a Slurm login node):
 #   bash tools/gpu_free.sh                 # summary for a100 and l40s (our 4gpu_tier bf16 set)

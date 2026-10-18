@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 #
-# run_on_free_gpu.sh -- launch egs/sft.sh on whichever GPU type (a100 or l40s) has the
+# run_on_free_gpu.sh -- launch egs/launch.sh on whichever GPU type (a100 or l40s) has the
 # MOST free GPUs right now, so you don't have to eyeball `tools/gpu_free.sh` and set
 # slurm.gres by hand.
 #
 # Usage (run from a login node):
-#   bash tools/run_on_free_gpu.sh egs/mmtc/fr-en/sft_lora.sweep.yaml
-#   bash tools/run_on_free_gpu.sh egs/mmtc/fr-en/sft_lora.yaml train.seed=37,42 train.max_steps=20
+#   bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml
+#   bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=37,42 train.max_steps=20
+#   bash tools/run_on_free_gpu.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml
 #
-# All args are forwarded to egs/sft.sh verbatim; this wrapper only appends the chosen
+# All args are forwarded to egs/launch.sh verbatim; this wrapper only appends the chosen
 # `slurm.gres=gpu:<type>:1`. So do NOT pass your own slurm.gres (that
 # would be a duplicate override). Change the candidate types with GPU_TYPES:
-#   GPU_TYPES="a100 l40s v100" bash tools/run_on_free_gpu.sh egs/mmtc/fr-en/sft_lora.sweep.yaml
+#   GPU_TYPES="a100 l40s v100" bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml
 #
 # Policy: pick the type with the most free GPUs (tie -> first in GPU_TYPES). Note your
 # 4gpu_tier caps you at 4 concurrent GPUs regardless, so "freest" mainly shortens queueing.
@@ -41,4 +42,4 @@ if (( bestf <= 0 )); then
 fi
 
 echo ">> Freest GPU type: ${best} (${bestf} free). Launching on gpu:${best}:1" >&2
-exec bash "$root/egs/sft.sh" "$@" "slurm.gres=gpu:${best}:1"
+exec bash "$root/egs/launch.sh" "$@" "slurm.gres=gpu:${best}:1"

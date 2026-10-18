@@ -6,5 +6,5 @@ wandb/
 outputs/
 egs/**/outputs/
 __pycache__/
-# Per-machine data locations, sourced by egs/sft.sh (never commit). feature 09
+# Per-machine data locations, sourced by egs/launch.sh (never commit). feature 09
 egs/**/local_setting.sh

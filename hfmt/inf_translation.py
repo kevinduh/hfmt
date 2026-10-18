@@ -1,8 +1,8 @@
 """Decode a test set with a model trained by sft_translation.py (Hydra-driven, feature 09).
 
 Runs on a trained run folder's saved config, so the base model, fine-tuning mode, prompt and
-decode settings match training. Normally launched by egs/inf.sh, which saves the job's config as
-<run folder>/inf/<inf_name>/inf_config.yaml. Direct run (debugging):
+decode settings match training. Normally launched by `egs/launch.sh inf`, which saves the job's
+config as <run folder>/inf/<inf_name>/inf_config.yaml. Direct run (debugging):
     python -m hfmt.inf_translation --config-dir <run folder> --config-name run_config \\
         model_dir=<run folder>/model hydra.run.dir=<output folder> [overrides]
 e.g. decode.num_beams=5, or another test set: 'data.test.src=[...]' 'data.test.trg=[...]'.

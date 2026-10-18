@@ -1,5 +1,5 @@
 # Sweep experiment: sft_lora.yaml over a learning-rate x LoRA-rank grid (2 x 2 = 4 jobs).
-# Launch:  bash egs/sft.sh egs/mmtc/fr-en/sft_lora.sweep.yaml [overrides]
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml [overrides]
 # Always runs the full grid; a command-line comma list adds an axis, a single value pins one.
 # Jobs land in outputs/sft_lora_sweep-<idx>/; outputs/sft_lora_sweep.grid.txt maps idx -> values.
 # Change run_name when you change the grid's shape (indexes are positions in the grid).

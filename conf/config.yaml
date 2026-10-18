@@ -28,7 +28,7 @@ wandb:
   entity: null
   tags: []
 
-inf_name: test              # egs/inf.sh output subfolder: <run folder>/inf/<inf_name>/
+inf_name: test              # inference (egs/launch.sh inf) output subfolder: <run folder>/inf/<inf_name>/
 
 hydra:
   job:

@@ -171,18 +171,18 @@ export HFMT_DATA_ROOT=/path/to/data/fr-en
 # egs/mmtc/fr-en/dataset.yaml              (tracked, generic)
 data_root: ${oc.env:HFMT_DATA_ROOT}
 ```
-- `egs/sft.sh` runs `unset HFMT_DATA_ROOT`, then sources
+- `egs/launch.sh sft` (formerly `egs/sft.sh`) runs `unset HFMT_DATA_ROOT`, then sources
   `<experiment folder>/local_setting.sh` if it exists, before calling `grid.py`. The `unset` keeps a
   value left in your shell from silently pointing a different folder at the wrong data.
 - A tracked `local_setting.sh.example` (one line) sits next to each `dataset.yaml`. When the variable
   is missing, `grid.py` turns OmegaConf's error into a hint: create
   `<experiment folder>/local_setting.sh` (see `.example`).
 - It is needed **only at launch**. `grid.py` saves resolved absolute paths in `run_config.yaml`, so
-  compute nodes, re-runs of a saved config and `inf.sh` on a run folder don't need it.
+  compute nodes, re-runs of a saved config and inference on a run folder don't need it.
 - Direct debugging runs (`python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en ...`) don't go
-  through `sft.sh`, so the experiment header comment says to `source egs/mmtc/fr-en/local_setting.sh`
+  through `launch.sh`, so the experiment header comment says to `source egs/mmtc/fr-en/local_setting.sh`
   first.
-- `tools/run_on_free_gpu.sh` goes through `sft.sh`, so it needs no change. `egs/sft_job.sh` needs none
+- `tools/run_on_free_gpu.sh` goes through the launcher (now `egs/launch.sh <sft|inf>`). `egs/sft_job.sh` needs none
   either. `test_grid.py` sets a dummy `HFMT_DATA_ROOT` (`grid.py` doesn't check that files exist).
 - One variable name in every folder: only one folder's file is sourced per launch.
 
@@ -209,25 +209,27 @@ already hold everything needed to decode with a trained model.
   It decodes `data.test` with the `decode.*` settings and writes predictions. If `data.test.trg`
   is given, it also writes BLEU/chrF/TER to a local file (**Q7**). No W&B for inference
   (confidentiality is simpler; aggregate scores could be added later).
-- **`egs/inf.sh <run folder>/run_config.yaml [overrides]`**: always a single run (one trained model
-  per call; revised after phase A, see Q4a). Same `LOCAL=1`/`DRYRUN=1` as `sft.sh`.
+- **`egs/launch.sh inf <run folder>/run_config.yaml [overrides]`**: always a single run (one trained
+  model per call; revised after phase A, see Q4a). Same `LOCAL=1`/`DRYRUN=1` as training.
+  **One launcher (decided in phase C):** `egs/sft.sh` and the planned `egs/inf.sh` are merged into
+  `egs/launch.sh <sft|inf>`, so `egs/` has three launch files: `launch.sh`, `sft_job.sh`, `inf_job.sh`.
   - `grid.py --inf` (about 15 lines): the input must be a `run_config.yaml` and comma lists are
     refused, so there is exactly one job. It composes the saved config + your overrides +
     `model_dir=<run folder>/model`, runs the usual checks on the login node (typos fail before
     submitting), checks that `model/` exists, and saves `<run folder>/inf/<inf_name>/inf_config.yaml`.
     It never touches `run_config.yaml`. Same `JOBS`/`SBATCH_ARGS` output as for training.
   - No `local_setting.sh` needed: saved configs hold resolved paths.
-  - Examples: `bash egs/inf.sh egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml decode.num_beams=5 inf_name=beam5`,
+  - Examples: `bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml decode.num_beams=5 inf_name=beam5`,
     or another test set via `'data.test.src=[...]' 'data.test.trg=[...]' inf_name=other`.
   - A whole sweep is a shell loop (one `sbatch` per folder):
-    `for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/inf.sh $rc ...; done`.
+    `for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc ...; done`.
 - **One job script per launcher** (developer's naming): `egs/job.sh` is renamed `egs/sft_job.sh`
-  (called by `sft.sh`), and a new `egs/inf_job.sh` (called by `inf.sh`) runs
+  (run by `launch.sh sft`), and a new `egs/inf_job.sh` (run by `launch.sh inf`) runs
   `hfmt.inf_translation` on `inf_config`. Each hard-codes its module and config name, so neither
   needs extra arguments.
 
 ### Inference decisions (Q4a–e, all decided as recommended)
-- **Q4a (revised):** `inf.sh` takes only a run folder's `run_config.yaml`, one model per call
+- **Q4a (revised):** inference (`launch.sh inf`) takes only a run folder's `run_config.yaml`, one model per call
   (originally (i): experiments and sweeps too; changed to (ii) to keep `grid.py --inf` small; a
   sweep is decoded with a shell loop). A separate inference-experiment kind is not added.
 - **Q4b:** output in `<run folder>/inf/<inf_name>/`. `inf_name` is a new top-level key, default
@@ -280,6 +282,6 @@ One commit per phase (`09_hydra_detailed_reorg-<phase>: ...`), each with its own
 |---|---|---|
 | A | Schema to types-only (Rule) + H2 hierarchy; `conf/` reorg (`peft/`, `train/default`, slurm/wandb in B, deletions); experiments updated; `local_setting.sh` (+ `.example`, `.gitignore`, sourced by `sft.sh`, hint in `grid.py`); `sft_translation.py` key paths; consistency check; `test_grid.py` updated | `--cfg job` for `sft_lora` equals the 08 output, except the intended renames (diffed); tests pass; each `peft` option composes; bad combinations fail in `grid.py` |
 | B | `hfmt/mt_model.py` (shared prompt/decode/`load_model`); `sft_translation.py` uses it; `inf_translation.py` on Hydra with optional scoring | 20-step `LOCAL=1` SFT for each of `full`, `lora`, `qlora` on a GPU node; direct inference on each run folder reproduces the final test predictions |
-| C | `grid.py --inf` (single run), `egs/inf.sh` + `egs/inf_job.sh`, `job.sh` → `sft_job.sh`; tests for inference mode | `DRYRUN`/`LOCAL` inference on a run folder lands in `<run folder>/inf/<inf_name>/`; `run_config.yaml` untouched; typo, comma list and non-`run_config` input fail before submitting |
+| C | `grid.py --inf` (single run), `egs/launch.sh <sft|inf>` (replaces `sft.sh`), `egs/inf_job.sh`, `job.sh` → `sft_job.sh`; tests for inference mode | `DRYRUN`/`LOCAL` inference on a run folder lands in `<run folder>/inf/<inf_name>/`; `run_config.yaml` untouched; typo, comma list and non-`run_config` input fail before submitting |
 | D | Docs: CLAUDE.md, README, `decisions.md` entry | docs match code |
-| E | Slurm validation: short sweep with `peft: lora_default,qlora_default`, then `inf.sh` on each run folder (shell loop) | done by the developer, as in 08 |
+| E | Slurm validation: short sweep with `peft: lora_default,qlora_default`, then `launch.sh inf` on each run folder (shell loop) | done by the developer, as in 08 |

@@ -1,191 +1,63 @@
-import time
+"""Decode a test set with a model trained by sft_translation.py (Hydra-driven, feature 09).
+
+Runs on a trained run folder's saved config, so the base model, fine-tuning mode, prompt and
+decode settings match training. Normally launched by egs/inf.sh, which saves the job's config as
+<run folder>/inf/<inf_name>/inf_config.yaml. Direct run (debugging):
+    python -m hfmt.inf_translation --config-dir <run folder> --config-name run_config \\
+        model_dir=<run folder>/model hydra.run.dir=<output folder> [overrides]
+e.g. decode.num_beams=5, or another test set: 'data.test.src=[...]' 'data.test.trg=[...]'.
+
+Writes pred.trg (one line per test line) and, when data.test.trg is given, scores.json
+(BLEU/chrF/TER). Everything stays local: no W&B (CLAUDE.md).
+"""
+
+import json
 import os
-import torch
-import numpy as np
-import csv
-import argparse
 import logging
-import sys
-import wandb
-import yaml
-from datetime import datetime
-from datasets import load_dataset, concatenate_datasets, DatasetDict
-from transformers import AutoTokenizer, AutoConfig, DataCollatorForLanguageModeling
-from transformers import AutoModelForCausalLM, Trainer, BitsAndBytesConfig, EarlyStoppingCallback
-from torch.utils.data import DataLoader
-from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training, PeftModel
-from trl import SFTConfig, SFTTrainer
-from pprint import pprint, pformat
-from sacrebleu.metrics import BLEU, TER, CHRF
 
-os.environ["WANDB_PROJECT"]="hfmt"
-experiment_id=""
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import OmegaConf
+
+from hfmt.hydra_config import Config, check_config, register_configs
+from hfmt.mt_model import inference_on_eval_data, load_tokenizer, load_trained_model, score
 
 
-def format_input_prompt(instruction_prefix, content):
-    return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
+@hydra.main(config_path="../conf", config_name="config", version_base=None)
+def main(cfg: Config) -> None:
+    check_config(cfg)
+    if cfg.model_dir is None or not os.path.isdir(cfg.model_dir):
+        raise SystemExit(f"inf_translation: model_dir={cfg.model_dir} is not a trained model folder")
+    if cfg.data.test is None or not cfg.data.test.src:
+        raise SystemExit("inf_translation: data.test.src is unset or empty; nothing to decode")
 
-
-def format_input_prompt2(instruction_prefix, content):
-    return instruction_prefix + "\n" + content + "\n"
-
-
-def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, text_field='text'):
-    logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
-    original_padding_side = tokenizer.padding_side
-    original_truncation_side = tokenizer.truncation_side
-    tokenizer.padding_side = "left"
-    tokenizer.truncation_side = "left"
-    logging.info(f"inference_on_eval_data: Tokenizer setting in inference {tokenizer.padding_side = } {tokenizer.truncation_side = }")
-
-    logging.info(f"inference_on_eval_data: {eval_data}")
-    eval_dataloader = DataLoader(eval_data, batch_size=16, shuffle=False)
-    all_testout = []
-    start_time = time.time()
-    with open(predictions_file, "w") as O:
-        for i, eval_batch in enumerate(eval_dataloader):
-            # TODO: extract this into helper function so it can also be called in compute_metrics
-            if tokenizer.chat_template:
-                prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
-                test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, 
-                                                            max_length=128, truncation=True, padding=True,
-                                                            return_tensors="pt", return_dict=True).to(device)
-            else:
-                prompts = [format_input_prompt2(instruction_prefix, s) for s in eval_batch[text_field]]
-                print(f"prompts: {prompts}")
-                test_inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, max_length=128).to(device)
-
-            boundary = test_inputs["input_ids"].shape[1]
-            test_outputs = model.generate(**test_inputs, max_new_tokens=128, do_sample=False)[:, boundary:]
-            test_inputs_detok = tokenizer.batch_decode(test_inputs["input_ids"], skip_special_tokens=False)
-            test_outputs_detok = tokenizer.batch_decode(test_outputs, skip_special_tokens=True)
-            test_outputs_detok_clean = [sent.strip().replace('\n', ' ') for sent in test_outputs_detok]
-            for testout in test_outputs_detok_clean:
-                O.write(f"{testout}\n")
-                all_testout.append(testout)
-
-            # todo: change this to be more configurable
-            if i <= 2:
-                print_n = 2
-                torch.set_printoptions(profile="full")
-                logging.info(f"----- debug eval_batch {i}: (show {print_n} samples) -----")
-                logging.info(f"{test_inputs['input_ids'].shape = } {test_inputs['input_ids'][:print_n] = }")
-                logging.info(f"{test_outputs.shape = } {test_outputs[:print_n] = }")
-                logging.info(f"detokenized input w/ special token: {pformat(test_inputs_detok[:print_n])}")
-                logging.info(f"detokenized outputs w/ special token: {pformat(tokenizer.batch_decode(test_outputs[:print_n]))}")
-                torch.set_printoptions(profile="default")
-
-    end_time = time.time()
-    logging.info(f"Testing - Elapsed time for {len(eval_data)} sentences in {i+1} batches: {end_time-start_time:.1f}s")
-    tokenizer.padding_side = original_padding_side
-    tokenizer.truncation_side = original_truncation_side
-    return all_testout
-
-
-
-
-
-
-def main():
-
-
-
-    ###################################
-    ## Set arguments
-    parser = argparse.ArgumentParser(description="Train Machine Translation using HuggingFace")
-    parser.add_argument("-e", "--eval", help="Eval source text")
-    # Two load modes (feature 04):
-    #   QLoRA/LoRA: -c <base checkpoint>  -p <run_dir>/model   (adapter on a 4-bit base)
-    #   Full FT   : -c <run_dir>/model    (no -p)              (a fully fine-tuned model)
-    parser.add_argument("-c", "--checkpoint", required=True,
-                        help="Base model id (with --peft), or a full fine-tuned model dir (without --peft)")
-    parser.add_argument("-p", "--peft", type=str, default="",
-                        help="PEFT adapter dir (e.g. <run_dir>/model from a LoRA run); omit for a full fine-tuned model")
-    parser.add_argument("-o", "--outdir", required=True, help="Output directory")
-    parser.add_argument("-i", "--instruction", type=str, default="", help="Instruction prefix")
-    parser.add_argument("--max_steps", type=int, default=10000, help="Max number of train steps")
-    parser.add_argument("--learning_rate", type=float, default=2e-5)
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--logging_steps", type=int, default=10)
-    parser.add_argument("--eval_steps", type=int, default=1000)
-    parser.add_argument("--lr_scheduler_type", type=str, default="linear")
-    parser.add_argument("--warmup_steps", type=int, default=0)
-    parser.add_argument("--label_smoothing_factor", type=float, default=0.0)
-    parser.add_argument("--seed", type=int, default=42)
-    
-    args = parser.parse_args()
-
-    logging.basicConfig(filename=os.path.join(args.outdir, "inf.log"), level=logging.INFO, \
-        format='%(asctime)s - %(levelname)s - %(message)s', filemode="w")
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    logging.info(args)
-
-    # wandb.init(name=args.outdir, project='hfmt', dir=os.path.join(args.outdir,'wandb'),
-    #            config=args)
-    
-    ###################################
-    ## User settings 
-    global instruction_prefix
-    instruction_prefix = args.instruction
-    logging.info(f"instruction: '{instruction_prefix}'")
-
-    global experiment_id
-    experiment_id = args.outdir.replace(os.sep,'_').replace('models_','')
-    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    logging.info(f"Using device: {device}")
-
-    # TODO - check
+    import torch
     import datasets
+    from datasets import load_dataset
+
+    outdir = HydraConfig.get().runtime.output_dir
+    logging.info(f"Output folder: {outdir}")
+    logging.info(f"Config:\n{OmegaConf.to_yaml(cfg, resolve=True)}")
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     datasets.config.HF_DATASETS_OFFLINE = True
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    ###################################
-    ## Helper functions
+    tokenizer = load_tokenizer(cfg.checkpoint)
+    model = load_trained_model(cfg, cfg.model_dir, device)
 
+    test_data = load_dataset("text", data_files=list(cfg.data.test.src), streaming=False, split="train")
+    preds = inference_on_eval_data(tokenizer, model, test_data, os.path.join(outdir, "pred.trg"), device,
+                                   cfg.instruction, cfg.decode)
 
-    def preprocess_fn(samples):
-        prompt = [format_input_prompt(instruction_prefix, s) for s in samples["src"]]
-        completion = [[{"content":t, "role":"assistant"}] for t in samples["trg"]]
-        return {"prompt": prompt, "completion": completion}
-    
-
-
-    ###################################
-    ## Model Configuration
-    logging.info(f"======== Model Configuration ========")
-        
-    if args.peft:
-        logging.info("Loading PEFT model")
-        config = AutoConfig.from_pretrained(args.checkpoint)
-        
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-        )
-
-        base_model = AutoModelForCausalLM.from_pretrained(args.checkpoint, quantization_config=bnb_config).to(device)
-        model = PeftModel.from_pretrained(base_model, args.peft)
-    else:
-        logging.info("Loading base model")
-        model = AutoModelForCausalLM.from_pretrained(args.checkpoint).to(device)
-
-    print(model)
+    if cfg.data.test.trg:
+        refs = load_dataset("text", data_files=list(cfg.data.test.trg), streaming=False, split="train")["text"]
+        scores = score(preds, refs)
+        logging.info(f"Test scores: {scores}")
+        with open(os.path.join(outdir, "scores.json"), "w") as f:
+            json.dump(scores, f, indent=2)
 
 
-
-    ###################################
-    ## Inference on Eval set
-    logging.info(f"======== Testing ========")
-    eval_data = load_dataset("text", data_files=args.eval, streaming=False, split="train")
-    #inference_on_eval_data(tokenizer, model, eval_data.select(range(64)), os.path.join(args.outdir,"tmp.eval.pred.trg"), device)
-    inference_on_eval_data(tokenizer, model, eval_data, os.path.join(args.outdir,"eval.inf.trg"), device)
-
+register_configs()
 
 if __name__ == "__main__":
     main()

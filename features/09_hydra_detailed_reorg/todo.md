@@ -91,69 +91,73 @@ Ground rules for every phase:
 ## B. Shared model code and Hydra inference
 
 ### B1. `hfmt/mt_model.py`
-- [ ] Move `format_input_prompt` and `inference_on_eval_data` from `sft_translation.py`.
-- [ ] `load_base_model(cfg, device)`: the qlora/lora/full branches now in `sft_translation.py`
+- [x] Move `format_input_prompt` and `inference_on_eval_data` from `sft_translation.py`.
+- [x] `load_base_model(cfg, device)`: the qlora/lora/full branches now in `sft_translation.py`
       (dtype, 4-bit config, device placement), returning the model and `use_bf16`.
-- [ ] `load_trained_model(cfg, model_dir, device)`: `full` loads `model_dir` with the training dtype;
-      `lora`/`qlora` load the base via `load_base_model` and add `PeftModel.from_pretrained`.
-- [ ] `score(preds, refs)`: BLEU (flores200, as in training), chrF, TER; used by the training
+- [x] `load_trained_model(cfg, model_dir, device)`: `full` loads `model_dir` with the training dtype;
+      `lora`/`qlora` load the base via `load_base_model` and add `PeftModel.from_pretrained`; a `qlora`
+      base gets `prepare_model_for_kbit_training(use_gradient_checkpointing=False)` (fp32 non-quantized
+      params, as in training).
+- [x] `score(preds, refs)`: BLEU (flores200, as in training), chrF, TER; used by the training
       callback and by inference.
-- [ ] Heavy imports inside functions (config-only use stays fast).
+- [x] Heavy imports inside functions (config-only use stays fast).
 
 ### B2. `sft_translation.py`
-- [ ] Use `mt_model` (prompt, decode, `load_base_model`, `score`); behavior unchanged.
+- [x] Use `mt_model` (prompt, decode, `load_base_model`, `score`).
+- [x] After `trainer.train()`, `trainer.accelerator.unwrap_model(model, keep_fp32_wrapper=False)` before
+      the test decoding: training leaves Accelerate's autocast wrapper on `model.forward`, which made
+      full fine-tune test predictions differ from stand-alone inference. Dev decoding stays bf16.
 
 ### B3. `inf_translation.py` on Hydra
-- [ ] Replace the argparse CLI (Q4d) with `@hydra.main(config_path="../conf", config_name="config")`;
+- [x] Replace the argparse CLI (Q4d) with `@hydra.main(config_path="../conf", config_name="config")`;
       `register_configs()` at module level; `check_config(cfg)`.
-- [ ] Fail clearly if `model_dir` is unset/missing or `data.test` is `None`.
-- [ ] Tokenizer from `cfg.checkpoint`; decode `data.test.src` with `cfg.instruction` and `decode.*`;
+- [x] Fail clearly if `model_dir` is unset/missing or `data.test` is `None`.
+- [x] Tokenizer from `cfg.checkpoint`; decode `data.test.src` with `cfg.instruction` and `decode.*`;
       write `<run dir>/pred.trg`.
-- [ ] If `data.test.trg` is given, write aggregate scores to `<run dir>/scores.json` (Q7). Logs stay local.
-- [ ] No W&B import or call (confidentiality).
+- [x] If `data.test.trg` is given, write aggregate scores to `<run dir>/scores.json` (Q7). Logs stay local.
+- [x] No W&B import or call (confidentiality).
 
 ### B4. Phase B checks (GPU, via Slurm)
-- [ ] 20-step SFT runs for `peft=full_finetune`, `lora_default` and `qlora_default` (scratch
+- [x] 20-step SFT runs for `peft=full_finetune`, `lora_default` and `qlora_default` (scratch
       `output_root`, `train.max_steps=20`) complete.
-- [ ] Direct inference on each run folder (`--config-dir <run> --config-name run_config
-      model_dir=<run>/model hydra.run.dir=<scratch>`) reproduces that run's `eval.pred.trg`.
-- [ ] `test_grid.py` still passes. Present the commit message.
+- [x] Direct inference on each run folder (`--config-dir <run> --config-name run_config
+      model_dir=<run>/model hydra.run.dir=<scratch>`) reproduces that run's `eval.pred.trg`
+      (`p09c-{0,1,2}`: 0/2000 lines differ for full, lora, qlora).
+- [x] `test_grid.py` still passes. Present the commit message.
 
-## C. Inference launcher
+## C. Inference launcher (single run: one `run_config.yaml` per call, Q4a revised)
 
-### C1. `egs/job.sh`
-- [ ] Take the module and the saved-config name as the first two arguments, then the job folders
-      (`job.sh hfmt.sft_translation run_config <dirs...>`).
-- [ ] `sft.sh` (sbatch and `LOCAL=1`) passes them.
+### C1. Job scripts
+- [ ] `git mv egs/job.sh egs/sft_job.sh`; update `sft.sh` (sbatch, `LOCAL=1`, `DRYRUN=1`) and the
+      comment in `sft_translation.py`.
+- [ ] `egs/inf_job.sh`: like `sft_job.sh`, but `python -m hfmt.inf_translation --config-name inf_config`.
 
 ### C2. `grid.py --inf`
-- [ ] Refactor the job-folder naming so training and inference share it.
-- [ ] Refuse command-line comma lists in inference mode.
-- [ ] Map the input (experiment, sweep, or `run_config.yaml`) to its run folders; require each
-      folder's `run_config.yaml` and `model/`.
-- [ ] Per folder: compose `<run>/run_config` + overrides + `model_dir=<run>/model`; `check_config`;
-      resolve; MISSING check; all before writing anything.
-- [ ] Warn when a folder's saved config disagrees with the expanded experiment on a grid axis.
+- [ ] Accept only an input named `run_config.yaml`; refuse command-line comma lists (exactly 1 job).
+- [ ] Require `<run folder>/model`.
+- [ ] Compose `<run>/run_config` + overrides + `model_dir=<run>/model`; `check_config`; resolve;
+      MISSING check; all before writing anything.
 - [ ] Save `<run>/inf/<inf_name>/inf_config.yaml` (+ `git_rev`); warn if the folder exists; never
       write `run_config.yaml`.
-- [ ] Print `JOBS` (inference folders) and `SBATCH_ARGS` (job name `<run_name>-inf`, logs in the
-      inference folders).
+- [ ] Print `JOBS` (the inference folder) and `SBATCH_ARGS` (job name `<run_name>-inf`, log in the
+      inference folder), reusing the training code path.
 
 ### C3. `egs/inf.sh`
-- [ ] Same path resolution, `local_setting.sh` sourcing, `LOCAL=1`, `DRYRUN=1` as `sft.sh`; share
-      code with `sft.sh` rather than duplicating it.
-- [ ] Calls `grid.py --inf`, then `job.sh hfmt.inf_translation inf_config <dirs...>`.
+- [ ] Same path resolution, `LOCAL=1`, `DRYRUN=1` as `sft.sh` (no `local_setting.sh`: saved configs
+      hold resolved paths); share code with `sft.sh` rather than duplicating it.
+- [ ] Calls `grid.py --inf`, then submits (or runs, `LOCAL=1`) `egs/inf_job.sh <dir>`.
 
 ### C4. Tests and checks
-- [ ] `test_grid.py`: inference on a single run and a sweep (fake `model/` folders) writes
-      `inf/<inf_name>/inf_config.yaml`; `run_config.yaml` unchanged; comma list, missing `model/`
-      and a key typo fail before writing.
+- [ ] `test_grid.py`: inference on a saved run folder (fake `model/`) writes
+      `inf/<inf_name>/inf_config.yaml` with `model_dir` set; `run_config.yaml` unchanged; a comma
+      list, a non-`run_config` input, a missing `model/` and a key typo fail before writing.
 - [ ] `LOCAL=1 bash egs/inf.sh` on a B4 run folder (GPU node or Slurm) matches B4's predictions.
-- [ ] `DRYRUN=1` on a sweep prints one array over all inference folders.
+- [ ] `DRYRUN=1` prints a 1-task array with logs in the inference folder.
 - [ ] Present the commit message.
 
 ## D. Docs
-- [ ] CLAUDE.md: structure (`conf/` groups `train`/`peft`/`decode`, `inf.sh`, `mt_model.py`),
+- [ ] CLAUDE.md: structure (`conf/` groups `train`/`peft`/`decode`, `inf.sh`/`inf_job.sh`,
+      `sft_job.sh`, `mt_model.py`),
       the Rule, `local_setting.sh`, renamed keys, inference.
 - [ ] README "Running SFT experiments": new keys and groups, `local_setting.sh` setup, inference.
 - [ ] `decisions.md`: 09 entry (the Rule, H2 `peft` group, `local_setting.sh`, inference from saved
@@ -162,5 +166,6 @@ Ground rules for every phase:
 - [ ] Measure net added lines (not strict). Present the commit message.
 
 ## E. Validation (developer)
-- [ ] Short Slurm sweep with `peft: lora_default,qlora_default`, then `inf.sh` on it.
+- [ ] Short Slurm sweep with `peft: lora_default,qlora_default`, then `inf.sh` on each run folder
+      (shell loop).
 - [ ] Present the commit message.

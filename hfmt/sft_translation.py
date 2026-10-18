@@ -19,90 +19,32 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
 from hfmt.hydra_config import Config, check_config, register_configs
-
-
-def format_input_prompt(instruction_prefix, content):
-    return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
-
-
-def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, decode, text_field='text'):
-    from torch.utils.data import DataLoader
-    logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
-    original_padding_side = tokenizer.padding_side
-    original_truncation_side = tokenizer.truncation_side
-    tokenizer.padding_side = "left"
-    tokenizer.truncation_side = "left"
-    logging.info(f"inference_on_eval_data: Tokenizer setting in inference {tokenizer.padding_side = } {tokenizer.truncation_side = }")
-
-    logging.info(f"inference_on_eval_data: {eval_data}")
-    eval_dataloader = DataLoader(eval_data, batch_size=decode.batch_size, shuffle=False)
-    all_testout = []
-    start_time = time.time()
-    with open(predictions_file, "w") as O:
-        for i, eval_batch in enumerate(eval_dataloader):
-
-            prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
-            test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
-                                                        max_length=decode.max_length, truncation=True, padding=True,
-                                                        return_tensors="pt", return_dict=True).to(device)
-
-            boundary = test_inputs["input_ids"].shape[1]
-            test_outputs = model.generate(**test_inputs, max_new_tokens=decode.max_new_tokens, num_beams=decode.num_beams, do_sample=decode.do_sample)[:, boundary:]
-            test_inputs_detok = tokenizer.batch_decode(test_inputs["input_ids"], skip_special_tokens=False)
-            test_outputs_detok = tokenizer.batch_decode(test_outputs, skip_special_tokens=True)
-            test_outputs_detok_clean = [sent.strip().replace('\n', ' ') for sent in test_outputs_detok]
-            for testout in test_outputs_detok_clean:
-                O.write(f"{testout}\n")
-                all_testout.append(testout)
-
-            # todo: change this to be more configurable
-            # if i <= 2:
-            #     print_n = 2
-            #     torch.set_printoptions(profile="full")
-            #     logging.info(f"----- debug eval_batch {i}: (show {print_n} samples) -----")
-            #     logging.info(f"{test_inputs['input_ids'].shape = } {test_inputs['input_ids'][:print_n] = }")
-            #     logging.info(f"{test_outputs.shape = } {test_outputs[:print_n] = }")
-            #     logging.info(f"detokenized input w/ special token: {pformat(test_inputs_detok[:print_n])}")
-            #     logging.info(f"detokenized outputs w/ special token: {pformat(tokenizer.batch_decode(test_outputs[:print_n]))}")
-            #     torch.set_printoptions(profile="default")
-
-    end_time = time.time()
-    logging.info(f"Testing - Elapsed time for {len(eval_data)} sentences in {i+1} batches: {end_time-start_time:.1f}s")
-    tokenizer.padding_side = original_padding_side
-    tokenizer.truncation_side = original_truncation_side
-    return all_testout
+from hfmt.mt_model import format_input_prompt, inference_on_eval_data, load_base_model, load_tokenizer, score
 
 
 def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, instruction_prefix, decode):
     """Early stopping that also decodes the dev set and adds BLEU/chrF/TER to the eval metrics.
     Built in a function so transformers/sacrebleu are imported only when training."""
     from transformers import EarlyStoppingCallback
-    from sacrebleu.metrics import BLEU, TER, CHRF
     import wandb
 
     class EarlyStopping_MT_Callback(EarlyStoppingCallback):
         def __init__(self):
             super().__init__(early_stopping_patience=early_stopping_patience, early_stopping_threshold=early_stopping_threshold)
-            self.refs = [[s.strip() for s in data["trg"]]]
-            self.bleu = BLEU(smooth_method="none", max_ngram_order=4, tokenize='flores200')
-            self.chrf = CHRF()
-            self.ter = TER()
+            self.refs = data["trg"]
 
         def on_evaluate(self, args, state, control, **kwargs):
             logging.info(f"Tokenizer setting in TrainerCallback on_evaluate {tokenizer.padding_side = } {tokenizer.truncation_side = }")
             preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, instruction_prefix, decode, 'src')
-            score_bleu = self.bleu.corpus_score(preds, self.refs)
-            score_chrf = self.chrf.corpus_score(preds, self.refs)
-            score_ter = self.ter.corpus_score(preds, self.refs)
+            scores = score(preds, self.refs)
 
             # Local log only (examples never go to W&B, CLAUDE.md).
             logging.info(f"Decoded predictions at step {state.global_step}: {preds[:2]}")
-            logging.info(f"Decoded labels: {self.refs[0][:2]}")
-            logging.info(f"Metric scores at step {state.global_step}: BLEU={score_bleu.score:.2f}, CHRF={score_chrf.score:.2f}, TER={score_ter.score:.2f}")
+            logging.info(f"Decoded labels: {self.refs[:2]}")
+            logging.info(f"Metric scores at step {state.global_step}: BLEU={scores['bleu']:.2f}, CHRF={scores['chrf']:.2f}, TER={scores['ter']:.2f}")
 
-            kwargs["metrics"]["eval_bleu"] = round(score_bleu.score, 2)
-            kwargs["metrics"]["eval_chrf"] = round(score_chrf.score, 2)
-            kwargs["metrics"]["eval_ter"] = round(score_ter.score, 2)
+            for k, v in scores.items():
+                kwargs["metrics"][f"eval_{k}"] = v
             print(f"EarlyStopping_MT_Callback on_evaluate called at step {state.global_step} with metrics: {kwargs['metrics']} {self.early_stopping_patience_counter = }")
 
             # Log the evaluation metrics to WandB (aggregate scores only)
@@ -126,7 +68,6 @@ def main(cfg: Config) -> None:
     import torch
     import datasets
     from datasets import load_dataset, concatenate_datasets, DatasetDict
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
     from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTConfig, SFTTrainer
 
@@ -153,9 +94,7 @@ def main(cfg: Config) -> None:
     instruction_prefix = cfg.instruction
     logging.info(f"instruction: '{instruction_prefix}'")
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.checkpoint)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = load_tokenizer(cfg.checkpoint)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logging.info(f"Using device: {device}")
@@ -202,31 +141,7 @@ def main(cfg: Config) -> None:
 
     ### Load Base Model
     finetune_mode = cfg.peft.mode  # one of: full | lora | qlora
-    use_bf16 = torch.cuda.is_bf16_supported(including_emulation=False)
-    compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
-    logging.info(f"finetune_mode: {finetune_mode}, use_bf16: {use_bf16}, compute_dtype: {compute_dtype}")
-    if finetune_mode in ("full", "lora"):
-        model_dtype = torch.float32 if finetune_mode == "full" else compute_dtype
-        model = AutoModelForCausalLM.from_pretrained(
-            cfg.checkpoint,
-            dtype=model_dtype,
-        ).to(device)
-    elif finetune_mode == "qlora":
-        model_dtype = compute_dtype
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=cfg.peft.quant.load_in_4bit,
-            bnb_4bit_use_double_quant=cfg.peft.quant.bnb_4bit_use_double_quant,
-            bnb_4bit_quant_type=cfg.peft.quant.bnb_4bit_quant_type,
-            bnb_4bit_compute_dtype=compute_dtype
-        )
-        model = AutoModelForCausalLM.from_pretrained(
-            cfg.checkpoint,
-            dtype=model_dtype,
-            quantization_config=bnb_config,
-            device_map = {"": torch.cuda.current_device()}
-        )
-    else:
-        raise ValueError(f"Unknown mode: {finetune_mode}")
+    model, use_bf16 = load_base_model(cfg, device)
 
     ### Apply LoRA/QLoRA if needed
     lora_config = None
@@ -366,18 +281,17 @@ def main(cfg: Config) -> None:
     used_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024)
     max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024)
     logging.info(f"GPU = {gpu_stats.name}. Peak reserved memory = {used_memory} GB. {round(used_memory / max_memory * 100)}% of max ({max_memory} GB)")
+    model.save_pretrained(os.path.join(outdir, "model"))
 
     ###################################
     ## Inference on the test set (skipped when the dataset has no test split)
     logging.info(f"======== Testing ========")
-    if cfg.data.test is not None:
+    model = trainer.accelerator.unwrap_model(model, keep_fp32_wrapper=False)
+    if cfg.data.test is not None and cfg.data.test.src:
         test_data = load_dataset("text", data_files=list(cfg.data.test.src), streaming=False, split="train")
         inference_on_eval_data(tokenizer, model, test_data, os.path.join(outdir,"eval.pred.trg"), device, instruction_prefix, cfg.decode)
     else:
-        logging.info("No test split -- skipping test decoding.")
-
-    # Adapter (lora/qlora) or full weights, inside the run folder.
-    model.save_pretrained(os.path.join(outdir, "model"))
+        logging.info("No test files (data.test.src) -- skipping test decoding.")
 
 
 register_configs()

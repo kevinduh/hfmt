@@ -35,9 +35,16 @@ test:
 """
 
 
-def _make(tmp, make_test_files=False, dataset_file="dataset.yaml", template=TEMPLATE):
-    """Write a dataset template + train/dev (and optionally test) split files; return a cfg."""
-    with open(os.path.join(tmp, dataset_file), "w") as f:
+def _make(tmp, make_test_files=False, dataset_file="dataset.yaml", template=TEMPLATE,
+          dataset="mmtc", lang_pair="fr-en"):
+    """Write a dataset template + train/dev (and optionally test) split files; return a cfg.
+
+    The template lives in ``<tmp>/<dataset>/<lang_pair>/``, mirroring ``egs/<dataset>/<src>-<trg>/``,
+    so the lang-pair check and the ``dataset_name`` derivation see the real layout.
+    """
+    dataset_dir = os.path.join(tmp, dataset, lang_pair)
+    os.makedirs(dataset_dir)
+    with open(os.path.join(dataset_dir, dataset_file), "w") as f:
         f.write(template)
     data_root = os.path.join(tmp, "data")
     os.makedirs(data_root, exist_ok=True)
@@ -50,7 +57,7 @@ def _make(tmp, make_test_files=False, dataset_file="dataset.yaml", template=TEMP
     cfg.data.src = "fr"
     cfg.data.trg = "en"
     cfg.data.data_root = data_root
-    cfg.data.dataset_dir = tmp
+    cfg.data.dataset_dir = dataset_dir
     cfg.data.dataset_file = dataset_file
     cfg.data.instruction = "Translate French to English"
     return cfg, data_root
@@ -173,6 +180,45 @@ def test_missing_data_root_errors():
             assert False, "expected ValueError on missing data_root"
         except ValueError as e:
             assert "data_root" in str(e)
+
+
+# --- dataset/lang-pair context (feature 06 naming schema) -------------------------
+
+def test_dataset_name_derived_from_directory():
+    # egs/<dataset>/<src>-<trg>/ -> dataset_name is the parent dir; it becomes a W&B tag.
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg, _ = _make(tmp)
+        assert cfg.data.dataset_name is None
+        S.populate_data_paths(cfg)
+        assert cfg.data.dataset_name == "mmtc"
+
+
+def test_dataset_name_tolerates_trailing_slash():
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg, _ = _make(tmp)
+        cfg.data.dataset_dir = cfg.data.dataset_dir + "/"
+        S.populate_data_paths(cfg)
+        assert cfg.data.dataset_name == "mmtc"
+
+
+def test_explicit_dataset_name_wins():
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg, _ = _make(tmp)
+        cfg.data.dataset_name = "mmtc_v2"
+        S.populate_data_paths(cfg)
+        assert cfg.data.dataset_name == "mmtc_v2"
+
+
+def test_lang_pair_mismatch_errors():
+    # A fr-en experiment copied into de-en/ without editing src/trg must fail fast, not train
+    # on fr-en files under de-en tags.
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg, _ = _make(tmp, lang_pair="de-en")  # cfg still says src=fr, trg=en
+        try:
+            S.populate_data_paths(cfg)
+            assert False, "expected ValueError on lang-pair mismatch"
+        except ValueError as e:
+            assert "fr-en" in str(e) and "de-en" in str(e)
 
 
 if __name__ == "__main__":

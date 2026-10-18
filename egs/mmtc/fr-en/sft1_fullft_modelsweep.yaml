@@ -18,8 +18,6 @@ defaults:
   - override /decode: default
   - override /hydra/launcher: slurm_fullft   # more host RAM + walltime for full FT
 
-experiment: mmtc_fr-en_sft1_fullft_modelsweep
-
 # Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
 data:
   data_root: ${oc.env:HFMT_ROOT}/data/fr-en
@@ -30,13 +28,12 @@ data:
 train:
   finetune_mode: full       # full-parameter fine-tune; in the unswept train group, so it
                             # survives the per-job basemodel swap (every model loads unquantized)
-  # Full-FT LR (see mmtc_fr-en_sft1_fullft): 2e-5, not qlora_default's LoRA-tuned 2e-4.
+  # Full-FT LR (see sft1_fullft): 2e-5, not qlora_default's LoRA-tuned 2e-4.
   learning_rate: 2e-5
   seed: 37
 
 wandb:
-  group: mmtc_fr-en_sft1_fullft_modelsweep
-  tags: [sft, fr-en, fullft]
+  tags: [sft, fullft]
 
 sweep:
   enabled: true

@@ -16,19 +16,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sft_translation as S  # noqa: E402
 
 
-def _cfg(experiment="mmtc_fr-en_sft1", group="mmtc_fr-en_sft1", tags=("sft", "fr-en"), name=None):
-    """Minimal stand-in for the Hydra cfg fields derive_run_identity reads."""
+def _cfg(experiment="sft1", group=None, tags=("sft",), name=None,
+         dataset_name="mmtc", src="fr", trg="en"):
+    """Minimal stand-in for the Hydra cfg fields derive_run_identity reads.
+
+    Feature 06 naming: ``experiment`` is the yaml's file stem (injected by run.sh) and yamls no
+    longer set ``wandb.group`` (it falls back to the experiment); the dataset/lang-pair context
+    comes from ``data.dataset_name``/``src``/``trg``.
+    """
     return SimpleNamespace(
         experiment=experiment,
+        data=SimpleNamespace(dataset_name=dataset_name, src=src, trg=trg),
         wandb=SimpleNamespace(group=group, tags=list(tags), name=name),
     )
 
 
-SWEEP_OUT = "/x/outputs/mmtc_fr-en_sft1/sweep-2026-10-08_15-47-06/lora_r-8__lora_target-qv__seed-37"
-SINGLE_OUT = "/x/outputs/mmtc_fr-en_sft1/2026-10-08_15-47-06"
+OUTPUTS = "/x/egs/mmtc/fr-en/outputs"
+SWEEP_OUT = f"{OUTPUTS}/sft1/sweep-2026-10-08_15-47-06/lora_r-8__lora_target-qv__seed-37"
+SINGLE_OUT = f"{OUTPUTS}/sft1/2026-10-08_15-47-06"
 # Plain run via run.sh: --multirun (so under sweep-<ts>/) but no swept params, so the dir
 # leaf is the experiment name (build_run_label fallback) -- feature 04.
-PLAIN_OUT = "/x/outputs/mmtc_fr-en_sft1_fullft/sweep-2026-10-08_15-47-06/mmtc_fr-en_sft1_fullft"
+PLAIN_OUT = f"{OUTPUTS}/sft1_fullft/sweep-2026-10-08_15-47-06/sft1_fullft"
 
 # Hydra's default override_dirname separators (pairs ',', key/value '=').
 GRID = "lora.lora_r=16,lora.lora_target=all-linear,train.learning_rate=0.0002,train.seed=37"
@@ -84,7 +92,7 @@ def test_slash_bearing_value_dropped():
 
 def test_structural_selectors_dropped():
     # experiment/sweep/sweep.enabled/hydra* carry no hyperparameter info.
-    tok = "experiment=mmtc_fr-en_sft1,sweep=coarse,sweep.enabled=true,hydra.launcher=slurm,lora.lora_r=8"
+    tok = "experiment=sft1,sweep=coarse,sweep.enabled=true,hydra.launcher=slurm,lora.lora_r=8"
     assert S.build_run_label(tok) == "lora_r-8"
 
 
@@ -101,7 +109,7 @@ def test_nested_experiment_selector_dropped():
 def test_nested_selector_plain_run_falls_back_to_experiment():
     # A plain run via run.sh (nested selector only, no swept axes) has no informative tokens,
     # so the label falls back to the experiment name -- dir/W&B name stay meaningful.
-    assert S.build_run_label("+mmtc/fr-en=sft1", experiment="mmtc_fr-en_sft1") == "mmtc_fr-en_sft1"
+    assert S.build_run_label("+mmtc/fr-en=sft1", experiment="sft1") == "sft1"
 
 
 def test_append_and_tilde_prefixes_stripped():
@@ -120,7 +128,7 @@ def test_empty_falls_back_to_job_num():
 def test_fallback_uses_experiment_when_given():
     # Feature 04: a plain run (no informative tokens) is named by the experiment, not jobN,
     # so run.sh single runs get a meaningful dir/W&B name instead of "job0".
-    assert S.build_run_label("", experiment="mmtc_fr-en_sft1_fullft") == "mmtc_fr-en_sft1_fullft"
+    assert S.build_run_label("", experiment="sft1_fullft") == "sft1_fullft"
     # Tokens that all get dropped (data path) still fall back to the experiment.
     assert S.build_run_label("data.train_yaml=/x/y.yaml", experiment="exp") == "exp"
     # An informative token still wins over the experiment fallback.
@@ -158,18 +166,19 @@ def test_identity_sweep_name_prefixes_experiment():
     # Feature 05: the W&B run name prefixes the experiment onto the label so flat run lists
     # stay unambiguous across experiments that sweep the same axis. The run *directory* leaf
     # keeps the bare label, so name and dir basename differ by exactly that prefix.
-    assert name == "mmtc_fr-en_sft1-lora_r-8__lora_target-qv__seed-37"
+    assert name == "sft1-lora_r-8__lora_target-qv__seed-37"
     assert name == f"{_cfg().experiment}-{os.path.basename(SWEEP_OUT)}"
 
 
 def test_identity_sweep_group_from_parent():
     _, _, group, _ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
-    assert group == "mmtc_fr-en_sft1-sweep-2026-10-08_15-47-06"
+    assert group == "sft1-sweep-2026-10-08_15-47-06"
 
 
 def test_identity_sweep_tags_split_from_label():
     _, _, _, tags = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
-    assert tags == ["sft", "fr-en", "sweep", "lora_r-8", "lora_target-qv", "seed-37"]
+    # Feature 06: dataset + lang pair always lead the tags (names no longer carry them).
+    assert tags == ["mmtc", "fr-en", "sft", "sweep", "lora_r-8", "lora_target-qv", "seed-37"]
 
 
 def test_identity_sweep_run_id_unique_and_stable():
@@ -181,26 +190,26 @@ def test_identity_sweep_run_id_unique_and_stable():
 
 def test_identity_single_run():
     rid, name, group, tags = S.derive_run_identity(_cfg(group=None), SINGLE_OUT, is_multirun=False)
-    assert group == "mmtc_fr-en_sft1"  # falls back to experiment
-    assert name == "mmtc_fr-en_sft1-2026-10-08_15-47-06"
+    assert group == "sft1"  # falls back to experiment
+    assert name == "sft1-2026-10-08_15-47-06"
     assert rid == "mmtc_fr-en_sft1_2026-10-08_15-47-06"
-    assert tags == ["sft", "fr-en"]  # no sweep tag
+    assert tags == ["mmtc", "fr-en", "sft"]  # no sweep tag
 
 
 def test_identity_plain_multirun_run():
     # A plain run via run.sh is --multirun but has no sweep params: named by the experiment
     # (== dir leaf, so disk/W&B match), grouped under the base group with NO -sweep-<ts>
     # suffix, and with no 'sweep' tag (feature 04).
-    cfg = _cfg(experiment="mmtc_fr-en_sft1_fullft", group="mmtc_fr-en_sft1_fullft",
-               tags=("sft", "fr-en", "fullft"))
+    cfg = _cfg(experiment="sft1_fullft", tags=("sft", "fullft"))
     rid, name, group, tags = S.derive_run_identity(cfg, PLAIN_OUT, is_multirun=True, is_sweep=False)
-    assert name == "mmtc_fr-en_sft1_fullft"
+    assert name == "sft1_fullft"
     assert name == os.path.basename(PLAIN_OUT)        # dir basename == W&B name (invariant holds)
-    assert group == "mmtc_fr-en_sft1_fullft"          # base group, no date appended
+    assert group == "sft1_fullft"                     # base group, no date appended
     assert "sweep" not in tags
-    assert tags == ["sft", "fr-en", "fullft"]
-    # run_id carries the sweep-<ts> parent so separate launches stay distinct + requeue-stable.
-    assert rid == "mmtc_fr-en_sft1_fullft_sweep-2026-10-08_15-47-06_mmtc_fr-en_sft1_fullft"
+    assert tags == ["mmtc", "fr-en", "sft", "fullft"]
+    # run_id carries the sweep-<ts> parent so separate launches stay distinct + requeue-stable,
+    # and the dataset/lang-pair prefix so it stays unique across lang pairs (feature 06).
+    assert rid == "mmtc_fr-en_sft1_fullft_sweep-2026-10-08_15-47-06_sft1_fullft"
 
 
 def test_identity_respects_wandb_name_override():
@@ -214,6 +223,46 @@ def test_identity_no_slashes_or_data_anywhere():
     for s in [rid, name, group, *tags]:
         assert "/" not in s
         assert SHELL_SAFE.match(s), s
+
+
+# --- feature 06 naming schema ---------------------------------------------------
+
+def test_identity_names_carry_no_dataset_or_lang_pair():
+    # The outputs path already says mmtc/fr-en; W&B names/groups must not repeat it.
+    sweep = S.derive_run_identity(_cfg(experiment="sft1_refine1"), SWEEP_OUT,
+                                  is_multirun=True, is_sweep=True)
+    plain = S.derive_run_identity(_cfg(experiment="sft1_fullft"), PLAIN_OUT,
+                                  is_multirun=True, is_sweep=False)
+    for _, name, group, tags in (sweep, plain):
+        for s in (name, group):
+            assert "mmtc" not in s and "fr-en" not in s, s
+        assert tags[:2] == ["mmtc", "fr-en"]
+
+
+def test_identity_context_tags_deduplicated():
+    # A hand-written fr-en tag left in an experiment yaml is not doubled.
+    _, _, _, tags = S.derive_run_identity(_cfg(tags=("sft", "fr-en")), SINGLE_OUT,
+                                          is_multirun=False)
+    assert tags == ["mmtc", "fr-en", "sft"]
+
+
+def test_identity_run_id_unique_across_lang_pairs():
+    # Same experiment stem, same sweep-<ts>, same label, different lang pair: with
+    # resume='allow' a shared id would silently attach one job to the other's run (R11).
+    fr_en, *_ = S.derive_run_identity(_cfg(), SWEEP_OUT, is_multirun=True, is_sweep=True)
+    zh_en, *_ = S.derive_run_identity(_cfg(src="zh"), SWEEP_OUT, is_multirun=True, is_sweep=True)
+    other, *_ = S.derive_run_identity(_cfg(dataset_name="other"), SWEEP_OUT,
+                                      is_multirun=True, is_sweep=True)
+    assert len({fr_en, zh_en, other}) == 3
+    assert zh_en.startswith("mmtc_zh-en_sft1_") and other.startswith("other_fr-en_sft1_")
+
+
+def test_identity_without_dataset_name_keeps_lang_pair():
+    # Defensive: if dataset_name was never filled in, the lang pair still tags/prefixes.
+    rid, _, _, tags = S.derive_run_identity(_cfg(dataset_name=None), SINGLE_OUT,
+                                            is_multirun=False)
+    assert tags == ["fr-en", "sft"]
+    assert rid == "fr-en_sft1_2026-10-08_15-47-06"
 
 
 if __name__ == "__main__":

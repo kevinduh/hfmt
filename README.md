@@ -49,7 +49,7 @@ not in the training script or a per-experiment shell script.
 
 An experiment is a flat list of component *selections* — base model, train, lora, decode, **and launcher** — plus an inline `data` block (`data_root`/`src`/`trg`/`instruction`), so the end user reads only choices, never buried settings; the complex presets live in their own `conf/` files. Every experiment selects a launcher (`- override /hydra/launcher: slurm`); one that selects none falls back to Hydra's local `basic` launcher (it will not submit to Slurm).
 
-W&B settings are no longer a `conf/` group: their defaults come from the `WandbConfig` dataclass and each experiment sets `wandb.group`/`wandb.tags` inline. The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
+W&B settings are no longer a `conf/` group: their defaults come from the `WandbConfig` dataclass and each experiment sets `wandb.tags` inline (the group defaults to the experiment name; see [Naming and filtering runs](#naming-and-filtering-runs)). The typed schema in `hfmt/hydra_config.py` validates all config at compose time — wrong types or unknown keys are rejected before anything loads.
 
 ### Running an experiment
 
@@ -66,27 +66,39 @@ Override any parameter on the command line (forwarded to Hydra):
 bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=16 train.learning_rate=2e-5
 ```
 
-Preview the fully-composed config without running anything (pass the nested selector + the dataset dir yourself when not going through `run.sh`):
+Preview the fully-composed config without running anything (pass the nested selector, the experiment name and the dataset dir yourself when not going through `run.sh`):
 
 ```bash
-python hfmt/sft_translation.py +mmtc/fr-en=sft1 data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en --cfg job
+python hfmt/sft_translation.py +mmtc/fr-en=sft1 experiment=sft1 data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en --cfg job
 ```
 
 Run in-process instead of submitting (e.g. when already on a GPU node):
 
 ```bash
-python hfmt/sft_translation.py +mmtc/fr-en=sft1 data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en
+python hfmt/sft_translation.py +mmtc/fr-en=sft1 experiment=sft1 data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en
 ```
 
 ### Adding a new experiment
 
-Add a file `egs/<dataset>/<src>-<trg>/<name>.yaml` (copy `egs/mmtc/fr-en/sft1.yaml`) next to a `dataset.yaml` template, select your components (`override /basemodel:`, `/lora:`, `/hydra/launcher:`, ...), fill the inline `data` block (`data_root`/`src`/`trg`/`instruction`; `dataset_file` defaults to `dataset.yaml`), set any value overrides, then `bash egs/run.sh <dataset>/<src>-<trg>/<name>.yaml`. No new shell script needed. Remember to select a launcher (`- override /hydra/launcher: slurm`, or `slurm_fullft` for a full fine-tune). To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
+Add a file `egs/<dataset>/<src>-<trg>/<name>.yaml` (copy `egs/mmtc/fr-en/sft1.yaml`) next to a `dataset.yaml` template, select your components (`override /basemodel:`, `/lora:`, `/hydra/launcher:`, ...), fill the inline `data` block (`data_root`/`src`/`trg`/`instruction`; `dataset_file` defaults to `dataset.yaml`), set any value overrides, then `bash egs/run.sh <dataset>/<src>-<trg>/<name>.yaml`. No new shell script needed. The file name **is** the experiment name, so don't set `experiment:` or `wandb.group:` in the yaml (`run.sh` injects `experiment=<name>`), and keep `data.src`/`data.trg` matching the `<src>-<trg>` directory (a mismatch fails fast). Remember to select a launcher (`- override /hydra/launcher: slurm`, or `slurm_fullft` for a full fine-tune). To fully fine-tune instead of using LoRA, override `/basemodel:` to a non-quantized config (or set `basemodel.load_in_4bit=false`) and set `lora.enabled=false`.
 
 Outputs (checkpoints, logs, the trained adapter under `model/`, and predictions `eval.pred.trg` / `dev.step_*.pred`) land under `egs/<dataset>/<src>-<trg>/outputs/<experiment>/<timestamp>/` (feature 06; gitignored), and the W&B run is named/grouped by the experiment and linked to that output dir. Score the predictions with:
 
 ```bash
 python analysis/run_sacrebleu.py --ref <ref.trg> --hyp egs/<dataset>/<src>-<trg>/outputs/<experiment>/<timestamp>/eval.pred.trg
 ```
+
+### Naming and filtering runs
+
+**A name holds only what its location doesn't already say** (feature 06). The experiment name is the yaml's file stem: `egs/mmtc/fr-en/sft1_refine1.yaml` is `sft1_refine1`, never `mmtc_fr-en_sft1_refine1`. The dataset and lang pair are recorded once per surface:
+
+* **On disk**, the `egs/mmtc/fr-en/outputs/` path carries them, so nothing below it repeats them:
+  `egs/mmtc/fr-en/outputs/sft1_refine1/sweep-<timestamp>/learning_rate-0.0003__seed-37/`.
+* **In W&B**, the run name (`sft1_refine1-learning_rate-0.0003__seed-37`) and group (`sft1_refine1-sweep-<timestamp>`) hold only the stem. Every run is **tagged** with the dataset and lang pair (`mmtc`, `fr-en`; they lead the tag list), and the logged config has `hfmt.data.dataset_name`, `hfmt.data.src` and `hfmt.data.trg`. The hidden run id (in the URL) keeps a `mmtc_fr-en_` prefix so ids stay unique across lang pairs.
+
+To look at one dataset/lang pair, filter by the `mmtc` + `fr-en` tags in the W&B UI, or group by `hfmt.data.dataset_name` / `hfmt.data.src`. **Caveat:** a plain (unswept) run's group is just the stem, so `mmtc/fr-en/sft1` and `mmtc/zh-en/sft1` share the group `sft1`; filter by tag before reading grouped charts. Sweep groups are always unique (`-sweep-<timestamp>`). `analysis/pull_wandb.py` takes the same filter: `--group sft1 --tag mmtc --tag fr-en`.
+
+Runs from before this change keep their old `mmtc_fr-en_*` names in both their output dirs and W&B.
 
 ### Sweeping parameters
 
@@ -123,7 +135,7 @@ The override grammar also supports `range(1,4)`, `choice(a,b)`, and `glob(*)`, a
 Notes:
 
 * **Grids are cross-products** — the job count multiplies fast (a 7-way space can be ~200 runs). At most `hydra.launcher.array_parallelism` jobs (default **4**, the node-tier size) run at once; the rest queue. Override per-sweep with `hydra.launcher.array_parallelism=<N>`. Start from a coarse grid and refine (see the `_refine1` experiment).
-* **Outputs mirror W&B, so a run maps 1:1 to its files.** A sweep's jobs land under one shared `outputs/<experiment>/sweep-<timestamp>/` (the `sweep-<timestamp>` dir == the W&B **group** `<experiment>-sweep-<timestamp>`), and each job's dir is named by its swept values — e.g. `lora_r-16__lora_target-qv__seed-37/`. **The W&B run name prefixes the experiment onto that label** (e.g. `mmtc_fr-en_sft1-lora_r-16__lora_target-qv__seed-37`) so a flat run list stays unambiguous across experiments that sweep the same axis; the run *directory* leaf keeps the bare label, so from a run in the W&B UI you strip the `<experiment>-` prefix to `cd` to its `eval.pred.trg`. Names are shell-safe (`[A-Za-z0-9._-]`; keys verbatim, pairs joined by `__`). Runs never clobber (distinct dir + W&B run id).
+* **Outputs mirror W&B, so a run maps 1:1 to its files.** A sweep's jobs land under one shared `egs/<dataset>/<src>-<trg>/outputs/<experiment>/sweep-<timestamp>/` (the `sweep-<timestamp>` dir == the W&B **group** `<experiment>-sweep-<timestamp>`), and each job's dir is named by its swept values — e.g. `lora_r-16__lora_target-qv__seed-37/`. **The W&B run name prefixes the experiment onto that label** (e.g. `sft1-lora_r-16__lora_target-qv__seed-37`) so a flat run list stays unambiguous across experiments that sweep the same axis; the run *directory* leaf keeps the bare label, so from a run in the W&B UI you strip the `<experiment>-` prefix to `cd` to its `eval.pred.trg`. Names are shell-safe (`[A-Za-z0-9._-]`; keys verbatim, pairs joined by `__`). Runs never clobber (distinct dir + W&B run id).
 * **Runs are identifiable.** Each run is **named/tagged by its swept values**, so you can compare them at a glance. Only hyperparameters appear in names/tags — never data content (data paths are stripped). Note values are shown as resolved numbers, so `learning_rate=2e-4` appears as `learning_rate-0.0002`.
 
 ## Usage example: training seq2seq MT model
@@ -209,7 +221,9 @@ environment (which already includes `wandb`; see [Installation](#installation)):
    ```bash
    python analysis/pull_wandb.py
    # optional filters:
-   #   --project hfmt --entity <you> --group <group> --run-id <id> --limit 20 --out path.json
+   #   --project hfmt --entity <you> --group <group> --tag <tag> --run-id <id> --limit 20 --out path.json
+   # --tag is repeatable and every tag must match, e.g. one dataset/lang pair:
+   #   --group sft1 --tag mmtc --tag fr-en
    ```
 
 The export is written to `analysis/wandb_export.json` (override with `--out`).

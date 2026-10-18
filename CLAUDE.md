@@ -39,7 +39,8 @@ hfmt/
 ├── conf/                    # Hydra config for the SFT workflow (model/data/train/decode/wandb/experiment/sweep/launcher)
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
-├── egs/                     # recipes; run.sh <experiment> launches the Hydra SFT workflow
+├── egs/                     # recipes; run.sh <dataset>/<src>-<trg>/<name>.yaml launches the Hydra SFT workflow
+│   ├── mmtc/fr-en/          # SFT experiments + dataset.yaml template; outputs/ (gitignored) holds their runs
 │   ├── data/                # example bitext, YAML/JSONL manifests
 │   ├── translation/  summarization/  mmtc/<lang-pair>/  synth_lrl/<lang>-eng/
 ├── outputs/                 # Hydra run outputs (gitignored)
@@ -50,19 +51,24 @@ hfmt/
 ## Key conventions
 
 - **Configuration (Hydra)** — for the `sft_translation.py` QLoRA SFT workflow: `conf/` holds
-  only atomistic, mix-and-match components (`basemodel`, `lora`, `data`, `train`, `decode`;
-  typed schema in `hfmt/hydra_config.py`). An experiment composes them (plus inline `wandb`
-  and `sweep`) and lives under `egs/experiment/<name>.yaml`, found via `hydra.searchpath`.
-  Launch with `bash egs/run.sh <name>` (submits to Slurm via the submitit launcher; run from a
-  login node, don't `sbatch` it). Override on the CLI, e.g.
-  `bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=16`. Set `lora.enabled=false` (with
+  only atomistic, mix-and-match components (`basemodel`, `lora`, `train`, `decode`;
+  typed schema in `hfmt/hydra_config.py`). An experiment composes them (plus inline `data`,
+  `wandb` and `sweep`) and lives at `egs/<dataset>/<src>-<trg>/<name>.yaml` next to a
+  `dataset.yaml` template, found via `hydra.searchpath`.
+  Launch with `bash egs/run.sh <dataset>/<src>-<trg>/<name>.yaml` (submits to Slurm via the
+  submitit launcher; run from a login node, don't `sbatch` it). Override on the CLI, e.g.
+  `bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=16`. Set `lora.enabled=false` (with
   `basemodel.load_in_4bit=false`) to fully fine-tune instead of LoRA. See README and `decisions.md`.
+- **Naming** — the experiment name is the yaml's file stem (`sft1_refine1`), injected by
+  `run.sh`; yamls don't set `experiment:`/`wandb.group:`. Output dirs and W&B names/groups never
+  repeat the dataset or lang pair (the `egs/<dataset>/<src>-<trg>/outputs/` path already does);
+  in W&B those are tags (`mmtc`, `fr-en`) + config. See README "Naming and filtering runs".
 - **Parameter sweeps (inline, toggleable)** — each experiment carries a `sweep: {enabled, params}`
   block. `egs/run.sh` always runs `--multirun` and reads the block via `hfmt/sweep_probe.py`,
   forwarding the axes only when `sweep.enabled` (toggle with `sweep.enabled=true`; off → one job).
   Axes are ordinary overrides — leaf values or whole component files
   (`basemodel: "qwen2.5-7b,qwen2.5-1.5b"`). Ad-hoc comma-list overrides still fan out directly
-  (`bash egs/run.sh mmtc_fr-en_sft1 lora.lora_r=8,16,32`). Sweep runs share a per-sweep W&B group
+  (`bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=8,16,32`). Sweep runs share a per-sweep W&B group
   and are named/tagged by their swept values — component-file axes by the selected YAML file name
   (data paths/content never go in labels); `hydra.launcher.array_parallelism` caps concurrency.
   See README "Sweeping parameters".

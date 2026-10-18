@@ -1,6 +1,6 @@
 # @package _global_
 # Case 2: train a SINGLE model WITH LoRA (standard QLoRA SFT).
-# This is the canonical single run -- identical to mmtc_fr-en_sft1 but without the
+# This is the canonical single run -- identical to sft1 but without the
 # inline coarse grid. Select with:  bash egs/run.sh mmtc/fr-en/sft1_lora.yaml
 #
 # Uses the 1.5B model for quick iteration (override /basemodel: qwen2.5-7b for the
@@ -14,8 +14,6 @@ defaults:
   - override /decode: default
   - override /hydra/launcher: slurm
 
-experiment: mmtc_fr-en_sft1_lora
-
 # Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
 data:
   data_root: ${oc.env:HFMT_ROOT}/data/fr-en
@@ -27,5 +25,4 @@ train:
   seed: 37
 
 wandb:
-  group: mmtc_fr-en_sft1_lora
-  tags: [sft, fr-en, lora]
+  tags: [sft, lora]

@@ -12,7 +12,10 @@
 #
 # The sole positional arg is the experiment's path relative to egs/ (the .yaml file; a
 # trailing .yaml is optional). Its directory selects the nested Hydra config group and names
-# the dataset.yaml location; its basename is the experiment option (feature 06).
+# the dataset.yaml location; its basename is the experiment option AND the experiment name
+# (feature 06). The name is just the file stem (sft1, not mmtc_fr-en_sft1): it names the output
+# dirs and the W&B run/group, while the dataset + lang pair live in the outputs path on disk and
+# in the W&B tags. Experiment yamls do not set `experiment:` themselves.
 #
 # Override any knob on the CLI (forwarded via "$@"), e.g.:
 #   bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=16 train.learning_rate=2e-5
@@ -21,9 +24,9 @@
 #   bash egs/run.sh mmtc/fr-en/sft1.yaml lora.lora_r=8,16,32
 #
 # Run locally/in-process instead of submitting (e.g. already on a GPU node) -- pass the same
-# nested selector + the dataset dir yourself:
+# nested selector, experiment name and dataset dir yourself:
 #   cd ${HFMT_ROOT} && python -m hfmt.sft_translation \
-#       +mmtc/fr-en=sft1 data.dataset_dir=${HFMT_ROOT}/egs/mmtc/fr-en
+#       +mmtc/fr-en=sft1 experiment=sft1 data.dataset_dir=${HFMT_ROOT}/egs/mmtc/fr-en
 #
 # NOTE: we run as a module (python -m hfmt.sft_translation) with HFMT_ROOT on
 # PYTHONPATH so that submitit can re-import hfmt.* when it unpickles the job on the
@@ -65,7 +68,9 @@ fi
 
 # The dataset.yaml template lives in the experiment's own directory; inject that directory and
 # the per-experiment output root (feature 06). The experiment names the file itself via
-# data.dataset_file (default dataset.yaml); run.sh only supplies the directory.
+# data.dataset_file (default dataset.yaml); run.sh only supplies the directory. The experiment
+# name is also injected below (experiment=<file stem>), so the file name is its only source:
+# a copied yaml can't silently share another experiment's output tree or W&B group.
 dataset_dir="${HFMT_ROOT}/egs/${exp_group}"
 output_root="egs/${exp_group}/outputs"
 
@@ -98,6 +103,7 @@ sweep_axes=$(python -m hfmt.sweep_probe "${exp_group}=${exp_name}" "data.dataset
 # that selects none falls back to Hydra's local `basic` launcher.)
 python -m hfmt.sft_translation --multirun \
     "+${exp_group}=${exp_name}" \
+    experiment="${exp_name}" \
     data.dataset_dir="${dataset_dir}" \
     output_root="${output_root}" \
     ${sweep_axes} \

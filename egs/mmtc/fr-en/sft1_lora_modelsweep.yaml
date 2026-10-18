@@ -12,8 +12,6 @@ defaults:
   - override /decode: default
   - override /hydra/launcher: slurm
 
-experiment: mmtc_fr-en_sft1_lora_modelsweep
-
 # Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
 data:
   data_root: ${oc.env:HFMT_ROOT}/data/fr-en
@@ -25,8 +23,7 @@ train:
   seed: 37
 
 wandb:
-  group: mmtc_fr-en_sft1_lora_modelsweep
-  tags: [sft, fr-en, lora]
+  tags: [sft, lora]
 
 sweep:
   enabled: true

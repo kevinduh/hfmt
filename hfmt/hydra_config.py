@@ -11,7 +11,7 @@ Feature 04 reshaped the groups into atomistic, mix-and-match components:
 ``basemodel`` (the pretrained model + quantization), ``lora`` (the adapter, with an
 ``enabled`` toggle for full fine-tuning), ``data``, ``train``, ``decode``, plus
 ``wandb`` and an inline ``sweep`` block. Experiments compose these and live under
-``egs/experiment/`` (reached via ``hydra.searchpath``).
+``egs/<dataset>/<src>-<trg>/`` (feature 06; reached via ``hydra.searchpath``).
 
 Confidentiality note (see CLAUDE.md): config carries data *paths*, never data
 *content*. Keep it that way when logging config to W&B.
@@ -90,6 +90,11 @@ class DataConfig:
     is inflated in code into the ``train``/``dev``/``test`` path lists below. ``dataset_dir`` is
     injected by ``egs/run.sh`` (the experiment's own directory). ``test`` is optional — when its
     source files are absent the end-of-run inference pass is skipped.
+
+    ``dataset_name`` identifies the dataset (e.g. ``mmtc``). When unset it is filled in code from
+    the hierarchy (the parent of ``dataset_dir``: ``egs/<dataset>/<src>-<trg>/``). Together with
+    ``src``/``trg`` it carries the dataset/lang-pair context into W&B as tags + config, so run
+    names don't need to repeat it (feature 06 naming schema).
     """
 
     src: str = MISSING  # source language code, e.g. "fr"
@@ -100,6 +105,9 @@ class DataConfig:
     dataset_file: str = "dataset.yaml"
     # Directory holding dataset_file (== the experiment's own dir); injected by egs/run.sh.
     dataset_dir: str = MISSING
+    # Dataset identifier, e.g. "mmtc"; filled in code from dataset_dir's parent when unset.
+    # An identifier only, never data content -- it becomes a W&B tag.
+    dataset_name: Optional[str] = None
     # Instruction prefix prepended to the source in the chat prompt.
     instruction: str = ""
 
@@ -166,6 +174,8 @@ class WandbConfig:
     enabled: bool = True
     project: str = "hfmt"
     entity: Optional[str] = None
+    # If null, the group is the experiment name (the file stem). The dataset and lang pair are
+    # NOT part of names or groups: derive_run_identity prepends them to tags (feature 06).
     group: Optional[str] = None
     tags: List[str] = field(default_factory=list)
     # Run name; if null it is derived from the experiment name at runtime (Stage D).
@@ -176,7 +186,7 @@ class WandbConfig:
 class SweepConfig:
     """Inline, toggleable parameter sweep (feature 04).
 
-    Lives in the experiment config (``egs/experiment/<name>.yaml``) so a sweep is a
+    Lives in the experiment config (``egs/<dataset>/<src>-<trg>/<name>.yaml``) so a sweep is a
     self-contained part of the experiment. ``enabled`` is the on/off switch;
     ``params`` maps each sweep axis to a comma-separated list of choices. Axes are
     ordinary Hydra task overrides -- either a config-group choice (sweep over whole

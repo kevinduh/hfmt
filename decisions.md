@@ -241,3 +241,34 @@ self-contained and self-describing.
 - **Scope.** Only the Hydra SFT workflow (`sft_translation.py`) is migrated; the other
   (unmigrated) entry points — seq2seq, inference, summarization — keep their plain-manifest/shell
   recipes.
+
+## Names hold only the experiment stem; dataset/lang go to tags (feature 06_hydra_config_directory_hierarchy)
+
+**Decision:** A name holds only what its location doesn't already say. The experiment name is
+the yaml's **file stem** (`sft1_refine1`, not `mmtc_fr-en_sft1_refine1`), injected by `egs/run.sh`
+as `experiment=<stem>`. Experiment yamls no longer set `experiment:` or `wandb.group:`. So output
+dirs (`egs/mmtc/fr-en/outputs/sft1_refine1/sweep-<ts>/<label>/`), W&B run names
+(`sft1_refine1-<label>`) and W&B groups (`sft1_refine1-sweep-<ts>`, or `sft1_lora` for a plain run)
+carry no dataset or lang pair. In W&B those go to **tags** (`mmtc`, `fr-en`, always first) and
+the logged config (`data.dataset_name`, filled in from the directory, plus `data.src`/`data.trg`).
+
+**Context:** After the hierarchy move, every name still carried the `mmtc_fr-en_` prefix. The
+migration had deliberately kept each `experiment:` value for output-path/W&B-group stability,
+but the prefix repeats what the `egs/<dataset>/<src>-<trg>/` path already says. Deriving the name
+from the file also stops a copied yaml from silently sharing another experiment's outputs.
+
+- **The hidden run id keeps the context** (`mmtc_fr-en_<stem>_sweep-<ts>_<label>`). With
+  stem-only names, two lang pairs launched in the same second would otherwise share an id, and
+  `resume='allow'` would silently attach one job to the other's W&B run. The id only appears in
+  the URL, so this doesn't put context back into anything visible.
+- **Plain-run groups are the bare stem (accepted trade-off).** `mmtc/fr-en/sft1` and
+  `mmtc/zh-en/sft1` share the group `sft1`, so grouped W&B charts can mix lang pairs unless you
+  filter by tag first. **Rejected:** keeping `mmtc_fr-en_` in the group only. That would mean
+  grouped views never mix lang pairs, but it reintroduces the context into a visible name.
+  `analysis/pull_wandb.py` gained a repeatable `--tag` (AND) filter for the same reason.
+- **Lang-pair guard.** Because tags now carry the lang pair, `data.src`/`data.trg` must match the
+  `<src>-<trg>` directory (checked in `populate_data_paths`, and as a login-node fast-fail in
+  `sweep_probe.py`). This catches a fr-en yaml copied into `de-en/` without edits.
+- **One-time break.** Existing `mmtc_fr-en_*` output dirs and W&B runs/groups keep their old
+  names; new runs don't join the old groups. `analysis/` dirs stay context-prefixed
+  (`analysis/<date>_mmtc_fr-en_sft1/`) because `analysis/` is flat.

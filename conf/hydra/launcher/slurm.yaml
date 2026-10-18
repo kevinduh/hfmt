@@ -1,5 +1,7 @@
 # Slurm submission via hydra-submitit-launcher. Use with multirun (-m):
-#   python hfmt/sft_translation.py -m +experiment=mmtc_fr-en_sft1 hydra/launcher=slurm
+#   python hfmt/sft_translation.py -m +mmtc/fr-en=sft1 experiment=sft1 \
+#       data.dataset_dir=$HFMT_ROOT/egs/mmtc/fr-en hydra/launcher=slurm
+#   (or simply: bash egs/run.sh mmtc/fr-en/sft1.yaml)
 #
 # Mirrors the sbatch line in egs/mmtc/fr-en/sft1.sh:
 #   sbatch -p gpu --gres=gpu:a100:1 --time=48:00:00 ...

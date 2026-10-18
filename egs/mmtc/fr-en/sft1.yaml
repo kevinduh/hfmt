@@ -15,8 +15,6 @@ defaults:
   - override /decode: default
   - override /hydra/launcher: slurm
 
-experiment: mmtc_fr-en_sft1
-
 # Dataset (feature 06): data_root/src/trg + the dataset.yaml template beside this file. The
 # template is inflated into absolute train/dev/test paths at run time. data_root must hold the
 # {train,dev,test}.fr-en.{fr,en} files (confirm the layout). egs/run.sh injects dataset_dir.
@@ -32,9 +30,11 @@ data:
 train:
   seed: 37
 
+# Naming (feature 06): no `experiment:` or `wandb.group:` here. egs/run.sh names the experiment
+# after this file's stem (sft1), which names the output dirs and the W&B run/group; the dataset
+# and lang pair (mmtc, fr-en) are prepended to the W&B tags automatically.
 wandb:
-  group: mmtc_fr-en_sft1
-  tags: [sft, fr-en]
+  tags: [sft]
 
 # Inline, toggleable sweep (feature 04). Flip `enabled: true` (or override on the CLI,
 # `bash egs/run.sh mmtc/fr-en/sft1.yaml sweep.enabled=true`) to fan out the grid below;

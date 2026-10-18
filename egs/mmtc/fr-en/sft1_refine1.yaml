@@ -15,8 +15,6 @@ defaults:
   - override /decode: default
   - override /hydra/launcher: slurm
 
-experiment: mmtc_fr-en_sft1_refine1
-
 # Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
 data:
   data_root: ${oc.env:HFMT_ROOT}/data/fr-en
@@ -33,8 +31,7 @@ train:
   max_steps: 1000           # extend past the coarse 800 to probe continued improvement
 
 wandb:
-  group: mmtc_fr-en_sft1_refine1
-  tags: [sft, fr-en, refine1]
+  tags: [sft, refine1]
 
 # A refinement sweep is a sweep by nature -> enabled by default (8 jobs = lr{4} x seed{2}).
 # Disable for a single run with `sweep.enabled=false`.

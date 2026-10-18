@@ -16,8 +16,6 @@ defaults:
   - override /decode: default
   - override /hydra/launcher: slurm_fullft   # more host RAM + walltime for full FT
 
-experiment: mmtc_fr-en_sft1_fullft
-
 # Dataset (feature 06): see egs/mmtc/fr-en/dataset.yaml; data_root holds the data files.
 data:
   data_root: ${oc.env:HFMT_ROOT}/data/fr-en
@@ -34,5 +32,4 @@ train:
   seed: 37
 
 wandb:
-  group: mmtc_fr-en_sft1_fullft
-  tags: [sft, fr-en, fullft]
+  tags: [sft, fullft]

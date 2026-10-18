@@ -40,6 +40,10 @@ except ModuleNotFoundError:
     from hfmt.hydra_config import register_configs
 
 
+class LanguagePairMismatchError(ValueError):
+    """The experiment's ``data.src``/``data.trg`` don't match its ``<src>-<trg>`` directory."""
+
+
 def sweep_overrides(selector, conf_dir, extra_overrides=None):
     """Return the list of bare ``<axis>=<csv>`` overrides for an experiment.
 
@@ -50,8 +54,9 @@ def sweep_overrides(selector, conf_dir, extra_overrides=None):
     comma-list axis overrides (``lora.lora_r=8,16``) would fail this single-run, type-validated
     compose, and they don't need the probe anyway (the sweeper expands them directly).
 
-    Also fast-fails if the experiment's named ``dataset.yaml`` template does not exist (a cheap
-    login-node check; full validation lives in ``hfmt/sft_translation.py``).
+    Also fast-fails if the experiment's named ``dataset.yaml`` template does not exist, or if its
+    ``data.src``/``data.trg`` don't match the ``<src>-<trg>`` directory it lives in (cheap
+    login-node checks; full validation lives in ``hfmt/sft_translation.py``).
 
     Returns an empty list when the ``sweep`` block is absent or disabled.
     """
@@ -74,6 +79,16 @@ def sweep_overrides(selector, conf_dir, extra_overrides=None):
         template = os.path.join(str(data.dataset_dir), str(data.get("dataset_file", "dataset.yaml")))
         if not os.path.isfile(template):
             raise FileNotFoundError(f"dataset template not found: {template}")
+        # Fast-fail: the lang pair must match the directory (mirrors resolve_dataset_context in
+        # sft_translation.py). It becomes a W&B tag, so a copied yaml must not mislabel runs.
+        if not (OmegaConf.is_missing(data, "src") or OmegaConf.is_missing(data, "trg")):
+            dataset_dir = os.path.normpath(str(data.dataset_dir))
+            lang_pair = f"{data.src}-{data.trg}"
+            if os.path.basename(dataset_dir) != lang_pair:
+                raise LanguagePairMismatchError(
+                    f"data.src/data.trg ({lang_pair!r}) do not match the experiment's directory "
+                    f"{dataset_dir!r}; fix them in the experiment yaml."
+                )
 
     sweep = cfg.get("sweep", None)
     if not sweep or not sweep.get("enabled", False):
@@ -99,7 +114,7 @@ def main(argv):
         overrides = sweep_overrides(
             selector, os.path.join(hfmt_root, "conf"), extra_overrides
         )
-    except FileNotFoundError as e:
+    except (FileNotFoundError, LanguagePairMismatchError) as e:
         # Fast-fail (login node): abort before the heavy submit with a clear message. Returning
         # non-zero makes run.sh's `$(...)` + `set -e` stop the launch.
         sys.stderr.write(f"sweep_probe.py: {e}\n")

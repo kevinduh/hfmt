@@ -13,6 +13,11 @@ context in the directory hierarchy. Concretely:
    **inflated** into absolute paths at data-load time.
 4. Remove the `conf/data/` config group entirely.
 5. Write run outputs into `egs/<dataset>/<src>-<trg>/outputs/` instead of repo-root `outputs/`.
+6. **Names don't repeat what the hierarchy already says** (Section H). The experiment name is
+   the yaml's file stem (`sft1_refine1`, **not** `mmtc_fr-en_sft1_refine1`). It's used for the
+   output dirs and the W&B run name and group. The dataset and language pair are already in the
+   `egs/<dataset>/<src>-<trg>/` path on disk. In W&B they become **tags + config fields** you
+   can filter on.
 
 ## Current state (what we're changing)
 
@@ -48,7 +53,9 @@ egs/
       outputs/            # run outputs (gitignored)
 ```
 Experiments drop the dataset/lang prefix from their filename (the directory now carries it):
-`mmtc_fr-en_sft1.yaml` → `egs/mmtc/fr-en/sft1.yaml`.
+`mmtc_fr-en_sft1.yaml` → `egs/mmtc/fr-en/sft1.yaml`. The prefix also goes from the
+**experiment name** (`experiment: sft1`, not `mmtc_fr-en_sft1`), and so from every output dir
+and W&B name built from it. See Section H for the full naming schema.
 
 ### B. `dataset.yaml` template (verbatim placeholders, inflated in code)
 ```yaml
@@ -188,9 +195,80 @@ stale `experiment` entry in `exclude_keys` can be left as a harmless no-op.
 Set the run/sweep dirs under the lang-pair dir. `run.sh` passes
 `output_root=egs/<dataset>/<src>-<trg>/outputs`; `conf/config.yaml`'s existing
 `hydra.run.dir` / `hydra.sweep.dir` templates (`${output_root}/${experiment}/...`) then
-produce `egs/mmtc/fr-en/outputs/<experiment>/<ts>/...`. No change to the W&B↔output-dir
-alignment logic. **Confidentiality:** these dirs hold `*.pred` / `eval.pred.trg` dumps —
+produce `egs/mmtc/fr-en/outputs/<experiment>/<ts>/...`, where `<experiment>` is the **bare
+file stem** (`egs/mmtc/fr-en/outputs/sft1_refine1/...`, never `.../outputs/mmtc_fr-en_sft1_refine1/...`;
+see Section H). No change to the W&B↔output-dir alignment logic. **Confidentiality:** these dirs hold `*.pred` / `eval.pred.trg` dumps —
 add `egs/**/outputs/` to `.gitignore` (see Risk R4).
+
+### H. Naming schema (output dirs + W&B)
+
+**Rule: a name holds only what its location doesn't already say.** The dataset and language
+pair are recorded **once per surface**:
+
+| Surface | Where `mmtc` / `fr-en` lives | Where it must **not** appear |
+|---|---|---|
+| Disk | the `egs/mmtc/fr-en/outputs/` path | any dir name below `outputs/` |
+| W&B (visible) | **tags** `mmtc`, `fr-en` + **config** `hfmt.data.dataset_name` / `hfmt.data.src` / `hfmt.data.trg` | run **name**, run **group** |
+| W&B (hidden) | the run **id** (in the URL only; kept for uniqueness, R11) | — |
+
+**The experiment name is the yaml's file stem.** For `egs/mmtc/fr-en/sft1_refine1.yaml` it is
+`sft1_refine1`. Every name below is built from `cfg.experiment`, so this one value fixes
+them all.
+
+**Worked example.** `bash egs/run.sh mmtc/fr-en/sft1_refine1.yaml` launched at `<ts>`; the
+sweep job with `learning_rate=3e-4, seed=37`:
+
+| Artifact | Today (wrong) | Target |
+|---|---|---|
+| `cfg.experiment` | `mmtc_fr-en_sft1_refine1` | `sft1_refine1` |
+| Experiment output dir | `egs/mmtc/fr-en/outputs/mmtc_fr-en_sft1_refine1/` | `egs/mmtc/fr-en/outputs/sft1_refine1/` |
+| Sweep job dir | `…/mmtc_fr-en_sft1_refine1/sweep-<ts>/learning_rate-0.0003__seed-37/` | `…/sft1_refine1/sweep-<ts>/learning_rate-0.0003__seed-37/` |
+| W&B run name (sweep) | `mmtc_fr-en_sft1_refine1-learning_rate-0.0003__seed-37` | `sft1_refine1-learning_rate-0.0003__seed-37` |
+| W&B group (sweep) | `mmtc_fr-en_sft1_refine1-sweep-<ts>` | `sft1_refine1-sweep-<ts>` |
+| W&B tags | `sft, fr-en, refine1, sweep, learning_rate-0.0003, seed-37` | `mmtc, fr-en, sft, refine1, sweep, learning_rate-0.0003, seed-37` |
+| W&B config | `hfmt.data.src=fr`, `hfmt.data.trg=en` | + `hfmt.data.dataset_name=mmtc` |
+| W&B run id (hidden) | `mmtc_fr-en_sft1_refine1_sweep-<ts>_learning_rate-0.0003__seed-37` | **same**, now built from `dataset_name` + `src-trg` + `experiment` |
+
+A plain (unswept) run, e.g. `sft1_lora.yaml`, has dir
+`egs/mmtc/fr-en/outputs/sft1_lora/sweep-<ts>/sft1_lora/`, W&B name `sft1_lora`, and group
+`sft1_lora`. The feature-05 `<experiment>-` prefix on sweep run names stays, but it is now just
+the stem.
+
+**Mechanism.**
+1. **`egs/run.sh` sets `experiment=${exp_name}`** (the stem it already computes), next to
+   `data.dataset_dir` and `output_root`. The file name becomes the only source of the
+   experiment name, so a copied yaml can't silently share another experiment's output tree or
+   W&B group (code_review.md §2.3). No label pollution: `experiment` is already in
+   `override_dirname.exclude_keys`, and `_label_pairs` already drops it, so `is_sweep` is unaffected.
+2. **Remove the `experiment:` and `wandb.group:` lines from all 7 experiment yamls.** The group
+   already falls back to `cfg.experiment` (`sft_translation.py:397`). Also drop the hand-written
+   `fr-en` from each `wandb.tags`; it is added automatically now. A raw `python -m` run passes
+   `experiment=<stem>` itself, just as it passes `data.dataset_dir` (update the run.sh header
+   example). If it doesn't, it falls back to `default`, which is harmless.
+3. **Add `data.dataset_name`** (`Optional[str] = None`) to `DataConfig`. `populate_data_paths`
+   fills it in from the directory when unset: `dataset_name = basename(dirname(dataset_dir))` →
+   `mmtc`. It then appears in the logged W&B config, where you can filter **and group by** it.
+4. **Lang-pair consistency check (fail fast):** in `populate_data_paths`, require
+   `basename(dataset_dir) == f"{data.src}-{data.trg}"`. Copying a `fr-en` yaml into `de-en/`
+   without editing `src`/`trg` would otherwise train on fr-en files under de-en tags. This
+   check keeps the auto-tags truthful.
+5. **`derive_run_identity`:**
+   - **tags:** put `[data.dataset_name, f"{data.src}-{data.trg}"]` first, then
+     `wandb.tags` (deduplicated, order kept), then `sweep` + param tags as today.
+   - **run_id:** prefix `f"{dataset_name}_{src}-{trg}_"` to the existing
+     `{experiment}_{sweep_dir}_{label}` form. Ids stay unique across lang pairs and datasets
+     (R11). For mmtc/fr-en sweep jobs the id is identical to today's.
+   - **name/group:** no logic change. They come from `cfg.experiment`, which is now the stem.
+6. **Filtering in W&B:** filter on tags `mmtc` + `fr-en` in the UI, or on config
+   `hfmt.data.dataset_name` / `hfmt.data.src`. Add a repeatable `--tag` filter (AND) to
+   `analysis/pull_wandb.py`, because `--group sft1` alone no longer pins a lang pair (R12).
+
+**Confidentiality:** the dataset name and lang pair are identifiers, not data content, and are
+already sent to W&B today (group names, the `fr-en` tag, data paths in the config). Nothing new
+or data-bearing gets routed to W&B.
+
+**Supersedes** todo F's "Kept each `experiment:` value as-is (W&B group / output-path
+stability)". That kept the prefix this section removes.
 
 ## Affected files
 - `hfmt/hydra_config.py` — repurpose `DataConfig` (D).
@@ -199,7 +277,15 @@ add `egs/**/outputs/` to `.gitignore` (see Risk R4).
   `cfg.data.train/dev/test` (early in `main()`); `get_data()` reads `cfg.data.train/dev`; final
   inference reads `cfg.data.test.src` **guarded by existence** (skip when `test` is None or its
   file(s) are absent); rename `eval_data`→`test_data`, retire `evalset`; add `"/" in key` guard
-  to `_label_pairs` (drops the slashed group selector).
+  to `_label_pairs` (drops the slashed group selector). **Naming (H):** `populate_data_paths`
+  fills in `data.dataset_name` and checks the lang pair; `derive_run_identity` adds the
+  auto-tags and the run-id prefix; fix the `build_run_label` docstring example
+  (`mmtc_fr-en_sft1_fullft` → `sft1_fullft`).
+- `hfmt/hydra_config.py` (naming, H) — add `DataConfig.dataset_name: Optional[str] = None`.
+- `hfmt/test_run_label.py` / `hfmt/test_dataset_inflation.py` — move fixtures to the stem
+  names; add tests for the auto-tags, the run-id uniqueness across lang pairs, the
+  `dataset_name` derivation, and the lang-pair mismatch error.
+- `analysis/pull_wandb.py` — add a repeatable `--tag` filter (AND).
 - `hfmt/sweep_probe.py` — compose with `+<group>=<name>` (unchanged searchpath); it already
   composes the full experiment, so it's the natural place for the **login-node fast-fail**
   template-existence check too.
@@ -208,13 +294,20 @@ add `egs/**/outputs/` to `.gitignore` (see Risk R4).
 - `conf/data/mmtc_fr-en.yaml` — **delete**.
 - `egs/run.sh` — single `egs`-relative `.yaml` path arg → `group=dirname`,
   `name=basename …  .yaml` (strip extension); emit `+<group>=<name>` and inject
-  `data.dataset_dir=${HFMT_ROOT}/egs/<group>` + `output_root=egs/<group>/outputs`.
+  `data.dataset_dir=${HFMT_ROOT}/egs/<group>` + `output_root=egs/<group>/outputs` +
+  **`experiment=<name>`** (H).
 - `egs/experiment/*.yaml` (7 files) — **move** to `egs/<dataset>/<src>-<trg>/`, strip
-  `override /data`, add inline `data:` block.
+  `override /data`, add inline `data:` block. **Naming (H):** delete the `experiment:` and
+  `wandb.group:` lines; drop `fr-en` from `wandb.tags`; update comments that cite the old
+  `mmtc_fr-en_*` names.
 - `egs/<dataset>/<src>-<trg>/dataset.yaml` — **new** template(s).
 - `.gitignore` — add `egs/**/outputs/`.
-- Docs: `README.md` (§"conf/data", §"Add an experiment"), `decisions.md` (record the
-  hierarchy + inflation decision), `overview.md` if it describes the data group.
+- Docs: `README.md` (§"conf/data", §"Add an experiment"; plus the naming/filtering rule from
+  H), `decisions.md` (record the hierarchy + inflation decision, **and** the naming rule from H,
+  which reverses the "keep `experiment:` as-is" call), `overview.md` if it describes the data
+  group. Stale `bash egs/run.sh mmtc_fr-en_sft1` / `+experiment=` examples remain in
+  `CLAUDE.md`, `conf/config.yaml`, `conf/hydra/launcher/{local,slurm}.yaml`, and
+  `tools/run_on_free_gpu.sh`.
 
 ## Risks & open questions
 
@@ -266,6 +359,25 @@ add `egs/**/outputs/` to `.gitignore` (see Risk R4).
 - **R9 — Multiple lang-pairs / datasets.** Design should generalize to `egs/mmtc/de-en/`,
   `egs/mmtc/zh-en/` with their own `dataset.yaml`. F1/F2 both handle this; only `mmtc/fr-en`
   gets fully populated now unless you want more scaffolded.
+- **R11 — W&B run-id collision (silent corruption) → mitigated in H.** With stem-only names,
+  `mmtc/fr-en/sft1` and `mmtc/zh-en/sft1` share `experiment=sft1`. A shell loop that launches
+  both within the same second would give them the same `sweep-<ts>` and label, so their run_ids
+  would be identical. Because `wandb.init(resume="allow")`, the second job would **attach to
+  the first's W&B run** (interleaved metrics, overwritten config) without any error. Fix: the
+  id keeps the `<dataset_name>_<src>-<trg>_` prefix. It only shows up in the URL, so this
+  doesn't break the "no context in visible names" rule.
+- **R12 — W&B group sharing for plain runs → accepted (decision 5a).** Sweep groups stay unique
+  (`<stem>-sweep-<ts>`), but a plain run's group is the bare stem. So `mmtc/fr-en/sft1` and
+  `mmtc/zh-en/sft1` both land in group `sft1`. The W&B grouped view then **averages across
+  lang pairs**, and `pull_wandb.py --group sft1` pulls both. Mitigation: filter by tag first,
+  or group by `hfmt.data.dataset_name` + `hfmt.data.src` in the UI, and use the new `--tag` flag
+  in `pull_wandb.py`.
+- **R13 — Old runs keep their old names.** Existing `egs/mmtc/fr-en/outputs/mmtc_fr-en_*` dirs and
+  existing W&B runs and groups are **not** renamed. New runs of `sft1` won't join the old
+  `mmtc_fr-en_sft1` group, and `analysis/2026-10-08/` cites the old names. That's acceptable
+  as a one-time break; record it in `decisions.md`. Optionally `mv` the old local output dirs
+  to their stem names, but W&B keeps the old group names, so on-disk paths and W&B groups
+  would no longer line up for those runs.
 
 ## Open decisions
 1. ~~**Addressing**~~ — **settled: F3** (pass the `egs`-relative `.yaml`; `+<group>=<name>` on
@@ -279,7 +391,13 @@ add `egs/**/outputs/` to `.gitignore` (see Risk R4).
    `dataset.yaml`); `run.sh` injects `data.dataset_dir`; the resolved file must exist in the
    experiment's directory (validated, R10).
 
-All design decisions are settled — ready to generate `todo.md` on your go.
+5. ~~**W&B group for plain runs (R12)**~~ — **settled: (a) bare stem** (`sft1`). Matches "no
+   context in names". Lang pairs are told apart with tags/config filters, and plain runs from
+   different lang pairs may share a group (accepted; mitigations in R12). Rejected: (b) keeping
+   `mmtc_fr-en_` in the group only.
+
+All design decisions, including the naming schema (Section H), are settled. The naming work is
+todo group I.
 
 ## Validation (once decisions land)
 - Compose spike: `--cfg job` prints resolved config with inflated train/dev/test paths; no
@@ -287,6 +405,14 @@ All design decisions are settled — ready to generate `todo.md` on your go.
 - `get_data()` unit check against a tiny fixture `dataset.yaml` + `egs/data/example.*` files,
   asserting inflated absolute paths and that src≠trg.
 - Dry single run (`sweep.enabled=false`) and a 2-axis sweep land under
-  `egs/<dataset>/<src>-<trg>/outputs/...`; W&B run name == run-dir basename still holds.
+  `egs/<dataset>/<src>-<trg>/outputs/...`. For a plain run, the W&B run name == the run-dir
+  basename; a sweep job's name is `<stem>-<label>`, while its dir is `<label>` (feature 05).
+- **Naming (H):** a `sft1_refine1` sweep job lands at
+  `egs/mmtc/fr-en/outputs/sft1_refine1/sweep-<ts>/learning_rate-0.0003__seed-37/`. Its W&B name
+  is `sft1_refine1-learning_rate-0.0003__seed-37`, its group `sft1_refine1-sweep-<ts>`, and its
+  tags include `mmtc` + `fr-en`. A plain `sft1_lora` run is named and grouped `sft1_lora`.
+  No dir name below `outputs/` and no W&B name or group contains `mmtc` or `fr-en`. The run ids
+  for `+mmtc/fr-en=sft1` and a hypothetical `+mmtc/zh-en=sft1` launched with the same `<ts>`
+  are different.
 - `git status` shows no `egs/**/outputs/` tracked; grep for stale `conf/data` / `train_yaml`
   / `evalset` references returns nothing but intended code.

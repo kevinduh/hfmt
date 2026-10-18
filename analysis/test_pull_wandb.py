@@ -71,6 +71,30 @@ def test_resolve_runs_state_any_drops_state_filter():
     assert "state" not in (api.calls["filters"] or {})
 
 
+def test_resolve_runs_tags_all_must_match():
+    # Feature 06: groups hold only the experiment stem, so --tag pins the dataset + lang pair.
+    # Every tag must be present (AND), alongside the group/state filters.
+    api = FakeApi()
+    P.resolve_runs(api, "ent", "hfmt", group="sft1", tags=["mmtc", "fr-en"], limit=1)
+    assert api.calls["filters"] == {
+        "group": "sft1",
+        "$and": [{"tags": {"$in": ["mmtc"]}}, {"tags": {"$in": ["fr-en"]}}],
+        "state": "finished",
+    }
+
+
+def test_build_filters_no_tags_adds_no_and_clause():
+    assert P.build_filters(group="g1", tags=[], state="finished") == {
+        "group": "g1", "state": "finished"
+    }
+
+
+def test_parse_args_tag_repeatable():
+    args = P.parse_args(["--tag", "mmtc", "--tag", "fr-en"])
+    assert args.tags == ["mmtc", "fr-en"]
+    assert P.parse_args([]).tags == []
+
+
 # --- collect_runs / collect_run -------------------------------------------------
 
 def test_collect_runs_skips_bad_run():

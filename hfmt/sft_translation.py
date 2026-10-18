@@ -119,19 +119,50 @@ def inflate_dataset_template(template_path, data_root, src, trg):
     return _sub(parsed)
 
 
+def resolve_dataset_context(data_cfg):
+    """Check the lang pair against the hierarchy and fill in ``data.dataset_name`` (feature 06).
+
+    An experiment lives at ``egs/<dataset>/<src>-<trg>/``, so ``data.dataset_dir`` names both its
+    dataset and its lang pair. Run names carry neither; they reach W&B as tags instead
+    (``derive_run_identity``), so they must be truthful. We require the directory's name to equal
+    ``<data.src>-<data.trg>``: a fr-en yaml copied into ``de-en/`` without editing ``src``/``trg``
+    would otherwise train on fr-en files under de-en tags. ``dataset_name`` defaults to the
+    directory's parent (``mmtc``) unless the experiment sets it.
+    """
+    dataset_dir = os.path.normpath(str(data_cfg.dataset_dir))
+    lang_pair = f"{data_cfg.src}-{data_cfg.trg}"
+    if os.path.basename(dataset_dir) != lang_pair:
+        raise ValueError(
+            f"data.src/data.trg ({lang_pair!r}) do not match the experiment's directory "
+            f"{dataset_dir!r}, which must be egs/<dataset>/<src>-<trg>/. "
+            "Fix data.src/data.trg (and data.data_root) in the experiment yaml."
+        )
+    if data_cfg.dataset_name is None:
+        dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+        if not dataset_name:
+            raise ValueError(
+                f"cannot derive data.dataset_name from data.dataset_dir={dataset_dir!r}; "
+                "set data.dataset_name explicitly."
+            )
+        data_cfg.dataset_name = dataset_name
+
+
 def populate_data_paths(cfg):
     """Inflate the experiment's dataset template into ``cfg.data.train/dev/test`` (feature 06).
 
     ``train``/``dev`` are required; ``test`` is optional -- when the template has no ``test`` block
     or its source file(s) do not exist on disk, ``cfg.data.test`` is left ``None`` and the
     end-of-run inference pass is skipped. Writes absolute paths (W&B-safe) back into the resolved
-    config. Returns the resolved template path (for logging).
+    config. Also checks the lang pair against the experiment's directory and fills in
+    ``data.dataset_name`` (``resolve_dataset_context``), which ``derive_run_identity`` turns into
+    W&B tags. Returns the resolved template path (for logging).
     """
     for key in ("data_root", "src", "trg"):
         if OmegaConf.is_missing(cfg.data, key):
             raise ValueError(f"data.{key} is required; set it in the experiment yaml.")
 
     template_path = resolve_dataset_template(cfg.data)
+    resolve_dataset_context(cfg.data)
     splits = inflate_dataset_template(
         template_path, cfg.data.data_root, cfg.data.src, cfg.data.trg
     )
@@ -349,7 +380,7 @@ def build_run_label(override_dirname, job_num="0", experiment=""):
     boundaries stay legible even though leaf names contain ``_``. When no informative override
     remains (a plain run -- ``run.sh`` always uses ``--multirun`` for submitit, so even a single
     non-swept run reaches here), it falls back to the ``experiment`` name so the run dir / W&B
-    name stay meaningful (``mmtc_fr-en_sft1_fullft`` rather than ``job0``); ``job<N>`` only if no
+    name stay meaningful (``sft1_fullft`` rather than ``job0``); ``job<N>`` only if no
     experiment is given. Examples:
     ``lora_r-8__lora_target-all-linear__learning_rate-0.0002__seed-37`` (leaf-value sweep);
     ``basemodel-qwen2.5-7b__lora_target-all-linear`` (group-choice + leaf sweep).
@@ -392,20 +423,38 @@ def derive_run_identity(cfg, outdir, is_multirun=False, is_sweep=False):
 
     ``run_id`` embeds the sweep dir (``--multirun``) or ts so it is unique per launch yet stable
     across a requeue of the same job.
+
+    **Naming schema (feature 06):** ``cfg.experiment`` is the experiment yaml's file stem
+    (``sft1_refine1``, injected by ``egs/run.sh``), so names and groups carry no dataset or lang
+    pair; the ``egs/<dataset>/<src>-<trg>/outputs/`` path already does on disk. In W&B that
+    context goes to the **tags**, which always start with ``[<dataset_name>, <src>-<trg>]``
+    (``data.dataset_name`` is filled in by ``populate_data_paths``), and to the hidden
+    **run_id**, which is prefixed ``<dataset_name>_<src>-<trg>_``. The prefix keeps ids unique
+    when two lang pairs share an experiment name: with ``resume='allow'``, a colliding id would
+    silently attach one job to another's run.
     """
     run_label = os.path.basename(os.path.normpath(outdir))
     base_group = cfg.wandb.group or cfg.experiment
-    tags = list(cfg.wandb.tags)
+    # Dataset + lang-pair context (e.g. ["mmtc", "fr-en"]): first in the tags, prefix of the id.
+    context = [
+        _sanitize_label(str(t))
+        for t in (cfg.data.dataset_name, f"{cfg.data.src}-{cfg.data.trg}")
+        if t
+    ]
+    tags = list(dict.fromkeys(context + list(cfg.wandb.tags)))  # dedupe, keep order
+    id_prefix = "".join(f"{t}_" for t in context)
     exp = _sanitize_label(cfg.experiment)
     label = _sanitize_label(run_label)
 
     if is_multirun:
         # The sweep-<ts> parent keeps launches distinct and is stable across a requeue.
         sweep_dir = os.path.basename(os.path.dirname(os.path.normpath(outdir)))
-        run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{sweep_dir}_{run_label}")
+        run_id = re.sub(
+            r"[^A-Za-z0-9_.-]", "-", f"{id_prefix}{cfg.experiment}_{sweep_dir}_{run_label}"
+        )
     else:
         sweep_dir = None
-        run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{cfg.experiment}_{run_label}")
+        run_id = re.sub(r"[^A-Za-z0-9_.-]", "-", f"{id_prefix}{cfg.experiment}_{run_label}")
 
     if is_sweep:
         group = f"{base_group}-{sweep_dir}"

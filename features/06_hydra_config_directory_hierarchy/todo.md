@@ -5,6 +5,9 @@ Generated from `plan.md` (all four design decisions settled; F3 addressing valid
 Dependencies flow top-to-bottom; the tree is temporarily inconsistent between phases B–F and
 coherent again after F.
 
+Group **I** was added on 2026-10-18 from plan §H (naming schema; decision 5 settled as
+bare-stem groups). It reverses F's "kept each `experiment:` value as-is".
+
 ---
 
 ## A. Confidentiality guard (do first — must precede any run)
@@ -159,3 +162,133 @@ coherent again after F.
       the spike finding, code-side YAML-first inflation + comment-`$` fix, optional test, fast-
       fail validation, outputs/confidentiality, scope).
 - [x] Updated this `todo.md` (items checked off) as phases completed.
+
+## I. Naming schema — stem-only names, W&B context via tags/config (plan §H)
+
+Target for `egs/mmtc/fr-en/sft1_refine1.yaml`: the dir is
+`egs/mmtc/fr-en/outputs/sft1_refine1/sweep-<ts>/learning_rate-0.0003__seed-37/`, the W&B name is
+`sft1_refine1-learning_rate-0.0003__seed-37`, the group is `sft1_refine1-sweep-<ts>`, and the
+tags include `mmtc` + `fr-en`. No name or group contains `mmtc` or `fr-en`.
+
+### I1. Schema (`hfmt/hydra_config.py`)
+- [x] Add `dataset_name: Optional[str] = None` to `DataConfig` (comment: dataset identifier,
+      filled in code from `dataset_dir` when unset; identifier only, never data content).
+- [x] Update the `DataConfig` docstring to mention `dataset_name` and its derivation.
+
+### I2. Context derivation + lang-pair guard (`hfmt/sft_translation.py`, `populate_data_paths`)
+*Depends on I1.*
+- [x] After `resolve_dataset_template` succeeds (so `dataset_dir` is known to be set), fill in
+      `cfg.data.dataset_name = basename(dirname(normpath(dataset_dir)))` **only if unset**
+      (`mmtc` for `.../egs/mmtc/fr-en`).
+- [x] **Lang-pair consistency check (fail fast):** require
+      `basename(normpath(dataset_dir)) == f"{data.src}-{data.trg}"`; otherwise raise a clear
+      single-line `ValueError` naming both values (catches a fr-en yaml copied into `de-en/`
+      without editing `src`/`trg`).
+- [x] Update the `populate_data_paths` docstring (now also fills in `dataset_name` + runs the
+      lang-pair check).
+- [x] *(Optional)* Mirror the lang-pair check in `hfmt/sweep_probe.py`'s login-node fast-fail,
+      next to the template-existence check (cheap; aborts before the Slurm submit).
+
+### I3. W&B identity (`hfmt/sft_translation.py`, `derive_run_identity`)
+*Depends on I2 (`populate_data_paths` runs before `derive_run_identity` in `main()`; confirm the
+order is kept).*
+- [x] **Auto-tags:** build `tags` as `[data.dataset_name, f"{data.src}-{data.trg}"]` +
+      `wandb.tags`, deduplicated with order kept; then append `sweep` + param tags as today
+      (sweep branch only). Run each through `_sanitize_label`.
+- [x] **Run-id prefix (R11):** prepend `f"{dataset_name}_{src}-{trg}_"` to both run_id forms
+      (`{experiment}_{sweep_dir}_{label}` and `{experiment}_{label}`) before the existing
+      `[^A-Za-z0-9_.-]` → `-` cleanup.
+- [x] Run **name** and **group** logic stays unchanged (both come from `cfg.experiment`, now the
+      stem). Confirm by reading that no other code path adds dataset/lang context to them.
+- [x] Update the `derive_run_identity` docstring: names/groups are stem-only, dataset + lang
+      pair go to the tags and the hidden id, and why (R11).
+- [x] Fix the `build_run_label` docstring example `mmtc_fr-en_sft1_fullft` → `sft1_fullft`.
+- [x] **Confidentiality check (CLAUDE.md):** the new tags and the `dataset_name` config field are
+      identifiers only (dataset name + lang codes), not data content. Nothing new or
+      data-bearing reaches W&B.
+
+### I4. Launcher (`egs/run.sh`)
+- [x] Inject `experiment="${exp_name}"` into the training launch, next to `data.dataset_dir`
+      and `output_root`. Confirm it doesn't affect the label: `experiment` is in
+      `override_dirname.exclude_keys` and dropped by `_label_pairs`, so `is_sweep` stays false
+      for a plain run.
+- [x] Update the header comments: the experiment name is the file stem (injected), and the raw
+      `python -m hfmt.sft_translation` example adds `experiment=sft1` next to `data.dataset_dir=…`.
+
+### I5. Experiment yamls (`egs/mmtc/fr-en/*.yaml`, 7 files)
+*Do with I4: once the `experiment:` line is removed, only run.sh sets the name.*
+- [x] Delete the `experiment: mmtc_fr-en_*` line from all 7.
+- [x] Delete `wandb.group: mmtc_fr-en_*` from all 7 (the group falls back to `cfg.experiment`).
+- [x] Drop the hand-written `fr-en` from each `wandb.tags` list (now added automatically); keep
+      the descriptive tags (`sft`, `lora`, `fullft`, `refine1`).
+- [x] Update comments that cite the old names (`sft1_lora.yaml` "identical to mmtc_fr-en_sft1",
+      `sft1_fullft_modelsweep.yaml` "see mmtc_fr-en_sft1_fullft") to the stem names.
+
+### I6. Analysis tooling (`analysis/pull_wandb.py`)
+- [x] Add a repeatable `--tag` arg (`action="append"`). Combine tags with **AND**
+      (`{"$and": [{"tags": {"$in": [t]}} for t in tags]}`) together with the existing
+      `group`/`state` filters, so `--group sft1 --tag mmtc --tag fr-en` pins one lang pair (R12).
+- [x] Update the usage docstring example (`--group mmtc_fr-en_sft1` →
+      `--group sft1 --tag mmtc --tag fr-en`).
+
+### I7. Tests
+*Depends on I2–I3.*
+- [x] `hfmt/test_run_label.py`: move the fixtures to stem names (`_cfg(experiment="sft1", …)`,
+      `SWEEP_OUT`/`SINGLE_OUT`/`PLAIN_OUT` under `.../egs/mmtc/fr-en/outputs/sft1…`). Give
+      `_cfg` the `data.dataset_name`/`src`/`trg` fields and update the expected names, groups and ids.
+- [x] Test: sweep job → name `sft1-<label>`, group `sft1-sweep-<ts>`, neither contains `mmtc`
+      or `fr-en`; tags start with `["mmtc", "fr-en", …]`, with no duplicate `fr-en` when
+      `wandb.tags` already has it.
+- [x] Test: plain run → name == group == `sft1_lora`; no `sweep` tag; auto-tags present.
+- [x] Test (R11): same `experiment`, `<ts>` and label, but `fr-en` vs `zh-en` → **different**
+      run_ids; for mmtc/fr-en sweep jobs the id equals today's form.
+- [x] `hfmt/test_dataset_inflation.py`: name the fixture `dataset_dir` `<tmp>/<dataset>/<src>-<trg>/`
+      so the lang-pair check passes. Add tests for `dataset_name` derivation, for explicit
+      `dataset_name` winning, and for the lang-pair mismatch error.
+- [x] Run `pytest hfmt/test_dataset_inflation.py hfmt/test_run_label.py`; all pass.
+  - *62 passed* across those two files plus `analysis/test_pull_wandb.py`, which gained three `--tag`
+    tests (AND filter, no `$and` without tags, repeatable arg). There are also extra tests for a
+    trailing slash on `dataset_dir` and for a missing `dataset_name`, where the lang pair is still
+    tagged.
+
+### I8. Verification
+- [x] Compose check (the `compose()` API, as in G) for all 7 experiments with
+      `experiment=<stem>` injected: `cfg.experiment` == file stem,
+      `data.dataset_name == "mmtc"`, and `derive_run_identity` returns stem-only name and group
+      plus `mmtc`/`fr-en` tags.
+- [x] Grep: no `mmtc_fr-en_` remains in `egs/`, `hfmt/`, `conf/`, `tools/`, `README.md`, or
+      `CLAUDE.md`, except the historical `analysis/` and earlier `features/` records. The
+      `CLAUDE.md` analysis-dir example `analysis/2026-10-08_mmtc_fr-en_sft1/` is also fine:
+      `analysis/` is flat, so its dir names need the context.
+  - *Verified:* all 7 compose OK. `sft1_refine1` gives dir
+    `egs/mmtc/fr-en/outputs/sft1_refine1/sweep-<ts>/…`, name
+    `sft1_refine1-learning_rate-0.0003__seed-37`, group `sft1_refine1-sweep-<ts>`, tags
+    `[mmtc, fr-en, sft, refine1, sweep, …]`, id `mmtc_fr-en_sft1_refine1_sweep-<ts>_…`.
+    Run.sh's real override string (`+mmtc/fr-en=…,experiment=…,data.dataset_dir=…,output_root=…`)
+    gives `_label_pairs` → `[]`, so a plain run is still not a sweep. `sweep_probe` still emits
+    the refine1 axes (rc 0) and rejects `data.src=de` with a one-line error (rc 2).
+    `sh -n egs/run.sh` passes.
+  - Remaining `mmtc_fr-en_` hits are intentional: "never `mmtc_fr-en_…`" examples, the old file
+    names of historical `conf/sweep/` presets in yaml comments, run-id expectations in tests, and
+    a legacy `data=` group-choice label test.
+- [ ] **Cluster dry run (deferred, like G):** `bash egs/run.sh mmtc/fr-en/sft1_refine1.yaml
+      train.max_steps=20` → dirs under `egs/mmtc/fr-en/outputs/sft1_refine1/sweep-<ts>/…`; in
+      W&B the names/group are stem-only and tags `mmtc` + `fr-en` filter them; a plain
+      `sft1_lora` run is named/grouped `sft1_lora`.
+
+### I9. Docs & decisions
+- [x] `README.md`: replace the stale run-name example (`mmtc_fr-en_sft1-lora_r-16__…` →
+      `sft1-lora_r-16__…`) and the `outputs/<experiment>/…` paths with
+      `egs/<dataset>/<src>-<trg>/outputs/<stem>/…`. Say that the experiment name is the file stem
+      (injected by run.sh, no `experiment:`/`wandb.group:` in the yaml). Add a short "Filtering
+      runs in W&B" note (tags `mmtc`/`fr-en`, config `hfmt.data.dataset_name`, and
+      `pull_wandb.py --tag`), including the R12 caveat that plain runs from different lang pairs
+      can share a group.
+- [x] `decisions.md`: record the naming rule ("a name holds only what its location doesn't
+      already say"), decision 5a (bare-stem groups, rejected alternative), the hidden-id prefix
+      (R11), and the one-time break with old `mmtc_fr-en_*` dirs, runs and groups (R13).
+- [x] Fix stale launch examples: `CLAUDE.md` (`bash egs/run.sh mmtc_fr-en_sft1 …` →
+      `mmtc/fr-en/sft1.yaml`), `conf/config.yaml:5`, `conf/hydra/launcher/{local,slurm}.yaml:2`
+      (`+experiment=…` → `+mmtc/fr-en=sft1 experiment=sft1 data.dataset_dir=…`), and
+      `tools/run_on_free_gpu.sh` usage comments.
+- [x] Check off group I items here as they complete.

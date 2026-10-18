@@ -2,7 +2,9 @@
 #
 # Composes the config groups below onto the structured schema (base_config,
 # registered from hfmt/hydra_config.py) so every value is type-validated.
-# Select a ready-made experiment with:  +experiment=mmtc_fr-en_sft1  (from egs/experiment/)
+# Select a ready-made experiment with:  bash egs/run.sh mmtc/fr-en/sft1.yaml
+#   (feature 06; run.sh passes +mmtc/fr-en=sft1 experiment=sft1 data.dataset_dir=... for you.
+#   The experiment name is the yaml's file stem; it names ${output_root}/${experiment}/ below.)
 # Override any knob on the CLI, e.g.:    train.learning_rate=2e-4 lora.lora_r=16
 
 defaults:
@@ -30,7 +32,8 @@ output_root: outputs
 hydra:
   # Extend the config search path to egs/ so experiment presets can live there
   # (feature 04). Resolved at compose time from HFMT_ROOT, the repo-wide path anchor,
-  # so +experiment=<name> finds egs/experiment/<name>.yaml under any launcher.
+  # so the nested selector +<dataset>/<src>-<trg>=<name> finds
+  # egs/<dataset>/<src>-<trg>/<name>.yaml under any launcher (feature 06).
   searchpath:
     - file://${oc.env:HFMT_ROOT}/egs
   # Keep CWD at the launch dir (repo root) so relative paths / HFMT_ROOT still
@@ -55,7 +58,7 @@ hydra:
       # this keeps the raw dirname clean too). Data/path keys are dropped in the resolver.
       override_dirname:
         exclude_keys:
-          - experiment
+          - experiment      # run.sh injects experiment=<file stem> (feature 06 naming)
           - sweep
           - sweep.enabled   # the sweep toggle may ride along as a passthrough override
           - hydra/launcher

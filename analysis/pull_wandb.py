@@ -19,8 +19,12 @@ Requires `wandb`, which is part of the project environment (see install/). Run i
 OUTSIDE the sandbox, where W&B is reachable:
     export WANDB_API_KEY=...        # or: wandb login
     python analysis/pull_wandb.py                      # latest 10 finished 'hfmt' runs
-    python analysis/pull_wandb.py --group mmtc_fr-en_sft1 --limit 20
+    python analysis/pull_wandb.py --group sft1 --tag mmtc --tag fr-en --limit 20
     python analysis/pull_wandb.py --run-id abc123 --run-id def456
+
+Run names and groups hold only the experiment's file stem (feature 06), so the same group
+(e.g. `sft1`) can appear under several datasets/lang pairs. Pin one with `--tag <dataset>
+--tag <src>-<trg>`; every run is tagged with both, and multiple --tag flags must ALL match.
 """
 
 import argparse
@@ -49,8 +53,11 @@ def parse_args(argv=None):
     p.add_argument("--entity", default=None,
                    help="W&B entity (team/user); defaults to your W&B default entity")
     p.add_argument("--group", default=None, help="only runs in this W&B group")
+    p.add_argument("--tag", dest="tags", action="append", default=[], metavar="TAG",
+                   help="only runs carrying this tag (repeatable; all must match), e.g. "
+                        "--tag mmtc --tag fr-en")
     p.add_argument("--run-id", dest="run_ids", action="append", default=[], metavar="ID",
-                   help="specific run id (repeatable); overrides --group/--limit/--state")
+                   help="specific run id (repeatable); overrides --group/--tag/--limit/--state")
     p.add_argument("--limit", type=int, default=100,
                    help="max number of most-recent runs to export")
     p.add_argument("--state", default="finished",
@@ -62,21 +69,34 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
-def resolve_runs(api, entity, project, group=None, run_ids=None, state="finished", limit=10):
+def build_filters(group=None, tags=None, state="finished"):
+    """W&B (MongoDB-style) run filters for the group/tag/state selection.
+
+    Each tag must be present on the run (AND), so `--tag mmtc --tag fr-en` pins one dataset
+    and lang pair even when several share a group name.
+    """
+    filters = {}
+    if group:
+        filters["group"] = group
+    if tags:
+        filters["$and"] = [{"tags": {"$in": [tag]}} for tag in tags]
+    if state and state.lower() != "any":
+        filters["state"] = state
+    return filters
+
+
+def resolve_runs(api, entity, project, group=None, run_ids=None, state="finished", limit=10,
+                 tags=None):
     """Return a list of wandb Run objects for the requested selection.
 
-    Explicit --run-id selections win and ignore the group/state/limit filters.
+    Explicit --run-id selections win and ignore the group/tag/state/limit filters.
     Otherwise query the project's runs (newest first) and take the latest `limit`.
     """
     path = f"{entity}/{project}" if entity else project
     if run_ids:
         return [api.run(f"{path}/{rid}") for rid in run_ids]
 
-    filters = {}
-    if group:
-        filters["group"] = group
-    if state and state.lower() != "any":
-        filters["state"] = state
+    filters = build_filters(group=group, tags=tags, state=state)
 
     runs = api.runs(path, filters=filters or None, order="-created_at")
     selected = []
@@ -309,20 +329,23 @@ def main(argv=None):
 
     try:
         runs = resolve_runs(api, entity, args.project, group=args.group,
-                            run_ids=args.run_ids, state=args.state, limit=args.limit)
+                            run_ids=args.run_ids, state=args.state, limit=args.limit,
+                            tags=args.tags)
         collected = collect_runs(runs)
     except Exception as e:  # noqa: BLE001
         _die(_friendly_wandb_error(e) + f"\n(querying '{entity}/{args.project}')")
 
     if not collected:
         _die(f"No runs matched (project={args.project!r}, entity={entity!r}, "
-             f"group={args.group!r}, state={args.state!r}). Nothing exported.")
+             f"group={args.group!r}, tags={args.tags!r}, state={args.state!r}). "
+             "Nothing exported.")
 
     if not args.raw:
         collected = [reduce_run(r) for r in collected]
 
     filters = {
         "group": args.group,
+        "tags": args.tags or None,
         "state": args.state,
         "run_ids": args.run_ids or None,
         "limit": args.limit,

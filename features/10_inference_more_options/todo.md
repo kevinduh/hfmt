@@ -172,24 +172,24 @@ Ground rules for every phase:
 
 ## E. Readability and docs (request 4)
 
-- [ ] Read `grid.py` top to bottom.
+- [x] Read `grid.py` top to bottom.
   - The module docstring covers the four flows (sft grid, inf on a run, inf on an experiment, merge),
     what each writes, and the `JOBS=(…)`/`SBATCH_ARGS=(…)` stdout contract with an example.
   - Each helper has a one-line purpose/caller comment.
-- [ ] Read `launch.sh` and `egs/job.sh` top to bottom: one comment per block; usage header current.
-- [ ] CLAUDE.md:
+- [x] Read `launch.sh` and `egs/job.sh` top to bottom: one comment per block; usage header current.
+- [x] CLAUDE.md:
   - structure (`job.sh`, `merge_model.py`);
   - the Inference bullet (two modes, `test<i>.pred.trg`, `scores.json`, `base_ckpt_inf/`);
   - a new merging bullet;
   - `inference_callback_interval`.
-- [ ] README:
+- [x] README:
   - Inference (base-model mode, several test sets);
   - a new "Merging and a second round" section;
   - the interval setting in Training.
-- [ ] `decisions.md`: feature 10 entry (yaml kind chooses the model, `base_ckpt_inf/`, numbered test
+- [x] `decisions.md`: feature 10 entry (yaml kind chooses the model, `base_ckpt_inf/`, numbered test
       outputs, qlora dequantize merge, one job script, the interval placeholder).
-- [ ] Line counts since 27b8cc3 (code/config/tests vs docs). Tests pass.
-- [ ] `todo.md` E ticked; commit message presented.
+- [x] Line counts since 27b8cc3 (code/config/tests vs docs). Tests pass.
+- [x] `todo.md` E ticked; commit message presented.
 
 ## F. Developer validation
 

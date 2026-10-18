@@ -17,7 +17,7 @@ hypotheses/translations — anything derived from the data.
   may be logged there. Never send sample text, tables, or artifacts containing examples
   to W&B.
 - **Local files and logs are fine.** Writing example text to disk (prediction dumps like
-  `*.pred`, `eval.pred.trg`) or to local `logging`/`print` output (e.g. "Decoded
+  `*.pred`, `test<i>.pred.trg`) or to local `logging`/`print` output (e.g. "Decoded
   predictions…", batch-inspection dumps) is allowed — those stay on the machine. Keep
   them out of version control.
 - **Config may be logged to W&B** because it holds only hyperparameters, data *paths*, and
@@ -36,17 +36,18 @@ hfmt/
 ├── hfmt/                    # Python entry-point scripts (not yet a package)
 │   ├── train_seq2seq.py     # encoder–decoder MT (T5, Marian) via Seq2SeqTrainer
 │   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
-│   ├── inf_translation.py   # decoder-only MT inference on a trained run folder — Hydra-driven
+│   ├── inf_translation.py   # decoder-only MT inference (trained run or downloaded checkpoint) — Hydra-driven
+│   ├── merge_model.py       # merge a run's lora/qlora adapter into model_merged/ (launch.sh merge)
 │   ├── mt_model.py          # model loading, prompting, decoding, scoring shared by SFT + inference
 │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore): types only, no defaults
-│   ├── grid.py              # login-node grid expansion + per-job saved configs (egs/launch.sh)
+│   ├── grid.py              # login-node checks + job folders for egs/launch.sh (sft grid, inf, merge)
 │   └── decode_summarization.py  # zero/few-shot summarization
 ├── conf/                    # SFT base config.yaml + groups train/ peft/ decode/; never experiments
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
-├── egs/                     # recipes; launch.sh <sft|inf> <yaml> launches the Hydra SFT workflow
-│   ├── launch.sh            # launcher (sbatch array, LOCAL=1 or DRYRUN=1) for training and inference
-│   ├── sft_job.sh  inf_job.sh   # one training job / one inference job
+├── egs/                     # recipes; launch.sh <sft|inf|merge> <yaml> launches the Hydra SFT workflow
+│   ├── launch.sh            # launcher (sbatch array, LOCAL=1 or DRYRUN=1) for training, inference, merging
+│   ├── job.sh               # one job of a launch: job.sh <sft|inf|merge> <folders...>
 │   ├── data/                # example bitext, YAML/JSONL manifests
 │   ├── mmtc/<src>-<trg>/    # SFT experiments, dataset.yaml, local_setting.sh (untracked);
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
@@ -77,19 +78,35 @@ hfmt/
   experiments" and `decisions.md`.
 - **Launch path (no submitit)** — `hfmt/grid.py` expands the grid, composes and checks every
   job's config, and saves it fully resolved as `<run folder>/run_config.yaml` (+ `git_rev`);
-  `egs/launch.sh sft` then submits one Slurm array of `egs/sft_job.sh` (each job a plain single
+  `egs/launch.sh sft` then submits one Slurm array of `egs/job.sh sft` (each job a plain single
   Hydra run of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
   sbatch command. Run folders: `<output_root>/<run_name>` (1 job) or `<run_name>-<idx>` (grid);
   `output_root` defaults to `<experiment folder>/outputs`. No timestamps: an existing folder
   only warns. W&B run name = run folder name, group = `run_name`. Re-run a saved job with
   `bash egs/launch.sh sft <run folder>/run_config.yaml [overrides]` (same folder unless `run_name=`).
-- **Inference** — `bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]`, one trained
-  run folder per call (loop in the shell for a sweep). `grid.py --inf` checks the saved config +
+- **Inference** — `bash egs/launch.sh inf <yaml> [overrides]`, one model per call (loop in the
+  shell for a sweep). The yaml kind decides the model: a trained run's `run_config.yaml` decodes its
+  `model/` into `<run folder>/inf/<inf_name>/`; an experiment yaml decodes its `checkpoint` as
+  downloaded (zero-shot, `model_dir` unset; the `peft` option sets the precision) into
+  `<output_root>/<run_name>/base_ckpt_inf/<inf_name>/`. `grid.py --inf` checks the config +
   overrides (e.g. `decode.num_beams=5`, `'data.test.src=[...]'`, `inf_name=beam5`) and saves
-  `<run folder>/inf/<inf_name>/inf_config.yaml`; `egs/inf_job.sh` writes `pred.trg` and
-  `scores.json` there. `run_config.yaml` is never changed; no W&B. Inference reproduces training's
-  `eval.pred.trg` exactly: both use `mt_model.py`, and training unwraps Accelerate's autocast
-  wrapper before its test decoding (and qlora bases get the same fp32 preparation).
+  `inf_config.yaml` there; `egs/job.sh inf` runs `inf_translation.py`. `run_config.yaml` is never
+  changed; no W&B. Each `data.test.src` file is decoded on its own into `test<i>.pred.trg` (i from 1);
+  `scores.json` has each set's paths and BLEU/chrF/TER when `data.test.trg` gives a reference
+  (`null` entry = none). Training writes the same files at its end (`mt_model.decode_test_sets`) and
+  inference reproduces them exactly: training unwraps Accelerate's autocast wrapper before its test
+  decoding (and qlora bases get the same fp32 preparation).
+- **Merging / second SFT round** — `bash egs/launch.sh merge <run folder>/run_config.yaml`
+  (lora/qlora runs; `slurm.*` overrides only) writes `<run folder>/model_merged/` (full bf16 weights,
+  tokenizer, `merge_info.yaml`); qlora merges onto the 4-bit base dequantized to bf16 (warned:
+  4-bit rounding). Use it as `checkpoint:` in another experiment; that run's inference works as for
+  any run. A full fine-tune's `model/` (which also holds the tokenizer) is a checkpoint already.
+- **Dev decoding during training** — the MT callback decodes dev + BLEU every
+  `train.inference_callback_interval` evaluations and at the last step (0 = never); early stopping
+  runs at every evaluation. With a BLEU-type `metric_for_best_model`, skipped evaluations get a
+  never-best placeholder so the Trainer's best-checkpoint check still works.
+- **Saved configs aren't backward compatible** — a run saved before a new required key was added
+  fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`).
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a
   `.sweep.yaml` carries its grid in `hydra.sweeper.params` and always runs all of it. Axes are
   leaf values or component files (`peft: lora_default,qlora_default`). Command-line comma

@@ -371,3 +371,45 @@ inference share model handling.
   qlora base's non-quantized parameters to fp32; inference now applies it too
   (`use_gradient_checkpointing=False`). The model is saved before test decoding so a crash there
   doesn't lose it.
+
+## Base-model inference, per-file test sets, merging, dev-decoding interval (feature 10_inference_more_options)
+
+**Decision:** Inference, merging and training share one launcher, and the yaml you give it decides
+what happens.
+
+- **The yaml kind chooses the model for `launch.sh inf`.** A trained run's `run_config.yaml`
+  decodes its `model/` into `<run folder>/inf/<inf_name>/`; an experiment yaml decodes its
+  `checkpoint` as downloaded (`model_dir` unset) into `<output_root>/<run_name>/base_ckpt_inf/<inf_name>/`.
+  A `peft=none` option was considered: more explicit in saved configs, but it needs its own
+  precision rule and training would have to reject it. Instead the experiment's `peft` option sets
+  the load precision. The separate `base_ckpt_inf/` folder means zero-shot output can't collide with
+  a trained run's `inf/`, so nothing is refused. Sweep experiments and comma lists are refused.
+- **Each test file is its own test set.** `data.test` is a `TestSet` (`trg` optional; a `null`
+  entry = no reference). `mt_model.decode_test_sets` writes `test<i>.pred.trg` (i from 1, in list
+  order, even for one file) and `scores.json` (paths + scores), and both training and inference
+  call it, so inference still reproduces training exactly. Train/dev stay concatenated. Named
+  test sets in `dataset.yaml` were considered; numbering kept the schema and the
+  `'data.test.src=[...]'` override simple. Training now scores its test sets too and puts the
+  numbers (no paths) in the W&B summary.
+- **Merging goes through Slurm: `launch.sh merge <run>/run_config.yaml`** writes
+  `<run>/model_merged/` (bf16 weights, tokenizer, `merge_info.yaml`). QLoRA merges onto the 4-bit
+  base dequantized to bf16 (`dequantize()`), i.e. the weights the adapter was trained against,
+  with a warning about the 4-bit rounding; merging into the original bf16 base gives better base
+  weights but not the evaluated model. Measured: merged vs adapter within ~0.3 BLEU, 10-12% of
+  lines differ (bf16 rounding). A second round is just an experiment with
+  `checkpoint: <run>/model_merged`; nothing else changed. Training also saves the tokenizer in
+  `model/`, so a full fine-tune's `model/` is a checkpoint as is.
+- **One job script, `egs/job.sh <sft|inf|merge>`,** replaces `sft_job.sh`/`inf_job.sh` (and a third
+  merge script): they differed only in the Python entry point.
+- **`train.inference_callback_interval`** (N): the MT callback decodes dev + BLEU every N
+  evaluations and at the last step (0 = never); early stopping runs every evaluation. With a
+  BLEU-type `metric_for_best_model`, the Trainer checks that metric at *every* evaluation and raises
+  if it's missing. So on skipped evaluations the callback runs early stopping first (it finds no
+  value and leaves its patience counter alone), then sets a never-best placeholder (±inf) for the
+  Trainer's best-checkpoint check. The placeholder never reaches W&B or `log_history`, because
+  the Trainer logs eval metrics before callbacks run. Refusing BLEU + N > 1 was the alternative.
+- **Saved configs aren't kept backward compatible.** A new required key (here
+  `train.inference_callback_interval`) makes older `run_config.yaml` files fail `inf`/`merge`
+  checks; the developer chose this over `Optional = None` keys or filling defaults on load.
+- `grid.py` was split into `main_sft` / `main_inf` / `main_merge` with step comments, and
+  `launch.sh` was commented block by block, since both had become hard to follow.

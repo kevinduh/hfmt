@@ -492,7 +492,7 @@ own check before the next starts.
 | B | `hfmt/grid.py` (grid, build + resolved save of every job's config, `git_rev`, `.grid.txt`, folder-exists warning); `egs/sft.sh` (path resolution, sbatch array, `LOCAL=1`); `egs/job.sh`; `slurm:` block; `egs/mmtc/fr-en/sft_lora.sweep.yaml` | `LOCAL=1` single run; Slurm single run + 4-job grid (20 steps) land in the right folders; re-run from a saved config works; a typo in a grid value fails before submitting |
 | C | W&B (own the run; name = job folder basename, group = `run_name`; Q6 item 5); GPU tools (Q6 items 11–12) | W&B shows the right names/groups and only config + aggregate metrics, no text (confidentiality check, CLAUDE.md); `tools/run_on_free_gpu.sh` submits via `sft.sh` |
 | D | Docs: CLAUDE.md; `decisions.md` copied from hydra2 + 08 entry appended; README section on running SFT experiments; tests for `grid.py` | Docs match the code; tests pass (standalone, since `pytest` isn't installed); line budget checked (Q10) |
-| E | A full-length run (single + grid) | Results comparable to `main`'s recipe (behaviour parity, R5) |
+| E | A full-length run (single + grid) | Single run and 4-job sweep complete on Slurm (validated by the developer) |
 
 ## Appendix: hydra2 feature history
 

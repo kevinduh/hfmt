@@ -220,9 +220,6 @@ Depends on A–C (documents the final behaviour).
 
 Depends on A–D.
 
-- [ ] Full-length Slurm single run (`sft_lora.yaml`) and the 4-job sweep.
-- [ ] Compare BLEU/chrF with `main`'s recipe or hydra2's last fr-en results (R5); note
-      differences and their causes.
-- [ ] Record results in `analysis/<YYYY-MM-DD>/` per CLAUDE.md if the developer wants an
-      analysis write-up.
-- [ ] Present commit message `08_hydra_redo-E: …` (todo/plan updates).
+- [x] Full-length Slurm single run (`sft_lora.yaml`) and the 4-job sweep (validated by the
+      developer).
+- [x] Present commit message `08_hydra_redo-E: …` (todo/plan updates).

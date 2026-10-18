@@ -102,6 +102,8 @@ class TrainConfig:
     greater_is_better: bool = MISSING
     early_stopping_patience: int = MISSING
     early_stopping_threshold: float = MISSING
+    # Dev decoding + BLEU in the MT callback: every N evaluations and at the last step; 0 = never.
+    inference_callback_interval: int = MISSING
 
 
 @dataclass
@@ -160,7 +162,11 @@ class Config:
 
 
 def check_config(cfg) -> None:
-    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present."""
+    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, or on a negative
+    ``train.inference_callback_interval``."""
+    if cfg.train.inference_callback_interval < 0:
+        raise ValueError(f"train.inference_callback_interval={cfg.train.inference_callback_interval}: "
+                         "must be >= 0 (0 = no dev decoding)")
     mode, has_lora, has_quant = cfg.peft.mode, cfg.peft.lora is not None, cfg.peft.quant is not None
     need = {"full": (False, False), "lora": (True, False), "qlora": (True, True)}
     if mode not in need:

@@ -23,6 +23,7 @@ logging_steps: 10
 eval_steps: 50
 save_steps: ${train.eval_steps}   
 save_total_limit: 3
+inference_callback_interval: 1   # dev decoding + BLEU every N evaluations (and at the last step); 0 = never
 
 # early stopping
 load_best_model_at_end: true

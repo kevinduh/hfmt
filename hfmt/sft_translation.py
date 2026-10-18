@@ -22,8 +22,13 @@ from hfmt.hydra_config import Config, check_config, register_configs
 from hfmt.mt_model import format_input_prompt, inference_on_eval_data, load_base_model, load_tokenizer, score
 
 
-def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, instruction_prefix, decode):
+DECODE_METRICS = ("eval_bleu", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
+
+
+def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, instruction_prefix, decode, interval):
     """Early stopping that also decodes the dev set and adds BLEU/chrF/TER to the eval metrics.
+    Dev decoding is expensive, so it runs only every ``interval`` evaluations and at the last step
+    (``interval`` 0: never); early stopping runs at every evaluation.
     Built in a function so transformers/sacrebleu are imported only when training."""
     from transformers import EarlyStoppingCallback
     import wandb
@@ -33,7 +38,28 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
             super().__init__(early_stopping_patience=early_stopping_patience, early_stopping_threshold=early_stopping_threshold)
             self.refs = data["trg"]
 
+        def _decode_now(self, args, state):
+            return interval > 0 and (state.global_step % (interval * args.eval_steps) == 0
+                                     or state.global_step >= state.max_steps)
+
         def on_evaluate(self, args, state, control, **kwargs):
+            if self._decode_now(args, state):
+                self._decode_dev(args, state, control, **kwargs)
+            else:
+                logging.info(f"Dev decoding skipped at step {state.global_step} (inference_callback_interval={interval})")
+
+            # Early stopping, at every evaluation. On a skipped step with a decode metric as
+            # metric_for_best_model it finds no value, warns, and leaves its patience counter alone.
+            super().on_evaluate(args, state, control, **kwargs)
+
+            # The Trainer's best-checkpoint check runs after this callback and raises KeyError on a
+            # missing metric (trainer.py _determine_best_metric). Give it a never-best value. The
+            # Trainer logs eval metrics before callbacks run, so this never reaches W&B or log_history.
+            metrics, best = kwargs["metrics"], args.metric_for_best_model
+            if best in DECODE_METRICS and best not in metrics:
+                metrics[best] = float("-inf") if args.greater_is_better else float("inf")
+
+        def _decode_dev(self, args, state, control, **kwargs):
             logging.info(f"Tokenizer setting in TrainerCallback on_evaluate {tokenizer.padding_side = } {tokenizer.truncation_side = }")
             preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, instruction_prefix, decode, 'src')
             scores = score(preds, self.refs)
@@ -58,8 +84,6 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
                                "eval/chrf": kwargs["metrics"]["eval_chrf"],
                                "eval/ter": kwargs["metrics"]["eval_ter"], 
                                "train/global_step": state.global_step})
-
-            super().on_evaluate(args, state, control, **kwargs)
 
     return EarlyStopping_MT_Callback()
 
@@ -265,6 +289,7 @@ def main(cfg: Config) -> None:
                                           device=device,
                                           instruction_prefix=instruction_prefix,
                                           decode=cfg.decode,
+                                          interval=cfg.train.inference_callback_interval,
                                           ))
 
     ###################################

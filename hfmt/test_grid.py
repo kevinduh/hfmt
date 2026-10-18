@@ -122,6 +122,14 @@ def test_peft_mode_must_match_blocks():
     assert fails(SINGLE, "peft.mode=adapter")                          # unknown mode
 
 
+def test_inference_callback_interval():
+    out, _, _ = run(SINGLE)
+    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/default.yaml
+    out, _, _ = run(SINGLE, "train=longrun", "train.inference_callback_interval=0")
+    assert saved(out, "sft_lora").train.inference_callback_interval == 0   # every train option sets it
+    assert fails(SINGLE, "train.inference_callback_interval=-1")
+
+
 def test_missing_value_fails():
     tmp = tempfile.mkdtemp()                           # experiment that sets no checkpoint
     shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)

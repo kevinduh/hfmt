@@ -2,10 +2,14 @@
 
 egs/launch.sh calls this once per launch, then submits what it prints. Three flows:
 
-  launch.sh sft <experiment.yaml | run_config.yaml> [overrides]  ->  main_sft
+  launch.sh sft <experiment.yaml> [overrides]                  ->  main_sft
       python -m hfmt.grid <yaml> [overrides...]
       Expands the grid, composes + checks every job, writes each job's run folder:
         <output_root>/<run_name>[-<idx>]/run_config.yaml (+ git_rev), and <run_name>.grid.txt for a grid.
+  launch.sh sft <run_config.yaml> [slurm.* overrides]          ->  main_resume
+      python -m hfmt.grid <run_config.yaml> [slurm.* overrides...]
+      Resume a cancelled run from its last checkpoint, in its own folder with its saved config
+      (feature 12). Checks it and writes nothing; prints KIND=sft_resume for launch.sh.
   launch.sh inf <run_config.yaml | experiment.yaml> [overrides]  ->  main_inf
       python -m hfmt.grid --inf <yaml> [overrides...]
       One job. The yaml kind decides which model gets decoded:
@@ -29,8 +33,7 @@ Training details:
   Hydra's own BasicSweeper rules (a single command-line value pins an axis). No grid -> 1 job.
 - Every job is composed and checked before anything is written, so a typo fails here, not on a GPU.
   Saved configs are fully resolved (no ${...} left), so jobs don't need local_setting.sh.
-- ``output_root`` defaults to ``<experiment folder>/outputs``. Re-running a saved
-  ``run_config.yaml`` without a new ``run_name`` reuses the folder it's in.
+- ``output_root`` defaults to ``<experiment folder>/outputs``.
 - An existing job folder only warns (no timestamps): its files are overwritten.
 
 Relies on Hydra internals (OverridesParser, BasicSweeper.split_arguments); tested on 1.3.7.
@@ -127,6 +130,9 @@ def _print_jobs(job_dirs, s, job_name, log):
 
 def main_sft(exp_dir, exp_name, args, parsed, parser):
     """Training: expand the grid, check every job, write one run folder per job."""
+    if exp_name == SAVED:                # a saved run: resume it (nothing else)
+        return main_resume(exp_dir, exp_name, args, parsed)
+
     # 1. Read the experiment's own grid. hydra.sweeper.params is only visible after composing, and a
     #    comma list can't be composed, so compose once with the single-value overrides only.
     plain = [a for a, o in zip(args, parsed) if not o.is_sweep_override()]
@@ -147,17 +153,16 @@ def main_sft(exp_dir, exp_name, args, parsed, parser):
     cfgs = [_compose_checked(exp_dir, exp_name, job) for job in jobs]
 
     # 4. Choose job folders: <run_name> for one job, <run_name>-<idx> for a grid (idx zero-padded so
-    #    folders sort in order). Re-running a saved run_config.yaml keeps its folder unless run_name changes.
+    #    folders sort in order).
     n, width = len(cfgs), len(str(len(cfgs) - 1))
     run_name = cfgs[0].run_name
     output_root = cfgs[0].output_root or os.path.join(exp_dir, "outputs")
-    reuse_dir = exp_name == SAVED and n == 1 and not any(a.lstrip("+~").startswith("run_name=") for a in args)
     git_rev = _git_rev()
     job_dirs, grid_lines = [], []
     for idx, (job, cfg) in enumerate(zip(jobs, cfgs)):
         name = cfg.run_name if n == 1 else f"{cfg.run_name}-{idx:0{width}d}"
-        job_dir = exp_dir if reuse_dir else os.path.join(cfg.output_root or output_root, name)
-        if cfg.output_root is None:      # save the resolved root, so a re-run lands next to it
+        job_dir = os.path.join(cfg.output_root or output_root, name)
+        if cfg.output_root is None:      # save the resolved root, so inference/merge find it as is
             cfg.output_root = output_root
         # 5. Save each job's config + git_rev; note which grid values it got.
         _save(job_dir, SAVED, cfg, git_rev)
@@ -176,6 +181,42 @@ def main_sft(exp_dir, exp_name, args, parsed, parser):
     log = os.path.join(job_dirs[0], "slurm-%A.out") if n == 1 else \
         os.path.join(output_root, f"{run_name}-%{width}a" if width > 1 else f"{run_name}-%a", "slurm-%A_%a.out")
     _print_jobs(job_dirs, cfgs[0].slurm, run_name, log)
+
+
+def main_resume(exp_dir, exp_name, args, parsed):
+    """Resume a cancelled training run (``launch.sh sft <run folder>/run_config.yaml``): same config,
+    same folder; the job continues from the last checkpoint (TRL's resume_from_checkpoint).
+    Writes nothing. Only slurm.* overrides (e.g. a bigger GPU after an OOM)."""
+    # 1. Nothing about the run may change, except where it runs.
+    if any(o.is_sweep_override() for o in parsed):
+        sys.exit("grid: resume: comma lists aren't allowed (one run folder per call; loop in the shell)")
+    if any(not o.get_key_element().startswith("slurm.") for o in parsed):
+        sys.exit("grid: resume only takes slurm.* overrides (use the experiment yaml to change a run)")
+
+    # 2. The run must be unfinished and have a complete checkpoint. trainer_state.json is the last
+    #    file the Trainer writes into a checkpoint, so a folder without it was cut off while saving.
+    if os.path.isdir(os.path.join(exp_dir, "model")):
+        sys.exit(f"grid: resume: {exp_dir} already finished (model/ exists); use launch.sh inf to decode it")
+    steps = [int(d.split("-", 1)[1]) for d in os.listdir(exp_dir)
+             if d.startswith("checkpoint-") and d.split("-", 1)[1].isdigit()
+             and os.path.isdir(os.path.join(exp_dir, d))]
+    if not steps:
+        sys.exit(f"grid: resume: no checkpoint-* in {exp_dir}; nothing to resume (launch the experiment again)")
+    last = os.path.join(exp_dir, f"checkpoint-{max(steps)}")
+    if not os.path.isfile(os.path.join(last, "trainer_state.json")):
+        sys.exit(f"grid: resume: {last} is incomplete (no trainer_state.json); delete it and resume again")
+    cfg = _compose_checked(exp_dir, exp_name, args)
+
+    # 3. Warn if the code changed since the run was launched.
+    rev_file = os.path.join(exp_dir, "git_rev")
+    saved_rev = open(rev_file).read().strip() if os.path.isfile(rev_file) else "unknown"
+    if saved_rev != _git_rev():
+        _log(f"WARNING: code changed since launch (git_rev {saved_rev} -> {_git_rev()})")
+    _log(f"resuming {exp_dir} from checkpoint-{max(steps)} (step {max(steps)} of {cfg.train.max_steps})")
+
+    # 4. Print the bash for launch.sh: the job folder is the run folder; KIND picks job.sh sft_resume.
+    _print_jobs([exp_dir], cfg.slurm, cfg.run_name, os.path.join(exp_dir, "slurm-%A.out"))
+    print("KIND=sft_resume")
 
 
 def main_inf(exp_dir, exp_name, args, parsed):

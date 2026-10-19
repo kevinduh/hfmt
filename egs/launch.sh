@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launch SFT training, inference or an adapter merge from a login node (features 08-10).
+# Launch SFT training, inference or an adapter merge from a login node (features 08-12).
 #
 #   bash egs/launch.sh <sft|inf|merge> <yaml> [overrides...]
 #
@@ -14,7 +14,11 @@
 #   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml                 # 1 job
 #   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml           # its full grid
 #   bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.r=8,16       # comma list -> grid
-#   bash egs/launch.sh sft <run folder>/run_config.yaml [overrides]     # re-run a saved job
+#
+# sft on a run folder's run_config.yaml: resume a run cancelled midway (time limit, OOM, scancel)
+# from its last checkpoint, in the same folder with the same config; only slurm.* may change.
+# To change a run, launch its experiment yaml with overrides and a new run_name instead.
+#   bash egs/launch.sh sft <run folder>/run_config.yaml [slurm.* overrides]   # e.g. slurm.gres=gpu:h100:1
 #
 # inf: decode the test sets with one model per call -> test<i>.pred.trg per test file, scores.json
 #   bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]     # the run's trained model/
@@ -63,18 +67,20 @@ cd "${HFMT_ROOT}"
 
 # 4. grid.py checks everything and writes the job folders, then prints bash that sets
 #    JOBS=(job folders) and SBATCH_ARGS=(sbatch options); see its docstring. Any problem exits here,
-#    before anything is submitted.
+#    before anything is submitted. For a resume it also sets KIND=sft_resume (the job.sh kind).
 if [ "$kind" = sft ]; then grid_args=("$yaml"); else grid_args=("--$kind" "$yaml"); fi
 grid=$(python -m hfmt.grid "${grid_args[@]}" "$@")
+KIND=$kind
 eval "$grid"
 
-# 5. Run the jobs: egs/job.sh <kind> <all job folders>; job i (array task i) works on JOBS[i].
-job=(egs/job.sh "$kind")
+# 5. Run the jobs: egs/job.sh <KIND> <all job folders>; job i (array task i) works on JOBS[i].
+#    LOCAL=1 appends to the job's local log, so a resumed job keeps the earlier attempt's log.
+job=(egs/job.sh "$KIND")
 if [ -n "${LOCAL}" ]; then
     for i in "${!JOBS[@]}"; do
         echo "job $i: ${JOBS[$i]}" >&2
         log="${JOBS[$i]}/local.log"; [ "$kind" = merge ] && log="${JOBS[$i]}/merge-local.log"
-        SLURM_ARRAY_TASK_ID=$i bash "${job[@]}" "${JOBS[@]}" > "$log" 2>&1 \
+        SLURM_ARRAY_TASK_ID=$i bash "${job[@]}" "${JOBS[@]}" >> "$log" 2>&1 \
             || echo "job $i failed (see $log)" >&2
     done
 elif [ -n "${DRYRUN}" ]; then

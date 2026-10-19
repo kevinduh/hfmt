@@ -1,4 +1,4 @@
-"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options). No GPU or training deps needed.
+"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options, 12_resume_sft). No GPU or training deps needed.
 
 Runs grid.main() in-process on the real fr-en experiments, with output_root pointed at a temp
 dir, and checks the job folders and saved configs it writes. HFMT_DATA_ROOT is a dummy path
@@ -89,13 +89,56 @@ def test_saved_config_is_resolved_and_complete():
     assert os.path.isfile(os.path.join(out, "sft_lora", "git_rev"))
 
 
-def test_rerun_saved_config_reuses_its_folder_unless_renamed():
-    out, _, _ = run(SWEEP)
-    rc = os.path.join(out, "sft_lora_sweep-1", "run_config.yaml")
-    run(rc, "train.max_steps=2000", out=out)
-    assert saved(out, "sft_lora_sweep-1").train.max_steps == 2000
-    _, dirs, _ = run(rc, "run_name=renamed", out=out)
-    assert "renamed" in dirs and saved(out, "renamed").peft.lora.r == 16
+def cancelled_run(step=40):
+    """A saved single run folder with a (fake) complete checkpoint; returns (run folder, run_config path)."""
+    out, _, _ = run(SINGLE)
+    run_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(run_dir, f"checkpoint-{step}"))
+    open(os.path.join(run_dir, f"checkpoint-{step}", "trainer_state.json"), "w").close()
+    return run_dir, os.path.join(run_dir, "run_config.yaml")
+
+
+def resume(rc, *overrides):
+    """Run grid.main on a saved run_config.yaml (a resume; no output_root override); return stdout."""
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main([rc, *overrides])
+    return stdout.getvalue()
+
+
+def test_resume_saved_config_uses_its_folder_and_writes_nothing():
+    run_dir, rc = cancelled_run()
+    before = {f: open(os.path.join(run_dir, f)).read() for f in ("run_config.yaml", "git_rev")}
+    names = sorted(os.listdir(run_dir))
+    stdout = resume(rc, "slurm.gres=gpu:l40s:1")
+    assert f"JOBS=({run_dir})" in stdout and "KIND=sft_resume" in stdout
+    assert "--gres=gpu:l40s:1" in stdout and f"--output={run_dir}/slurm-%A.out" in stdout
+    assert sorted(os.listdir(run_dir)) == names
+    assert all(open(os.path.join(run_dir, f)).read() == v for f, v in before.items())
+    assert "KIND" not in run(SINGLE)[2]                    # only a resume sets it
+
+
+def test_resume_refusals():
+    run_dir, rc = cancelled_run()
+    resume(rc)                                             # the good case passes
+    out, _, _ = run(SINGLE)
+    no_ckpt = os.path.join(out, "sft_lora", "run_config.yaml")
+    incomplete, _ = cancelled_run()
+    os.makedirs(os.path.join(incomplete, "checkpoint-60"))   # newest checkpoint cut off while saving
+    finished, _ = cancelled_run()
+    os.makedirs(os.path.join(finished, "model"))
+    for bad in [(rc, "train.max_steps=2000"),              # only slurm.* may change
+                (rc, "run_name=renamed"),                  # same run, same folder
+                (rc, "output_root=/tmp/x"),
+                (rc, "slurm.gres=a,b"),                    # comma list
+                (no_ckpt,),
+                (os.path.join(incomplete, "run_config.yaml"),),
+                (os.path.join(finished, "run_config.yaml"),)]:
+        try:
+            resume(*bad)
+            assert False, bad
+        except SystemExit:
+            pass
 
 
 def test_errors_fail_before_writing():

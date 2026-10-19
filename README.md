@@ -111,8 +111,8 @@ export HFMT_ROOT=`pwd`
 cp egs/mmtc/fr-en/local_setting.sh.example egs/mmtc/fr-en/local_setting.sh   # once; then edit the path
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml                       # 1 job
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml                 # 4 jobs
-bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.lora_r=16 train.max_steps=2000  # overrides
-bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.lora_r=8,16 # a comma list makes a grid
+bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.r=16 train.max_steps=2000       # overrides
+bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft.lora.r=8,16      # a comma list makes a grid
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml peft=lora_default     # another fine-tuning method
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml slurm.gres=gpu:l40s:1 # Slurm resources: slurm.*
 bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.yaml            # pick the freest GPU type
@@ -157,6 +157,24 @@ does it every N evaluations (and at the last step) instead of every evaluation; 
 `peft` selects `qlora_default` (default), `lora_default` or `full_finetune`. A full fine-tune
 needs a lower learning rate and more memory and time, e.g.
 `peft=full_finetune train.learning_rate=2e-5 checkpoint=Qwen/Qwen2.5-0.5B-Instruct slurm.mem_gb=64 slurm.time=12:00:00`.
+
+The LoRA options set `peft.lora.r`, `alpha`, `dropout` and `target_modules`. `target_modules` is a
+list of exact module names; each name matches every module whose full name ends with it, so
+`q_proj` wraps `q_proj` in every layer. The defaults wrap `[q_proj, v_proj]`. Names differ between
+model families, so look them up for a new checkpoint (on a login node; no weights are downloaded):
+
+```bash
+python tools/inspect_model.py Qwen/Qwen2.5-1.5B-Instruct     # a Hub id or a local folder
+```
+
+It prints the model, module types, the LoRA candidates (each Linear name with its count, shape and
+adapter size, plus ready-to-paste `target_modules:` lines), parameter counts, an estimate of peak
+training memory (every equation with its numbers, a per-token cost, and a table for full/lora/qlora
+at a few batch sizes and lengths), config highlights, and how many tokens the chat template adds
+(e.g. 365 for tiny-aya's default system prompt). Use another list with an override such as
+`'peft.lora.target_modules=[q_proj,k_proj,v_proj,o_proj]'`, or sweep lists with
+`'peft.lora.target_modules=[q_proj,v_proj],[q_proj,k_proj,v_proj,o_proj]'`. Training logs the
+modules it wrapped (`LoRA wraps: q_proj x28, v_proj x28`) and its peak allocated GPU memory.
 
 ### Inference
 

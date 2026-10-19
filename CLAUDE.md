@@ -52,7 +52,8 @@ hfmt/
 │   ├── mmtc/<src>-<trg>/    # SFT experiments, dataset.yaml, local_setting.sh (untracked);
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
 │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
-├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type)
+├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
+│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate)
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
@@ -61,10 +62,12 @@ hfmt/
 ## Key conventions
 
 - **Configuration (Hydra)** — for the `sft_translation.py`/`inf_translation.py` workflow
-  (features 08, 09). **The schema (`hfmt/hydra_config.py`) holds types only, no default values;
+  (features 08-11). **The schema (`hfmt/hydra_config.py`) holds types only, no default values;
   every default lives in exactly one yaml:** `conf/config.yaml` (defaults list + project-wide
   `slurm`, `wandb`, `inf_name`), `conf/<group>/<option>.yaml` for the groups `train`, `peft`
-  (`qlora_default` | `lora_default` | `full_finetune`: `peft.mode`, `peft.lora`, `peft.quant`) and
+  (`qlora_default` | `lora_default` | `full_finetune`: `peft.mode`, `peft.lora.{r,alpha,dropout,target_modules}`,
+  `peft.quant`; `target_modules` is a list of exact module names, found with
+  `tools/inspect_model.py <checkpoint>`) and
   `decode`, or the experiment folder. A key no yaml sets fails before launch. Every schema field
   must be read by code (or, for the optional `data.data_root/src/trg`, by `dataset.yaml`).
   An experiment is a yaml in `egs/<dataset>/<src>-<trg>/` whose defaults start with `- config`
@@ -73,7 +76,7 @@ hfmt/
   `data_root` comes from `$HFMT_DATA_ROOT`, set in the folder's untracked `local_setting.sh`
   (copy `local_setting.sh.example`); a dataset yaml may instead list absolute paths. Launch with
   `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
-  `peft.lora.lora_r=16`, `peft=lora_default`, `slurm.gres=gpu:l40s:1`. Avoid `+key`/`~key`
+  `peft.lora.r=16`, `peft=lora_default`, `slurm.gres=gpu:l40s:1`. Avoid `+key`/`~key`
   overrides: they add or delete keys and so bypass the schema. See README "Running SFT
   experiments" and `decisions.md`.
 - **Launch path (no submitit)** — `hfmt/grid.py` expands the grid, composes and checks every

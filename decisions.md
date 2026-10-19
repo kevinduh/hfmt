@@ -413,3 +413,26 @@ what happens.
   checks; the developer chose this over `Optional = None` keys or filling defaults on load.
 - `grid.py` was split into `main_sft` / `main_inf` / `main_merge` with step comments, and
   `launch.sh` was commented block by block, since both had become hard to follow.
+
+## LoRA target modules as explicit lists, short keys, model inspection (feature 11_hydra_lora)
+
+**Decision:** LoRA layers are named, not chosen from presets, and a script shows the names.
+
+- **`peft.lora.target_modules` is a required list of exact module names** (no `null`, no
+  `all-linear`). It replaces `lora_target` (`qv | all-linear | attention | mlp`), which
+  `sft_translation.py` mapped to names. That mapping was Qwen/Llama-specific and wrong even there:
+  `attention` listed `out_proj`, but Qwen's attention output is `o_proj`, so it silently trained only
+  q/k/v; `mlp` left out `gate_proj`. PEFT's built-in per-architecture default was rejected as the
+  fallback: it exists for qwen2 but not for cohere2 (tiny-aya). Names aren't checked at launch;
+  PEFT fails at job start on a name that matches nothing, and training logs what it wrapped.
+- **Short keys:** `peft.lora.{r,alpha,dropout,target_modules}` (were `lora_r`, `lora_alpha`,
+  `lora_dropout`, `lora_target`); the block is already `peft.lora`. No backward compatibility:
+  older run configs and W&B columns keep the old names.
+- **`tools/inspect_model.py <checkpoint>`** builds the model on the meta device (no weights, login
+  node, seconds) and prints module names, LoRA candidates, parameters, config, chat-template
+  overhead and a training memory estimate. The estimate uses fixed, printed equations (weights by
+  mode; gradients 4T and AdamW 8T for T trainable parameters; checkpointed activations; logits
+  14·b·s·V; CUDA context separately), not fitted; on four A100 runs it was within ±15% of peak
+  allocated memory. Peak *reserved* memory, logged before, was 2–4× allocated and grows to fill
+  larger GPUs, so training now also logs peak allocated. For large-vocabulary models (tiny-aya,
+  262k) the logits term dominates.

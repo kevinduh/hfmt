@@ -87,13 +87,13 @@ Ground rules for every phase:
 
 ## C. Docs
 
-- [ ] README: the `peft` paragraph (`peft.lora.{r,alpha,dropout,target_modules}`, how to find module
+- [x] README: the `peft` paragraph (`peft.lora.{r,alpha,dropout,target_modules}`, how to find module
       names with `tools/inspect_model.py`), and examples renamed.
-- [ ] CLAUDE.md: structure (`tools/inspect_model.py`), the config bullet, examples renamed.
-- [ ] `decisions.md`: feature 11 entry (module lists instead of mapped strings, short keys, the
+- [x] CLAUDE.md: structure (`tools/inspect_model.py`), the config bullet, examples renamed.
+- [x] `decisions.md`: feature 11 entry (module lists instead of mapped strings, short keys, the
       meta-device inspection and memory estimate).
-- [ ] Line counts since the feature's start commit. Tests pass.
-- [ ] `todo.md` C ticked; commit message presented.
+- [x] Line counts since the feature's start commit. Tests pass.
+- [x] `todo.md` C ticked; commit message presented.
 
 ## D. Developer validation
 

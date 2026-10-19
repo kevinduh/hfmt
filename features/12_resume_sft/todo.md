@@ -93,15 +93,15 @@ node).
 
 ## C. Docs (plan §4)
 
-- [ ] README "Running SFT experiments": the re-run paragraph becomes resume. Changing a run =
+- [x] README "Running SFT experiments": the re-run paragraph becomes resume. Changing a run =
       experiment yaml + overrides + a new `run_name`.
-- [ ] CLAUDE.md "Launch path" bullet.
-- [ ] `decisions.md`, feature 12 entry:
+- [x] CLAUDE.md "Launch path" bullet.
+- [x] `decisions.md`, feature 12 entry:
   - resume-only meaning;
   - environment variable, not a config key;
   - W&B continues the run;
   - TRL's default for callback state.
-- [ ] Tests pass. `todo.md` C ticked; commit message presented.
+- [x] Tests pass. `todo.md` C ticked; commit message presented.
 
 ## D. Developer validation
 

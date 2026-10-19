@@ -47,7 +47,7 @@ hfmt/
 ├── install/                 # conda bootstrap; pins an exact Transformers commit
 ├── egs/                     # recipes; launch.sh <sft|inf|merge> <yaml> launches the Hydra SFT workflow
 │   ├── launch.sh            # launcher (sbatch array, LOCAL=1 or DRYRUN=1) for training, inference, merging
-│   ├── job.sh               # one job of a launch: job.sh <sft|inf|merge> <folders...>
+│   ├── job.sh               # one job of a launch: job.sh <sft|sft_resume|inf|merge> <folders...>
 │   ├── data/                # example bitext, YAML/JSONL manifests
 │   ├── mmtc/<src>-<trg>/    # SFT experiments, dataset.yaml, local_setting.sh (untracked);
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
@@ -85,8 +85,19 @@ hfmt/
   Hydra run of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
   sbatch command. Run folders: `<output_root>/<run_name>` (1 job) or `<run_name>-<idx>` (grid);
   `output_root` defaults to `<experiment folder>/outputs`. No timestamps: an existing folder
-  only warns. W&B run name = run folder name, group = `run_name`. Re-run a saved job with
-  `bash egs/launch.sh sft <run folder>/run_config.yaml [overrides]` (same folder unless `run_name=`).
+  only warns. W&B run name = run folder name, group = `run_name`.
+- **Resume (feature 12)** — `bash egs/launch.sh sft <run folder>/run_config.yaml [slurm.* overrides]`
+  continues a run cancelled midway from its last checkpoint, in the same folder with the same
+  config. It never re-runs or renames a run: change a run via its experiment yaml + a new
+  `run_name`.
+  - `grid.py` `main_resume` refuses: non-`slurm.*` overrides, a finished run (`model/`), no
+    checkpoint, an incomplete last checkpoint (no `trainer_state.json`). It writes nothing and
+    prints `KIND=sft_resume`.
+  - `egs/job.sh sft_resume` sets `HFMT_SFT_RESUME=1`, and `sft_translation.py` then calls
+    `trainer.train(resume_from_checkpoint=True)`. W&B continues the run whose ID is in
+    `<run folder>/wandb/latest-run`.
+  - TRL defaults are kept: callback state (the early-stopping patience counter) isn't restored,
+    and `num_tokens` restarts.
 - **Inference** — `bash egs/launch.sh inf <yaml> [overrides]`, one model per call (loop in the
   shell for a sweep). The yaml kind decides the model: a trained run's `run_config.yaml` decodes its
   `model/` into `<run folder>/inf/<inf_name>/`; an experiment yaml decodes its `checkpoint` as

@@ -436,3 +436,41 @@ what happens.
   allocated memory. Peak *reserved* memory, logged before, was 2–4× allocated and grows to fill
   larger GPUs, so training now also logs peak allocated. For large-vocabulary models (tiny-aya,
   262k) the logits term dominates.
+
+## Resuming a cancelled SFT run (feature 12_resume_sft)
+
+**Decision:** `launch.sh sft <run folder>/run_config.yaml` means *resume*, and nothing else.
+It continues a run cancelled midway from its last checkpoint with TRL's `resume_from_checkpoint`,
+in the same folder with the same config.
+
+- **What it replaces.** Before this, the same command re-ran the saved config from scratch, with
+  any overrides. Without `run_name=` it reused the folder: it overwrote `model/`, the test
+  outputs and `run_config.yaml` itself, and started a second W&B run with the same name. With
+  `run_name=` it made a new folder.
+- **Why the re-run was dropped.** An experiment yaml + overrides does everything it did and more:
+  a `run_config.yaml` can't swap config options (its defaults list is only the schema). The only
+  thing the re-run gave was reproducing exactly the old values, and `git_rev` plus committed
+  yamls cover that.
+- **Only `slurm.*` may change** (a bigger GPU after an OOM, a longer time limit). Anything else
+  would make the resumed run something other than the cancelled one.
+- **The flag is an environment variable** (`job.sh sft_resume` sets `HFMT_SFT_RESUME=1`), not a
+  config key. A key would land in `run_config.yaml` and W&B, and need a `+key` override on a
+  saved config; resuming is how a job starts, not part of the experiment.
+- **Checks before submitting.** `grid.py` refuses:
+  - a finished run (`model/`);
+  - a run with no checkpoint (TRL itself raises `No valid checkpoint found`, but only after the
+    queue wait);
+  - an incomplete newest checkpoint. Checkpoints aren't saved atomically, and
+    `trainer_state.json` is the last file written.
+
+  A changed `git_rev` only warns.
+- **W&B continues the same run** (ID from `wandb/latest-run`, `resume="allow"`). Steps between
+  the last checkpoint and the kill are trained and logged again.
+- **TRL's defaults kept, to change as little as possible:**
+  - callback state isn't restored (`restore_callback_states_from_checkpoint=False`), so the
+    early-stopping patience counter restarts at 0. Turning it on would also need our callback's
+    `__init__` to take the saved arguments;
+  - TRL's `num_tokens` restarts at 0.
+
+  A GPU check against an uninterrupted run matched in steps and LR, and was within noise in losses
+  and test BLEU (61.08 vs 61.02).

@@ -78,12 +78,37 @@ scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run ha
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
 into an existing folder prints a warning and reuses it (training restarts from scratch).
 
-Re-run a finished job from its saved config, in the same folder or under a new name:
+**Resume** a job that was cancelled midway (time limit, OOM, node failure, `scancel`) from its
+last `checkpoint-N/`, by passing its run folder's `run_config.yaml`:
 
 ```bash
-bash egs/launch.sh sft egs/mmtc/fr-en/outputs/sft_lora_sweep-1/run_config.yaml train.max_steps=2000
-bash egs/launch.sh sft egs/mmtc/fr-en/outputs/sft_lora_sweep-1/run_config.yaml train.seed=1 run_name=sft_lora-seed1
+bash egs/launch.sh sft egs/mmtc/fr-en/outputs/sft_lora_sweep-1/run_config.yaml
+bash egs/launch.sh sft egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml slurm.gres=gpu:h100:1   # e.g. after an OOM
 ```
+
+**What carries over.** The run continues in the same folder with the same config, using TRL's
+`resume_from_checkpoint`. It restores the weights, optimizer, LR schedule, step count and position
+in the data. The W&B run continues too (same run ID).
+
+**What may change: `slurm.*` overrides only.** Anything else is refused.
+
+**When it's refused:**
+- the run has no checkpoint yet (launch the experiment again);
+- it already finished (`model/` exists; use `launch.sh inf`);
+- its newest checkpoint is incomplete (no `trainer_state.json`; delete that folder and resume
+  again).
+
+If the code changed since the launch (`git_rev`), you get a warning.
+
+**Not restored (TRL's defaults):**
+- the early-stopping patience counter starts again at 0;
+- TRL's `num_tokens` metric starts again from 0;
+- steps after the last checkpoint are trained again (their W&B rows appear twice).
+
+Check `squeue` first: never resume a job that is still running.
+
+**To change a run, don't resume it.** Launch the experiment yaml again with overrides and a new
+`run_name`, e.g. `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=1 run_name=sft_lora-seed1`.
 
 To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass
 `hydra.run.dir=...`; add `--cfg job` to only print the config):

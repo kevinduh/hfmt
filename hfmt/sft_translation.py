@@ -105,15 +105,24 @@ def main(cfg: Config) -> None:
     logging.info(f"Config:\n{OmegaConf.to_yaml(cfg, resolve=True)}")
     os.environ["WANDB_LOG_MODEL"] = "false"  # never upload models to W&B
     os.environ["WANDB_CONSOLE"] = "off"      # never upload console output (it has example text)
+    # Resume (feature 12): egs/job.sh sft_resume sets HFMT_SFT_RESUME=1 for a run cancelled midway;
+    # training continues from the folder's last checkpoint and W&B continues the same run.
+    resume = os.environ.get("HFMT_SFT_RESUME") == "1"
+    logging.info(f"Resume from the last checkpoint: {resume}")
 
     # W&B (main process only): name = run folder, group = run_name. Only the data-free config
     # (paths, hyperparameters, instruction) and aggregate metrics go to W&B (CLAUDE.md); the
     # Trainer's report_to="wandb" reuses this run.
+    # On a resume, the run ID comes from the local wandb/latest-run (run-<date>_<time>-<id>); with no
+    # earlier W&B run (it was off) a new one starts.
     if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
         import wandb
+        latest = os.path.join(outdir, "wandb", "latest-run")
+        run_id = os.path.realpath(latest).rsplit("-", 1)[-1] if resume and os.path.isdir(latest) else None
         wandb.init(project=cfg.wandb.project, entity=cfg.wandb.entity, name=os.path.basename(outdir),
                    group=cfg.run_name, tags=list(cfg.wandb.tags), dir=outdir,
                    config={"hfmt": OmegaConf.to_container(cfg, resolve=True), "run_dir": outdir},
+                   id=run_id, resume="allow" if run_id else None,
                    settings=wandb.Settings(console="off"))
 
     ###################################
@@ -284,7 +293,7 @@ def main(cfg: Config) -> None:
     ## Training
     logging.info(f"======== Training ========")
     start_time = time.time()
-    trainer_stats = trainer.train()
+    trainer_stats = trainer.train(resume_from_checkpoint=True if resume else None)   # True: the last checkpoint-N
     end_time = time.time()
     logging.info(f"Training - Elapsed time: {end_time-start_time:.1f}s")
 

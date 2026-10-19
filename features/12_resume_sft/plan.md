@@ -157,6 +157,11 @@ Expected size: roughly +40 lines in grid.py (mostly checks and messages) and −
 7. **Two concurrent jobs in one folder** (resuming while the original still runs) would corrupt
    it. No lock. Docs say: check `squeue` first.
 
+8. **TRL's `num_tokens` metric restarts from 0 on resume** (found in phase B: p12b logged
+   11,949 at step 50 vs 60,130 uninterrupted). TRL keeps the count on the trainer, not in the
+   checkpoint's `TrainerState`. Loss, LR, steps and epoch are right. Left as TRL behavior: compare
+   resumed runs on `train/global_step` or epoch, not `num_tokens`.
+
 ## Decided questions
 
 - **Q4.** TRL's default: no callback-state restore.

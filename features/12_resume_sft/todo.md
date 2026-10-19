@@ -61,22 +61,35 @@ Ground rules for every phase:
 
 ## B. Training job: `sft_translation.py` (plan §3)
 
-- [ ] `resume = os.environ.get("HFMT_SFT_RESUME") == "1"`; log it.
-- [ ] W&B on resume:
+- [x] `resume = os.environ.get("HFMT_SFT_RESUME") == "1"`; log it.
+- [x] W&B on resume:
   - ID from `<run folder>/wandb/latest-run` (`run-…-<id>`);
   - `wandb.init(..., id=<id>, resume="allow")`;
   - no `wandb/` folder → a new run.
-- [ ] `trainer.train(resume_from_checkpoint=True if resume else None)`.
+- [x] `trainer.train(resume_from_checkpoint=True if resume else None)`.
 
 ### Done when
-- [ ] GPU, `p12b` (lora, max_steps 60, save/eval every 20, small dev decode):
+Result (2026-10-19): p12b was cancelled 3 s after checkpoint-40, then resumed with
+`slurm.time=1:00:00` (job 1099586). Checks:
+- the log says `Resume from the last checkpoint: True`, the progress bar restarts at 41/60, and the
+  log is appended;
+- learning rate at steps 50/60 = reference (2.29e-05, 1.97e-07);
+- losses: 0.5793/0.6262 vs reference 0.5794/0.6241; eval 0.5904 vs 0.5902;
+- test BLEU 61.08 vs 61.02;
+- W&B: one run ID (0b1scz0f), "run resumed", history continues at `_step` 7;
+- TRL's `num_tokens` restarts from 0 on resume (plan risk 8);
+- a second resume is refused.
+
+Both test runs are deleted. `LOCAL=1` appending was not run (a local resume trains on the login
+node).
+- [x] GPU, `p12b` (lora, max_steps 60, save/eval every 20, small dev decode):
   - `scancel` after checkpoint-40;
   - `launch.sh sft <run>/run_config.yaml` resumes. The log says resuming from checkpoint-40, the
     run ends at step 60 with `model/`, `test1.pred.trg` and `scores.json`;
   - W&B: one run ID; history continues past step 40;
   - an uninterrupted `p12b-ref` of the same config: steps line up, losses close.
-- [ ] A second resume of the finished run is refused (`model/` exists).
-- [ ] `todo.md` B ticked; commit message presented.
+- [x] A second resume of the finished run is refused (`model/` exists).
+- [x] `todo.md` B ticked; commit message presented.
 
 ## C. Docs (plan §4)
 

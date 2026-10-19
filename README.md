@@ -20,63 +20,10 @@ Example Bash and Qsub scripts are in the subfolder `egs/`.
 Before running the scripts, please set the `HFMT_ROOT` variable, e.g. `export HFMT_ROOT=path/to/this/repo/`. This is needed for the scripts to find the path to everything.  
 
 Currently implemented: 
-* `hfmt/train_seq2seq.py`: Trains a Seq2Seq model (either by fine-tuning a pretrained model or training from scratch)
-* `hfmt/decode_summarization.py`: Runs inference on CausalLM models, with prompts for summarization
 * `hfmt/sft_translation.py`: Supervised fine-tuning (QLoRA, LoRA or full) of decoder-only LLMs for MT, configured with Hydra (see below)
 * `hfmt/inf_translation.py`: Inference with a fine-tuned run or a downloaded checkpoint; `hfmt/merge_model.py`: merges a LoRA/QLoRA run into a full checkpoint (see below)
-* todo: cascading of models, ...
 
 Scripts that perform training integrate with (Weights & Biases)[https://wandb.ai/] for logging purposes, so it is recommended that you set up a free account on that service. 
-
-## Usage example: training seq2seq MT model
-
-As illustration, let's fine-tune model on a small dataset. 
-
-First, we will create a yaml file that lists the training and dev data. Following the example template in `egs/data/example.template.yaml`, let's create a new file `egs/data/example.yaml` based on your own paths:
-
-```bash
-cd path/to/this/repo
-export HFMT_ROOT=`pwd`
-sed "s|__HFMT_ROOT__|$HFMT_ROOT|g" egs/data/example.template.yaml > egs/data/example.yaml
-cat egs/data/example.yaml
-```
-
-The yaml file should point to sentence-aligned files like these:
-
-```bash
-head -2 egs/data/example.de-en.train.*
-
-==> egs/data/example.de-en.train.de <==
-(applaus) david gallo: das ist bill lange. ich bin dave gallo.
-wir werden ihnen einige geschichten über das meer in videoform erzählen.
-
-==> egs/data/example.de-en.train.en <==
--lrb- applause -rrb- david gallo : this is bill lange . i 'm dave gallo .
-and we 're going to tell you some stories from the sea here in video .
-```
-
-Next, we run the training script:
-
-```bash
-# make sure to check that you've set HFMT_ROOT: export HFMT_ROOT=path/to/this/repo/
-qsub -S /bin/bash -V -cwd -j y -q gpu.q@@v100 -l gpu=1,h_rt=24:00:00,num_proc=8,mem_free=25G egs/translation/train_seq2seq_t5.sh
-```
-
-This will probably take around 15 minutes. For a real run, we will likely want to increase the `--max_steps` hyperparameter in the script. Here are some of the important settings in `egs/translation/train_seq2seq_t5.sh`, which should be modified for your own runs:
-
-```bash
-
-train_yaml=${HFMT_ROOT}/egs/data/example.yaml # specifies training/dev bitext
-evalset=${HFMT_ROOT}/egs/data/example.${src}-${trg}.test1.${src} # specifies (optional) eval set to decode after training
-
-checkpoint="google-t5/t5-small" # Huggingface checkpoint to load 
-instruction="translate German to English:" # Instruction string provided as prefix. May be empty depending on the model
-pretrain=1 # Set to 1 to fine-tune a pretrained model. Set to 0 to train from scratch
-cmdarg="--max_steps 5000 ..." # various additional hyperparameters
-
-```
-
-See `egs/translation/train_seq2seq_marian.sh` for a different example.
 
 ## Running SFT experiments (decoder-only MT, Hydra)
 
@@ -98,9 +45,6 @@ type but holds no default values; each default lives in exactly one yaml:
     `instruction`, and picks options with `override <group>: <option>` lines.
   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
-
-A key that no yaml sets, a typo, or a `peft.mode` that doesn't match its blocks fails before
-anything is submitted.
 
 ### Training
 
@@ -151,30 +95,13 @@ python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lor
 
 Decoding the dev set for BLEU during training is slow. `train.inference_callback_interval=N`
 does it every N evaluations (and at the last step) instead of every evaluation; `0` turns it off.
-`eval_loss` and early stopping still run at every evaluation, and a BLEU-based
-`train.metric_for_best_model` keeps working (only evaluations with BLEU can be the best checkpoint).
-
-`peft` selects `qlora_default` (default), `lora_default` or `full_finetune`. A full fine-tune
-needs a lower learning rate and more memory and time, e.g.
-`peft=full_finetune train.learning_rate=2e-5 checkpoint=Qwen/Qwen2.5-0.5B-Instruct slurm.mem_gb=64 slurm.time=12:00:00`.
 
 The LoRA options set `peft.lora.r`, `alpha`, `dropout` and `target_modules`. `target_modules` is a
-list of exact module names; each name matches every module whose full name ends with it, so
-`q_proj` wraps `q_proj` in every layer. The defaults wrap `[q_proj, v_proj]`. Names differ between
-model families, so look them up for a new checkpoint (on a login node; no weights are downloaded):
+list of exact module names. Names differ between model families, so look them up for a new checkpoint:
 
 ```bash
-python tools/inspect_model.py Qwen/Qwen2.5-1.5B-Instruct     # a Hub id or a local folder
+python tools/inspect_model.py Qwen/Qwen2.5-1.5B-Instruct     # a model id or a local folder
 ```
-
-It prints the model, module types, the LoRA candidates (each Linear name with its count, shape and
-adapter size, plus ready-to-paste `target_modules:` lines), parameter counts, an estimate of peak
-training memory (every equation with its numbers, a per-token cost, and a table for full/lora/qlora
-at a few batch sizes and lengths), config highlights, and how many tokens the chat template adds
-(e.g. 365 for tiny-aya's default system prompt). Use another list with an override such as
-`'peft.lora.target_modules=[q_proj,k_proj,v_proj,o_proj]'`, or sweep lists with
-`'peft.lora.target_modules=[q_proj,v_proj],[q_proj,k_proj,v_proj,o_proj]'`. Training logs the
-modules it wrapped (`LoRA wraps: q_proj x28, v_proj x28`) and its peak allocated GPU memory.
 
 ### Inference
 
@@ -184,16 +111,17 @@ experiment yaml, the experiment's `checkpoint` is decoded as downloaded (zero-sh
 option only sets the precision (`lora_default` = bf16, `qlora_default` = 4-bit, `full_finetune` = fp32).
 
 ```bash
-bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml                     # data.test
+bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml  # decoding with trained model
+bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml                     # decoding with base model (checkpoint)
+
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml decode.num_beams=5 inf_name=beam5
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml \
     'data.test.src=[/path/a.fr,/path/b.fr]' 'data.test.trg=[/path/a.en,null]' inf_name=ab
 for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; done
-bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml peft=lora_default                      # zero-shot
 ```
 
 Output goes to `<run folder>/inf/<inf_name>/` for a trained run, and to
-`<output_root>/<run_name>/base_ckpt_inf/<inf_name>/` for a downloaded checkpoint (`inf_name`
+`<output_root>/<run_name>/base_ckpt_inf/<inf_name>/` for a base model checkpoint (`inf_name`
 defaults to `test`). It holds `inf_config.yaml`, one `test<i>.pred.trg` per test file, and
 `scores.json` with each test set's paths and, when it has a reference, BLEU/chrF/TER. A run
 folder's `run_config.yaml` is never changed, and nothing is sent to W&B. With the run's own test
@@ -202,39 +130,16 @@ and `slurm.*` overrides work as for training.
 
 ### Merging and a second round of SFT
 
-A LoRA or QLoRA run can be merged into a full checkpoint, e.g. to start another round of SFT from it:
+A LoRA run can be merged into a full checkpoint, e.g. to start another round of SFT from it:
 
 ```bash
 bash egs/launch.sh merge egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml   # -> sft_lora/model_merged/
 ```
 
-`model_merged/` holds full bf16 weights, the tokenizer, and `merge_info.yaml` (source run, base
-checkpoint, `git_rev`). A QLoRA adapter is merged into the 4-bit base converted back to bf16, the
-weights it was trained against; a warning notes that the merged weights carry the 4-bit rounding.
-Merged and adapter models score within a few tenths of BLEU of each other, but aren't identical.
-Only `slurm.*` overrides apply; merging a run again replaces its `model_merged/`.
-
-Use the merged model as the `checkpoint` of another experiment (or on the command line); its
-training and inference work as for any run:
+`model_merged/` holds full weights, the tokenizer, and `merge_info.yaml` (source run, base
+checkpoint, `git_rev`). Use the merged model as the `checkpoint` of another experiment.
 
 ```bash
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml run_name=sft_lora_r2 \
     checkpoint=$PWD/egs/mmtc/fr-en/outputs/sft_lora/model_merged
-bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml run_name=sft_lora_merged \
-    checkpoint=$PWD/egs/mmtc/fr-en/outputs/sft_lora/model_merged peft=lora_default   # merged model alone
 ```
-
-The second round depends on the first run's folder: re-running or re-merging it changes the base
-of the second round. Copy `model_merged/` somewhere outside `outputs/` for anything long-lived.
-A full fine-tune's `model/` already is a full checkpoint (no merge needed).
-
-## Usage example: decoding with a Summarization model
-
-To do text summarization, we can run inference on a LLM using the appropriate prompt. 
-Here is an example dataset in English, where the `text` field is an article to be summarized and the `summary` field is a reference: `egs/data/summarization.en-en.jsonl`
-
-Here is an example script that runs `hfmt/decode_summarization.py` and compute ROUGE scores. 
-```bash
-qsub -S /bin/bash -V -cwd -j y -q gpu.q@@a100 -l gpu=1,h_rt=24:00:00,num_proc=8,mem_free=25G egs/summarization/decode_summarization.sh
-```
-

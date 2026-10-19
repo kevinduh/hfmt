@@ -4,7 +4,7 @@ lora:
   r: 8
   alpha: 32
   dropout: 0.1
-  target_modules: [q_proj, v_proj]   # exact module names; see tools/inspect_model.py <checkpoint>
+  target_modules: [q_proj, v_proj]   
 quant:
   load_in_4bit: true
   bnb_4bit_use_double_quant: true

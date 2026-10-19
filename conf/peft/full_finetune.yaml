@@ -1,3 +1,3 @@
-# Full fine-tune of all base-model parameters (fp32 weights, mixed-precision training). Usually
-# wants a lower learning rate and more memory/time, e.g. train.learning_rate=2e-5 slurm.mem_gb=64.
+# This mode indicates full fine-tune of all base-model parameters
+# It's technically not a PEFT method, but it's mutually exclusive with QLoRA/LoRA so it simplifies the code implement it this way.
 mode: full

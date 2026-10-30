@@ -1,4 +1,4 @@
-"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options, 12_resume_sft). No GPU or training deps needed.
+"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options, 12_resume_sft, 13_translategemma_prompt). No GPU or training deps needed.
 
 Runs grid.main() in-process on the real fr-en experiments, with output_root pointed at a temp
 dir, and checks the job folders and saved configs it writes. HFMT_DATA_ROOT is a dummy path
@@ -191,6 +191,46 @@ def test_lora_target_modules():
         "0: peft.lora.target_modules=[q_proj,v_proj]", "1: peft.lora.target_modules=[q_proj,k_proj,v_proj,o_proj]"]
     assert fails(SINGLE, "peft.lora.target_modules=[]")                     # empty
     assert fails(SINGLE, "peft.lora.lora_r=8")                              # old key name
+
+
+def test_prompt_format():
+    # Unknown name fails before writing; the message lists the known formats.
+    try:
+        run(SINGLE, "prompt_format=nope")
+        assert False
+    except SystemExit as e:
+        assert "chat" in str(e.code) and "translategemma" in str(e.code)
+    # chat needs a non-null instruction; translategemma needs instruction: null.
+    assert fails(SINGLE, "prompt_format=chat", "instruction=null")
+    assert fails(SINGLE, "prompt_format=translategemma")                    # instruction still set
+    out, _, _ = run(SINGLE, "prompt_format=translategemma", "instruction=null")
+    assert saved(out, "sft_lora").prompt_format == "translategemma"
+    # No default: an experiment without prompt_format fails (like test_missing_value_fails).
+    tmp = tempfile.mkdtemp()
+    shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)
+    exp = os.path.join(tmp, "no_fmt.yaml")
+    open(exp, "w").write("".join(l for l in open(SINGLE) if not l.startswith("prompt_format:")))
+    assert fails(exp)
+    # translategemma also needs data.src/data.trg; a dataset without them fails.
+    nosrc = tempfile.mkdtemp()
+    open(os.path.join(nosrc, "dataset.yaml"), "w").write(
+        "# @package data\n" + "".join(f"{s}: {{src: [/abs/{s}.fr], trg: [/abs/{s}.en]}}\n" for s in ("train", "dev")))
+    shutil.copy(SINGLE, nosrc)
+    saved_root = os.environ.pop("HFMT_DATA_ROOT")
+    try:
+        assert fails(os.path.join(nosrc, "sft_lora.yaml"), "prompt_format=translategemma", "instruction=null")
+    finally:
+        os.environ["HFMT_DATA_ROOT"] = saved_root
+    # The three TranslateGemma experiments compose: translategemma + null instruction; the two sweeps
+    # use batch 16 x accumulation 4.
+    egs = os.path.join(ROOT, "egs/mmtc/fr-en")
+    for name in ("sft_translategemma-4b-it", "sft_lora_translategemma-4b-it.sweep",
+                 "sft_qlora_translategemma-4b-it.sweep"):
+        out, dirs, _ = run(os.path.join(egs, name + ".yaml"))
+        cfg = saved(out, dirs[0])
+        assert cfg.prompt_format == "translategemma" and cfg.instruction is None
+        if name.endswith(".sweep"):
+            assert (cfg.train.train_batch_size, cfg.train.gradient_accumulation_steps) == (16, 4)
 
 
 def test_missing_value_fails():

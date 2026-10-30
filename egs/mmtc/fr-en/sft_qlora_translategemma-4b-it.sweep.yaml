@@ -1,0 +1,31 @@
+# Sweep experiment: QLoRA fine-tune of translategemma-4b-it
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_qlora_translategemma-4b-it.sweep.yaml [overrides]
+# Always runs the full grid; a command-line comma list adds an axis, a single value pins one.
+# Jobs land in outputs/sft_qlora_translategemma-4b-it_sweep-<idx>/; the .grid.txt maps idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: qlora_default
+  - override train: midrun          # cosine, 2e-5, 1000 steps, BLEU-selected
+  - _self_
+
+run_name: sft_qlora_translategemma-4b-it_sweep
+checkpoint: google/translategemma-4b-it
+prompt_format: translategemma
+# TranslateGemma's chat template builds the instruction from data.src/data.trg; no instruction string.
+instruction: null
+
+train:
+  # Batch 16 x accumulation 4 (effective batch 64) fits the 40 GB A100 pool; a job that still OOMs is
+  # resumed on a bigger GPU (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.gres=...).
+  train_batch_size: 16
+  gradient_accumulation_steps: 4
+
+wandb:
+  tags: [sft, fr-en, qlora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,1e-5
+      peft.lora.r: 8,16

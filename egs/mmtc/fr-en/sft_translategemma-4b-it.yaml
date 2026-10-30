@@ -1,0 +1,30 @@
+# Single-run experiment: full fine-tune of all translategemma-4b-it parameters
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_translategemma-4b-it.yaml [overrides]
+# Debug:   source egs/mmtc/fr-en/local_setting.sh &&
+#          python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_translategemma-4b-it
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: full_finetune
+  - override train: midrun          # cosine, 2e-5, 1000 steps, BLEU-selected
+  - _self_
+
+run_name: sft_full_translategemma-4b-it
+checkpoint: google/translategemma-4b-it
+prompt_format: translategemma
+# TranslateGemma's chat template builds the instruction from data.src/data.trg (the language codes),
+# so there is no instruction string.
+instruction: null
+
+train:
+  # 4.3B full FT: fixed weights+grads+AdamW alone = ~64 GiB (tools/inspect_model.py), leaving
+  # little of an 80GB A100 for activations. midrun's batch 32 needs ~124 GiB (OOM). Tiny per-device
+  # batch + accumulation keeps the effective batch at 64. Even this is tight; drop to 2 x 32 if it OOMs.
+  train_batch_size: 4
+  gradient_accumulation_steps: 16
+
+slurm:
+  constraint: 80gb   # 4B full FT (fp32 + Adam) needs an 80GB A100
+
+wandb:
+  tags: [sft, fr-en, full]

@@ -10,6 +10,7 @@ defaults:
 
 run_name: sft_lora
 checkpoint: Qwen/Qwen2.5-1.5B-Instruct
+prompt_format: chat
 instruction: "Translate French to English"
 
 wandb:

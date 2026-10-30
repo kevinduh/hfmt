@@ -21,7 +21,9 @@ Config carries data *paths*, never data content (CLAUDE.md).
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from omegaconf import MISSING
+from omegaconf import MISSING, OmegaConf
+
+from hfmt.prompt_formats import check_prompt_format
 
 
 @dataclass
@@ -159,7 +161,12 @@ class Config:
 
     run_name: str = MISSING
     checkpoint: str = MISSING  # pretrained model id or path
-    instruction: str = MISSING  # prepended to the source in the chat prompt
+    # Prompt format: a key in hfmt/prompt_formats.py (chat | translategemma), set in the experiment
+    # yaml next to checkpoint. No default -- each experiment states it.
+    prompt_format: str = MISSING
+    # Prefixed to the source in the chat prompt when prompt_format=chat. null for translategemma
+    # (its template builds the instruction from data.src/data.trg); still required to be set.
+    instruction: Optional[str] = MISSING
     # Folder holding run folders; unset -> grid.py uses <experiment folder>/outputs.
     output_root: Optional[str] = None
     inf_name: str = MISSING  # inference output subfolder: <run folder>/inf/<inf_name>/
@@ -173,9 +180,13 @@ class Config:
 
 
 def check_config(cfg) -> None:
-    """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, on an empty
-    ``peft.lora.target_modules``, on a negative ``train.inference_callback_interval``, or if
-    ``data.test.trg`` doesn't match ``data.test.src``."""
+    """Fail on an unknown ``prompt_format`` or an ``instruction`` that doesn't fit it, if ``peft.mode``
+    disagrees with which ``peft`` blocks are present, on an empty ``peft.lora.target_modules``, on a
+    negative ``train.inference_callback_interval``, or if ``data.test.trg`` doesn't match
+    ``data.test.src``."""
+    # prompt_format being unset entirely is reported by grid.py's missing-values check.
+    if not OmegaConf.is_missing(cfg, "prompt_format"):
+        check_prompt_format(cfg)
     if cfg.train.inference_callback_interval < 0:
         raise ValueError(f"train.inference_callback_interval={cfg.train.inference_callback_interval}: "
                          "must be >= 0 (0 = no dev decoding)")

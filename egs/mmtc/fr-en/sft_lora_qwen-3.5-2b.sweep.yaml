@@ -1,0 +1,24 @@
+# Sweep experiment: LoRA fine-tune of Qwen3.5-0.8B
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_qwen-3.5-0.8b.sweep.yaml [overrides]
+# Always runs the full grid; a command-line comma list adds an axis, a single value pins one.
+# Jobs land in outputs/sft_lora_qwen-3.5-0.8b_sweep-<idx>/; the .grid.txt maps idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_default
+  - override train: midrun          # cosine, 2e-5, 1000 steps, BLEU-selected
+  - _self_
+
+run_name: sft_lora_qwen-3.5-2b_sweep
+checkpoint: Qwen/Qwen3.5-2B
+prompt_format: chat
+instruction: "Translate French to English"
+
+wandb:
+  tags: [sft, fr-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,1e-5
+      peft.lora.r: 8,16

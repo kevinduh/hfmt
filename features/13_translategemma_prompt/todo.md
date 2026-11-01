@@ -8,7 +8,7 @@ checking the plan against the code (2026-10-30), not from the plan itself.
 
 Ground rules for every phase:
 - **No dataset content to W&B** (CLAUDE.md). This feature adds no W&B calls; the new log lines
-  (rendered placeholder prompt, "Not trained" list) stay local and hold no data.
+  (example built prompt, "Not trained" list) stay local and hold no data.
 - **Change as little as possible.** Keep TRL/PEFT defaults.
 - **Don't touch the untracked leftovers or the developer's runs** (`code_review.md`, `sync.sh`,
   `analysis/wandb_export.json`, `tools/delete_checkpoints.sh`, the modified
@@ -36,13 +36,13 @@ Ground rules for every phase:
 - [x] Module docstring: what a prompt format is, how to add one (one entry), why the key is
       explicit (see decisions.md).
 - [x] `@dataclass PromptFormat`: `build(cfg, text) -> messages`, `check(cfg) -> None` (config only;
-      `ValueError` that says the fix), `marker: str | None`.
+      `ValueError` that says the fix).
 - [x] `chat`: build `[{"role": "user", "content": f"{cfg.instruction}\n{text}"}]` (the same string as
-      `format_input_prompt` today); check requires `instruction` not null; `marker=None`.
+      `format_input_prompt` today); check requires `instruction` not null.
 - [x] `translategemma`: build `[{"role": "user", "content": [{"type": "text", "source_lang_code":
       cfg.data.src, "target_lang_code": cfg.data.trg, "text": text}]}]`; check requires `instruction:
       null` ("TranslateGemma's template writes the instruction from data.src/trg") and
-      `data.src`/`data.trg` set; `marker="source_lang_code"`.
+      `data.src`/`data.trg` set.
 - [x] `PROMPT_FORMATS = {"chat": ..., "translategemma": ...}`.
 - [x] `check_prompt_format(cfg)`: unknown name → `ValueError` listing the known names; otherwise run
       the format's `check`.
@@ -98,49 +98,44 @@ Ground rules for every phase:
 ## B. Prompts at job start: training and decoding (plan §1 `make_prompt_formatter`, §3, §4)
 
 ### B1. `hfmt/prompt_formats.py`
-- [ ] *(review)* `guess_prompt_format(chat_template) -> name`: the format whose `marker` is in the
-      template, else `chat` (a `None` template → `chat`). Used in the error messages below and by
-      `inspect_model.py` (D).
-- [ ] `make_prompt_formatter(cfg, tokenizer)` (tokenizer passed in; no heavy imports) runs two
-      checks, then returns `format_prompt(text) -> messages`:
-  1. a format with a `marker` must find it in `tokenizer.chat_template` (which may be `None`), else
-     `ValueError` naming the checkpoint and the format to use;
-  2. render `build(cfg, "x")` with `apply_chat_template(..., add_generation_prompt=True,
-     tokenize=False)`; any exception re-raises as a `ValueError` naming `prompt_format`, the
-     checkpoint, `guess_prompt_format`'s answer (so `chat` on TranslateGemma names
-     `translategemma`) and the original error (e.g. an unsupported language code).
-- [ ] Log the rendered placeholder prompt (local log; a placeholder, not data).
+- [x] `make_prompt_formatter(cfg)` (no tokenizer, no heavy imports): look up `cfg.prompt_format` in
+      the registry and return `format_prompt(text) -> messages` bound to `cfg`; log one
+      placeholder-built example (local log; no data). No chat-template inspection — the explicit key
+      is the source of truth; a format that doesn't fit the checkpoint surfaces when the template is
+      applied (one the template rejects crashes there; one that renders anyway is the user's choice).
 
 ### B2. `hfmt/mt_model.py`
-- [ ] Remove `format_input_prompt`.
-- [ ] `inference_on_eval_data(..., format_prompt, ...)` in place of `instruction_prefix`, for both the
+- [x] Remove `format_input_prompt`.
+- [x] `inference_on_eval_data(..., format_prompt, ...)` in place of `instruction_prefix`, for both the
       batch prompts and the cut-off length check.
-- [ ] `decode_test_sets` builds `make_prompt_formatter(cfg, tokenizer)` and passes it.
+- [x] `decode_test_sets` builds `make_prompt_formatter(cfg)` and passes it.
       (`inf_translation.py` needs no change.)
-- [ ] Module docstring: prompts come from `prompt_formats.py`.
+- [x] Module docstring: prompts come from `prompt_formats.py`.
 
 ### B3. `hfmt/sft_translation.py`
-- [ ] `format_prompt = make_prompt_formatter(cfg, tokenizer)` right after `load_tokenizer` (fails
-      before data and model loading); drop `instruction_prefix` and its log line.
-- [ ] `preprocess_fn`: `prompt = [format_prompt(s) for s in samples["src"]]`; completion unchanged
+- [x] `format_prompt = make_prompt_formatter(cfg)` right after `load_tokenizer`; drop
+      `instruction_prefix` and its log line.
+- [x] `preprocess_fn`: `prompt = [format_prompt(s) for s in samples["src"]]`; completion unchanged
       (assistant string).
-- [ ] `SFTTrainer(..., processing_class=tokenizer)`, commented: keeps TRL off `AutoProcessor`
+- [x] `SFTTrainer(..., processing_class=tokenizer)`, commented: keeps TRL off `AutoProcessor`
       (TranslateGemma and Qwen3.5 ship VL processors); one tokenizer for training and decoding.
-- [ ] `make_mt_callback(..., format_prompt, ...)` in place of `instruction_prefix`.
-- [ ] Imports: drop `format_input_prompt`, add `make_prompt_formatter`.
+- [x] `make_mt_callback(..., format_prompt, ...)` in place of `instruction_prefix`.
+- [x] Imports: drop `format_input_prompt`, add `make_prompt_formatter`.
 
 ### Done when
-- [ ] Tests pass; `grep -rn "format_input_prompt\|instruction_prefix" hfmt/mt_model.py
-      hfmt/sft_translation.py tools/` is empty.
-- [ ] Login node, scratch script (plan Validation 1), TranslateGemma tokenizer:
-  - the formatter's prompt and prompt+completion render; prompt tokens are a prefix of
-    prompt+completion;
-  - exactly one BOS; the completion ends with `<end_of_turn>`;
-  - code `xx` fails clearly; `chat` fails naming `translategemma`.
-- [ ] Same script, Qwen2.5-1.5B-Instruct and Qwen3.5-0.8B tokenizers: `chat` renders the same string
-      as `format_input_prompt` did; `translategemma` fails (no marker). (This is B's Qwen gate; the
-      GPU batch-dump regression runs once at the end of C, since C is a no-op for Qwen.)
-- [ ] `todo.md` B ticked; commit message presented.
+- [x] Tests pass (25); `grep -rn "format_input_prompt\|instruction_prefix" hfmt/mt_model.py
+      hfmt/sft_translation.py tools/` is empty; modules import with no torch (heavy imports stay in
+      functions); `make_prompt_formatter` build logic verified (chat + translategemma message
+      structures) with a small script.
+- [ ] *(cluster; not runnable in this sandbox — no hfmt env, TranslateGemma is gated)* Login node,
+      scratch script (plan Validation 1), TranslateGemma tokenizer: applying its template to the
+      translategemma prompt and prompt+completion renders; prompt tokens are a prefix of
+      prompt+completion; exactly one BOS; the completion ends with `<end_of_turn>`. (A `chat` prompt or
+      an unsupported code raises — ordinary transformers behavior, no longer pre-checked.)
+- [ ] *(cluster)* Same script, Qwen2.5-1.5B-Instruct and Qwen3.5-0.8B tokenizers: `chat` renders the
+      same string as `format_input_prompt` did. (This is B's Qwen gate; the GPU batch-dump regression
+      runs once at the end of C, since C is a no-op for Qwen.)
+- [x] `todo.md` B ticked; commit message presented.
 
 ## C. Only the language model is trained (plan §3 `NON_LANGUAGE_MODULES`, §4 Q3)
 
@@ -196,10 +191,11 @@ Ground rules for every phase:
       the vision params, inside ±30%, left for later.)
 - [ ] Section 4: a line listing the excluded subtrees with their param counts ("not trained; see
       `NON_LANGUAGE_MODULES`"), no `get_decoder` walk.
-- [ ] Section 7: `guess_prompt_format(tok.chat_template)`, then build the message with that format's
-      `build` and a stand-in cfg (`data.src=fr`, `data.trg=en`, `instruction="Translate French to
-      English"` for `chat`). Print the `prompt_format` to set in the experiment yaml and the real
-      per-example overhead (saying it includes the instruction) instead of crashing.
+- [ ] Section 7: build the message with an explicit `prompt_format` (CLI flag, default `chat`; pass
+      `translategemma` for a TranslateGemma-style checkpoint) and a stand-in cfg (`data.src=fr`,
+      `data.trg=en`, `instruction="Translate French to English"` for `chat`). Print the chosen
+      `prompt_format` and the real per-example overhead (saying it includes the instruction) instead
+      of crashing. No auto-detection.
 - [ ] Module docstring: mention the excluded modules and the suggested `prompt_format`.
 
 ### Done when (plan Validation 1)
@@ -222,7 +218,7 @@ No code expected here; a fix is committed under the phase whose code it changes.
       `model_merged/` equal the original checkpoint's.
 - [ ] Decode the merged model: `launch.sh inf egs/mmtc/fr-en/sft_translategemma-4b-it.yaml
       checkpoint=<p13c_lora>/model_merged peft=lora_default run_name=p13e_merged
-      slurm.constraint=null` passes the template check and scores like `p13c_lora`.
+      slurm.constraint=null` scores like `p13c_lora`.
 - [ ] Delete the `p13*` runs (and `p13ref_qwen`).
 - [ ] `todo.md` E ticked.
 

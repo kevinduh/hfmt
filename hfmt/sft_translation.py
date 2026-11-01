@@ -20,13 +20,14 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
 from hfmt.hydra_config import Config, check_config, register_configs
-from hfmt.mt_model import decode_test_sets, format_input_prompt, inference_on_eval_data, load_base_model, load_tokenizer, score
+from hfmt.mt_model import decode_test_sets, inference_on_eval_data, load_base_model, load_tokenizer, score
+from hfmt.prompt_formats import make_prompt_formatter
 
 
 DECODE_METRICS = ("eval_bleu", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
 
 
-def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, instruction_prefix, decode, interval):
+def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval):
     """Early stopping that also decodes the dev set and adds BLEU/chrF/TER to the eval metrics.
     Dev decoding is expensive, so it runs only every ``interval`` evaluations and at the last step
     (``interval`` 0: never); early stopping runs at every evaluation.
@@ -62,7 +63,7 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
 
         def _decode_dev(self, args, state, control, **kwargs):
             logging.info(f"Tokenizer setting in TrainerCallback on_evaluate {tokenizer.padding_side = } {tokenizer.truncation_side = }")
-            preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, instruction_prefix, decode, 'src')
+            preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, format_prompt, decode, 'src')
             scores = score(preds, self.refs)
 
             # Local log only (examples never go to W&B, CLAUDE.md).
@@ -127,10 +128,8 @@ def main(cfg: Config) -> None:
 
     ###################################
     ## User settings
-    instruction_prefix = cfg.instruction
-    logging.info(f"instruction: '{instruction_prefix}'")
-
     tokenizer = load_tokenizer(cfg.checkpoint)
+    format_prompt = make_prompt_formatter(cfg)   # builder for cfg.prompt_format (validated at launch)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logging.info(f"Using device: {device}")
@@ -143,7 +142,7 @@ def main(cfg: Config) -> None:
 
 
     def preprocess_fn(samples):
-        prompt = [format_input_prompt(instruction_prefix, s) for s in samples["src"]]
+        prompt = [format_prompt(s) for s in samples["src"]]
         completion = [[{"content":t, "role":"assistant"}] for t in samples["trg"]]
         return {"prompt": prompt, "completion": completion}
 
@@ -166,8 +165,8 @@ def main(cfg: Config) -> None:
     logging.info(f"======== Loading data ========")
     start_time = time.time()
     D = get_data()
-    logging.info(D)
-    logging.info(f"Example data: {D['train'][0]}")
+    # logging.info(D)
+    # logging.info(f"Example data: {D['train'][0]}")
     end_time = time.time()
     logging.info(f"Loading data - Elapsed time: {end_time-start_time:.1f}s")
 
@@ -252,6 +251,10 @@ def main(cfg: Config) -> None:
         args=training_args,
         train_dataset=D["train"],
         eval_dataset=D["dev"],
+        # Pass the tokenizer so TRL doesn't load AutoProcessor (TranslateGemma and Qwen3.5 ship VL
+        # processors, which put TRL on its multimodal path and rewrite the assistant turn); this also
+        # uses one tokenizer object for training and our decoding.
+        processing_class=tokenizer,
     )
 
     logging.info("Trainer fp16: %s, bf16: %s", trainer.args.fp16, trainer.args.bf16)
@@ -284,7 +287,7 @@ def main(cfg: Config) -> None:
                                           tokenizer=tokenizer,
                                           outdir=outdir,
                                           device=device,
-                                          instruction_prefix=instruction_prefix,
+                                          format_prompt=format_prompt,
                                           decode=cfg.decode,
                                           interval=cfg.train.inference_callback_interval,
                                           ))

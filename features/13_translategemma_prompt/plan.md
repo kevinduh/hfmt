@@ -1,6 +1,6 @@
-# 13_translategemma_prompt — plan (v3.1, simplified)
+# 13_translategemma_prompt — plan (v3.2, simplified)
 
-Status: **v3.1.** All questions decided.
+Status: **v3.2.** All questions decided.
 - Q1: the prompt format is an **explicit key**, `prompt_format`, set in the experiment yaml next to
   `checkpoint`. A small registry of formats keeps adding the next model to one entry.
 - Q2: TranslateGemma experiments set `instruction: null`; a string is an error.
@@ -10,13 +10,16 @@ Status: **v3.1.** All questions decided.
   (effective batch 64), which fits the 40 GB A100 pool. A job that still OOMs is resumed on a bigger
   GPU (feature 12).
 
-Since v2: the registry is a **dict of plain records** (not a class hierarchy); the job-start template
-check is **two checks** (not a bidirectional marker cross-check); the modules outside the language
-model are **named in one shared list** (`NON_LANGUAGE_MODULES` in `mt_model.py`), applied to every
-model and not discovered via `get_decoder()` (dropping the old Risk 6) — architecture, not the prompt
-format, decides them (Gemma 3 4B/12B/27B use `chat` but have TranslateGemma's vision tower); and
-`inspect_model.py` only corrects the reported counts, leaving the estimate's vision over-count for
+Since v2: the registry is a **dict of plain records** (not a class hierarchy); the modules outside the
+language model are **named in one shared list** (`NON_LANGUAGE_MODULES` in `mt_model.py`), applied to
+every model and not discovered via `get_decoder()` (dropping the old Risk 6) — architecture, not the
+prompt format, decides them (Gemma 3 4B/12B/27B use `chat` but have TranslateGemma's vision tower);
+and `inspect_model.py` only corrects the reported counts, leaving the estimate's vision over-count for
 later (inside its stated ±30%).
+
+v3.2: **no job-start template validation.** The explicit `prompt_format` key is the single source of
+truth; nothing inspects or guesses from a checkpoint's chat template (removed the `marker` field, the
+two checks, and `detect_prompt_format`). A mismatch surfaces when the template is applied (Risk 4).
 
 ## Request (summary)
 
@@ -82,28 +85,26 @@ A dict registry of plain records — **no class hierarchy**. The module imports 
 class PromptFormat:
     build:   Callable        # (cfg, text) -> the user-turn messages
     check:   Callable        # (cfg) -> None; config-only, raises ValueError with the fix
-    marker:  str | None      # must appear in the checkpoint's chat_template, or None
 
 PROMPT_FORMATS = {"chat": PromptFormat(...), "translategemma": PromptFormat(...)}
 ```
 
 - **`chat`** (every model so far): `build` → `[{"role": "user", "content": f"{cfg.instruction}\n{text}"}]`;
-  `check` requires `instruction` set (not null); `marker=None`.
+  `check` requires `instruction` set (not null).
 - **`translategemma`**: `build` → `[{"role": "user", "content": [{"type": "text", "source_lang_code":
   cfg.data.src, "target_lang_code": cfg.data.trg, "text": text}]}]`; `check` requires
   `instruction: null` ("TranslateGemma's template writes the instruction from data.src/trg") and
-  `data.src`/`data.trg` set; `marker="source_lang_code"`.
+  `data.src`/`data.trg` set.
 - `check_prompt_format(cfg)`: unknown name → raise listing the known names; else run the format's
   `check`. Called from `check_config`, so it runs at launch (`grid.py:84`) and again at job start
-  (`sft_translation.py:101`, `inf_translation.py:31`).
-- `make_prompt_formatter(cfg, tokenizer)` (job start; takes the tokenizer as an argument, imports
-  nothing heavy). Returns `format_prompt(text) -> messages` after **two checks**:
-  1. if the format has a `marker`, it must be in `tokenizer.chat_template`, else raise naming the
-     format to use. This is the only *silent* failure: `translategemma`'s list content renders as a
-     bare repr on a plain-chat template instead of raising.
-  2. render a placeholder prompt (`build(cfg, "x")`) through the template; any exception re-raises
-     with a clear message. This fails within seconds and catches `chat` on a TranslateGemma
-     checkpoint (loud Jinja error) and an unsupported language code. Log the rendered placeholder.
+  (`sft_translation.py:101`, `inf_translation.py:31`). These are **config-value** checks (instruction
+  null, codes set); no chat template is read.
+- `make_prompt_formatter(cfg)` (job start): look up `cfg.prompt_format` in the registry and return
+  `format_prompt(text) -> messages` bound to `cfg`, logging one placeholder-built example. **No
+  chat-template inspection** — the explicit key is the single source of truth. A format that doesn't
+  fit the checkpoint surfaces when the template is applied during training/decoding (one the template
+  rejects, e.g. `chat` on TranslateGemma, crashes there; one that renders anyway is the user's
+  declared responsibility).
 
 Adding a model with special requirements later = one more entry.
 
@@ -124,7 +125,7 @@ Adding a model with special requirements later = one more entry.
 ### 3. `mt_model.py`
 
 - Remove `format_input_prompt`. `inference_on_eval_data` takes `format_prompt` in place of
-  `instruction_prefix`; `decode_test_sets` builds it with `make_prompt_formatter(cfg, tokenizer)`.
+  `instruction_prefix`; `decode_test_sets` builds it with `make_prompt_formatter(cfg)`.
   `inf_translation.py` needs no change.
 - New constant `NON_LANGUAGE_MODULES = ["vision_tower", "multi_modal_projector"]`: module names that
   are never trained, applied to every model whatever its `prompt_format`. A model that has none of
@@ -139,8 +140,8 @@ Adding a model with special requirements later = one more entry.
 
 ### 4. Training (`sft_translation.py`)
 
-- **Prompts:** build `format_prompt = make_prompt_formatter(cfg, tokenizer)` right after
-  `load_tokenizer` (fail-fast; replaces the `instruction: '...'` log line). `preprocess_fn`:
+- **Prompts:** build `format_prompt = make_prompt_formatter(cfg)` right after `load_tokenizer`
+  (replaces the `instruction: '...'` log line). `preprocess_fn`:
   `prompt = [format_prompt(s) for s in samples["src"]]`. `SFTTrainer(..., processing_class=tokenizer)`
   keeps TRL off the processor path and uses one tokenizer object for training and decoding. The MT
   callback takes `format_prompt` in place of `instruction_prefix`.
@@ -159,8 +160,7 @@ Adding a model with special requirements later = one more entry.
 ### 5. `tools/inspect_model.py` (counts only)
 
 Imports the registry + `resolve_excluded_modules` from `hfmt/` (the exclusion needs no cfg, so it
-matches training exactly). For the prompt it has no cfg, so it picks the
-format whose `marker` is in the template (else `chat`) — section 7 already needs this.
+matches training exactly).
 - **Sections 3–4:** drop the excluded subtrees from the LoRA-candidate table and the paste-ready
   `target_modules` lines, and add a line listing the excluded subtrees with their param counts (via
   `resolve_excluded_modules`; no `get_decoder` walk). A new multimodal model whose modules aren't in
@@ -169,8 +169,9 @@ format whose `marker` is in the template (else `chat`) — section 7 already nee
 - **Section 5 (memory estimate):** unchanged for now. It still counts the vision params in the
   full-FT estimate (~5 GiB high for TranslateGemma), which is inside its stated ±30% band; revisit
   if it matters.
-- **Section 7:** build the message via the chosen format's `build` (placeholder codes `fr`→`en`),
-  print the `prompt_format` to use, and report the real per-example overhead instead of crashing.
+- **Section 7:** build the message via an explicit `prompt_format` (a CLI flag, default `chat`; pass
+  `translategemma` for a TranslateGemma-style checkpoint) with placeholder codes `fr`→`en`, and report
+  the real per-example overhead instead of crashing. No auto-detection — the key stays explicit.
 
 ### 6. Tests (`hfmt/test_grid.py`)
 
@@ -207,15 +208,19 @@ Expected size: `prompt_formats.py` ~55 lines; ~25 changed in `mt_model.py`, ~20 
    render string and `[{"type": "text"}]` content the same way, so tokens should be identical —
    verify with the "Inspecting batch before training" dump (Validation 5). Qwen2.5 is unaffected
    (`AutoProcessor` already returns its tokenizer).
-2. **What fails where.** At launch: unknown/missing `prompt_format`, an instruction that doesn't fit
-   the format, missing `data.src/trg`. At job start (needs the tokenizer): a format that doesn't
-   match the checkpoint's template, an unsupported language code.
+2. **What fails where, and when.** At launch (config-value checks): unknown/missing `prompt_format`,
+   an instruction that doesn't fit the format, missing `data.src/trg`. Nothing is checked against the
+   chat template; a format the template rejects (or an unsupported code) fails only when the template
+   is first applied, after the queue wait and model load (Risk 4).
 3. **Old run configs.** `inf`/`merge`/resume of runs saved before this change need `prompt_format:
    chat` (Design 2). Resume cancelled runs before this lands, or add the line by hand.
-4. **The template check is a safety net, not a proof** (a string match + a placeholder render). A
-   future model whose template has no registered marker passes under `chat` and would get the plain
-   chat prompt. Reading its template with `inspect_model.py` (section 7) when adding it is the real
-   check.
+4. **No job-start template validation.** `prompt_format` is trusted as declared. A mismatch the chat
+   template *rejects* (e.g. `chat` on TranslateGemma) crashes when the template is first applied —
+   after the queue wait and model load, not at launch. A mismatch the template *accepts anyway* (e.g.
+   `translategemma` content stringified by a plain-chat template) trains/decodes on wrong prompts
+   silently. The launch-time config checks still catch an unknown `prompt_format`, `chat` with a null
+   instruction, and `translategemma` without `instruction: null` or `data.src/trg`. Inspecting a new
+   model's template with `inspect_model.py` before launch is how to confirm the pairing.
 5. **fp16 overflow.** Gemma 3 overflows in fp16; `gres=gpu:a100` always gives bf16. Don't point
    TranslateGemma runs at V100s.
 6. **One shared tokenizer.** The callback flips `padding_side="left"` while decoding and restores it;
@@ -230,10 +235,13 @@ Expected size: `prompt_formats.py` ~55 lines; ~25 changed in `mt_model.py`, ~20 
 ## Validation (sketch)
 
 1. **Login node, no GPU** (scratch script; placeholder sentences, not data):
-   - TranslateGemma tokenizer: the formatter's prompt and prompt+completion render; prompt tokens are
-     a prefix of prompt+completion; exactly one BOS and the completion ends with `<end_of_turn>`;
-     code `xx` fails clearly; `chat` on it fails naming `translategemma`.
-   - A Qwen checkpoint: `chat` renders the same string as before; `translategemma` on it fails.
+   - `make_prompt_formatter(cfg)` builds the right messages per format (chat: instruction-prefixed
+     string; translategemma: list content with the codes).
+   - TranslateGemma tokenizer: applying its template to the translategemma prompt and prompt+completion
+     renders; prompt tokens are a prefix of prompt+completion; exactly one BOS and the completion ends
+     with `<end_of_turn>`. (Applying it to a `chat` prompt, or an unsupported code, raises — ordinary
+     transformers behavior, no longer pre-checked.)
+   - A Qwen checkpoint: `chat` renders the same string as before.
    - `HFMT_ROOT=$(pwd) python hfmt/test_grid.py` passes.
    - `inspect_model.py google/translategemma-4b-it`: finishes section 7 naming `translategemma`,
      LoRA candidates show `q_proj` 34, lists the vision tower + projector as not trained.

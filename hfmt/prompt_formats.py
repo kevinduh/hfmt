@@ -9,13 +9,16 @@ card; the explicit key is visible in ``run_config.yaml``/W&B and checked at laun
 
 Adding a model with special prompt requirements = one more ``PromptFormat`` entry.
 
-Imports nothing heavy (no torch/transformers), so the launch-time config check
-(``hfmt/grid.py`` -> ``hydra_config.check_config`` -> ``check_prompt_format``) can use it. Building a
-formatter against a loaded tokenizer's chat template is phase B (``make_prompt_formatter``).
+Imports nothing heavy (no torch/transformers), so both the launch-time config check
+(``hfmt/grid.py`` -> ``hydra_config.check_config`` -> ``check_prompt_format``) and the job-start
+``make_prompt_formatter`` can use it. Nothing here inspects a checkpoint's chat template: the
+``prompt_format`` key is the single source of truth, so a format that doesn't fit the checkpoint
+surfaces when the template is applied, not through any guessing here.
 """
 
+import logging
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 
 @dataclass
@@ -24,13 +27,10 @@ class PromptFormat:
 
     ``build(cfg, text)`` returns the user-turn messages for one source sentence. ``check(cfg)``
     validates the config at launch and raises ``ValueError`` whose message states the fix.
-    ``marker``, when set, is a string the checkpoint's chat template must contain (checked at job
-    start in phase B); ``None`` means no template requirement.
     """
 
     build: Callable[[object, str], List[dict]]
     check: Callable[[object], None]
-    marker: Optional[str]
 
 
 def _build_chat(cfg, text):
@@ -63,9 +63,8 @@ def _check_translategemma(cfg):
 
 
 PROMPT_FORMATS = {
-    "chat": PromptFormat(build=_build_chat, check=_check_chat, marker=None),
-    "translategemma": PromptFormat(build=_build_translategemma, check=_check_translategemma,
-                                   marker="source_lang_code"),
+    "chat": PromptFormat(build=_build_chat, check=_check_chat),
+    "translategemma": PromptFormat(build=_build_translategemma, check=_check_translategemma),
 }
 
 
@@ -76,3 +75,18 @@ def check_prompt_format(cfg) -> None:
     if name not in PROMPT_FORMATS:
         raise ValueError(f"prompt_format={name!r}: unknown; choose one of {sorted(PROMPT_FORMATS)}")
     PROMPT_FORMATS[name].check(cfg)
+
+
+def make_prompt_formatter(cfg):
+    """Return ``format_prompt(text) -> user-turn messages`` for ``cfg.prompt_format``. The format is
+    the experiment's explicit choice, already validated at launch by ``check_prompt_format``; nothing
+    here inspects the checkpoint's chat template. A format that doesn't fit the checkpoint surfaces
+    when the template is applied during training/decoding, not through any guessing here."""
+    fmt = PROMPT_FORMATS[cfg.prompt_format]
+
+    def format_prompt(text):
+        return fmt.build(cfg, text)
+
+    logging.info(f"prompt_format={cfg.prompt_format}: example built prompt (placeholder source): "
+                 f"{format_prompt('x')!r}")
+    return format_prompt

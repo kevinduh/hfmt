@@ -2,7 +2,8 @@
 
 Training (``sft_translation.py``) and inference (``inf_translation.py``) load the base model the
 same way for each ``peft.mode``, so a trained adapter is always decoded on the base it was
-trained on (e.g. 4-bit only for ``qlora``).
+trained on (e.g. 4-bit only for ``qlora``). Prompts are built by ``hfmt/prompt_formats.py``
+(feature 13).
 
 Heavy imports (torch, transformers, ...) live inside functions so config-only use stays fast.
 """
@@ -10,9 +11,7 @@ Heavy imports (torch, transformers, ...) live inside functions so config-only us
 import time
 import logging
 
-
-def format_input_prompt(instruction_prefix, content):
-    return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
+from hfmt.prompt_formats import make_prompt_formatter
 
 
 def load_tokenizer(checkpoint):
@@ -107,7 +106,7 @@ def merge_trained_model(cfg, model_dir, out_dir, device):
     return warning
 
 
-def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, decode, text_field='text'):
+def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, format_prompt, decode, text_field='text'):
     from torch.utils.data import DataLoader
     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
     original_padding_side = tokenizer.padding_side
@@ -124,7 +123,7 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
     with open(predictions_file, "w") as O:
         for i, eval_batch in enumerate(eval_dataloader):
 
-            prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
+            prompts = [format_prompt(s) for s in eval_batch[text_field]]
             test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
                                                         max_length=decode.max_length, truncation=True, padding=True,
                                                         return_tensors="pt", return_dict=True).to(device)
@@ -161,13 +160,14 @@ def decode_test_sets(cfg, tokenizer, model, outdir, device):
 
     test = cfg.data.test
     trgs = list(test.trg) if test.trg is not None else [None] * len(test.src)
+    format_prompt = make_prompt_formatter(cfg)
     results = {}
     for i, (src, trg) in enumerate(zip(test.src, trgs), start=1):
         name = f"test{i}"
         logging.info(f"Decoding {name}: {src}")
         data = load_dataset("text", data_files=[src], streaming=False, split="train")
         preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir, f"{name}.pred.trg"), device,
-                                       cfg.instruction, cfg.decode)
+                                       format_prompt, cfg.decode)
         results[name] = {"src": src, "trg": trg}
         if trg is not None:
             refs = load_dataset("text", data_files=[trg], streaming=False, split="train")["text"]

@@ -110,6 +110,22 @@ Check `squeue` first: never resume a job that is still running.
 **To change a run, don't resume it.** Launch the experiment yaml again with overrides and a new
 `run_name`, e.g. `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=1 run_name=sft_lora-seed1`.
 
+**Checking many runs at once.** `tools/run_status.py` lists every run folder's state and prints the
+command that fixes each unfinished one. It only prints; you review and run the commands. States:
+- finished, or queued/running (from `squeue`);
+- interrupted (it prints the resume command above);
+- failed before its first checkpoint (it prints an `sbatch egs/job.sh sft <run folder>` that reruns
+  just that folder from its saved config; resume refuses these);
+- trained but missing test scores (it prints `launch.sh inf`).
+
+For failed jobs it also shows the error line and the node, and points out nodes where several jobs
+failed:
+
+```bash
+python tools/run_status.py egs/mmtc/fr-en/outputs                         # summary + unfinished runs
+python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=node07  # fix commands avoid node07
+```
+
 To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass
 `hydra.run.dir=...`; add `--cfg job` to only print the config):
 

@@ -53,7 +53,8 @@ hfmt/
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
 │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
-│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate)
+│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate),
+│                            #   run_status.py <outputs dir> (run folder states + fix commands; prints only)
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)

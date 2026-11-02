@@ -30,6 +30,12 @@ if __name__ == "__main__":
     bleu_score = bleu.corpus_score(hyps, [refs])
     print(f"{bleu_score}\n\t{bleu.get_signature()}\n")
 
+    # Lowercased BLEU, 13a tokenization, exp smoothing (BLEU+case.lc+numrefs.1+smooth.exp+tok.13a),
+    # as in hfmt/mt_model.py score(); independent of --tokenize/--lc.
+    bleu_13a_lowercase = sacrebleu.metrics.BLEU(lowercase=True, tokenize="13a", smooth_method="exp")
+    bleu_13a_lowercase_score = bleu_13a_lowercase.corpus_score(hyps, [refs])
+    print(f"{bleu_13a_lowercase_score}\n\t{bleu_13a_lowercase.get_signature()}\n")
+
     chrf = sacrebleu.metrics.CHRF(lowercase=args.lc)
     chrf_score = chrf.corpus_score(hyps, [refs])
     print(f"{chrf_score}\n\t{chrf.get_signature()}\n")

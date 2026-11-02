@@ -24,7 +24,7 @@ from hfmt.mt_model import decode_test_sets, inference_on_eval_data, load_base_mo
 from hfmt.prompt_formats import make_prompt_formatter
 
 
-DECODE_METRICS = ("eval_bleu", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
+DECODE_METRICS = ("eval_bleu", "eval_bleu_13a_lowercase", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
 
 
 def config_token_ids(config):
@@ -40,7 +40,8 @@ def config_token_ids(config):
 
 
 def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval):
-    """Early stopping that also decodes the dev set and adds BLEU/chrF/TER to the eval metrics.
+    """Early stopping that also decodes the dev set and adds the ``score`` metrics (BLEU,
+    lowercased 13a BLEU, chrF, TER) to the eval metrics.
     Dev decoding is expensive, so it runs only every ``interval`` evaluations and at the last step
     (``interval`` 0: never); early stopping runs at every evaluation.
     Built in a function so transformers/sacrebleu are imported only when training."""
@@ -81,7 +82,8 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
             # Local log only (examples never go to W&B, CLAUDE.md).
             logging.info(f"Decoded predictions at step {state.global_step}: {preds[:2]}")
             logging.info(f"Decoded labels: {self.refs[:2]}")
-            logging.info(f"Metric scores at step {state.global_step}: BLEU={scores['bleu']:.2f}, CHRF={scores['chrf']:.2f}, TER={scores['ter']:.2f}")
+            logging.info(f"Metric scores at step {state.global_step}: BLEU={scores['bleu']:.2f}, "
+                         f"BLEU_13a_lowercase={scores['bleu_13a_lowercase']:.2f}, CHRF={scores['chrf']:.2f}, TER={scores['ter']:.2f}")
 
             for k, v in scores.items():
                 kwargs["metrics"][f"eval_{k}"] = v
@@ -94,9 +96,7 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
                 eval_metrics = kwargs.get("metrics", {})
                 logging.info(f"Evaluation metrics at step {state.global_step}: {eval_metrics}")
                 if wandb.run is not None:
-                    wandb.log({"eval/bleu": kwargs["metrics"]["eval_bleu"],
-                               "eval/chrf": kwargs["metrics"]["eval_chrf"],
-                               "eval/ter": kwargs["metrics"]["eval_ter"], 
+                    wandb.log({**{f"eval/{k}": v for k, v in scores.items()},   # eval/bleu, eval/chrf, ...
                                "train/global_step": state.global_step})
 
     return EarlyStopping_MT_Callback()
@@ -355,7 +355,7 @@ def main(cfg: Config) -> None:
         import wandb
         if wandb.run is not None:                                          # numbers only, no paths (CLAUDE.md)
             for name, r in results.items():
-                for k in ("bleu", "chrf", "ter"):
+                for k in ("bleu", "bleu_13a_lowercase", "chrf", "ter"):
                     if k in r:
                         wandb.run.summary[f"test/{name}/{k}"] = r[k]
     else:

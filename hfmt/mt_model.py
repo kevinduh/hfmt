@@ -185,7 +185,8 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
 def decode_test_sets(cfg, tokenizer, model, outdir, device):
     """Decode each ``cfg.data.test.src`` file on its own into ``<outdir>/test<i>.pred.trg`` (i from 1)
     and score it when it has a reference. Writes ``<outdir>/scores.json``
-    (``{"test<i>": {"src", "trg", "bleu", "chrf", "ter"}}``; no scores for a set without reference)
+    (``{"test<i>": {"src", "trg", "bleu", "bleu_13a_lowercase", "chrf", "ter"}}``; no scores for a
+    set without reference)
     and returns it. Used by both training and inference, so their outputs match."""
     import json
     import os
@@ -212,10 +213,12 @@ def decode_test_sets(cfg, tokenizer, model, outdir, device):
 
 
 def score(preds, refs):
-    """Corpus BLEU (flores200 tokenization), chrF and TER, rounded to 2 decimals.
-    Aggregate numbers only: safe to log anywhere (CLAUDE.md)."""
+    """Corpus BLEU (flores200 tokenization), lowercased BLEU (13a tokenization, exp smoothing:
+    sacreBLEU 1.x signature ``BLEU+case.lc+numrefs.1+smooth.exp+tok.13a``), chrF and TER,
+    rounded to 2 decimals. Aggregate numbers only: safe to log anywhere (CLAUDE.md)."""
     from sacrebleu.metrics import BLEU, TER, CHRF
     refs = [[r.strip() for r in refs]]
     return {"bleu": round(BLEU(smooth_method="none", max_ngram_order=4, tokenize='flores200').corpus_score(preds, refs).score, 2),
+            "bleu_13a_lowercase": round(BLEU(lowercase=True, tokenize='13a', smooth_method="exp").corpus_score(preds, refs).score, 2),
             "chrf": round(CHRF().corpus_score(preds, refs).score, 2),
             "ter": round(TER().corpus_score(preds, refs).score, 2)}

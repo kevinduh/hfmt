@@ -108,7 +108,8 @@ hfmt/
   overrides (e.g. `decode.num_beams=5`, `'data.test.src=[...]'`, `inf_name=beam5`) and saves
   `inf_config.yaml` there; `egs/job.sh inf` runs `inf_translation.py`. `run_config.yaml` is never
   changed; no W&B. Each `data.test.src` file is decoded on its own into `test<i>.pred.trg` (i from 1);
-  `scores.json` has each set's paths and BLEU/chrF/TER when `data.test.trg` gives a reference
+  `scores.json` has each set's paths and BLEU (`bleu`: flores200; `bleu_13a_lowercase`: 13a,
+  lowercased, exp smoothing)/chrF/TER when `data.test.trg` gives a reference
   (`null` entry = none). Training writes the same files at its end (`mt_model.decode_test_sets`) and
   inference reproduces them exactly: training unwraps Accelerate's autocast wrapper before its test
   decoding (and qlora bases get the same fp32 preparation).

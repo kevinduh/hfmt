@@ -1,21 +1,32 @@
-"""Inspect a causal-LM checkpoint before fine-tuning it (feature 11).
+"""Inspect a causal-LM checkpoint before fine-tuning it (features 11, 13).
 
-    python tools/inspect_model.py <checkpoint>      # a Hugging Face model id or a local folder
+    python tools/inspect_model.py <checkpoint> [prompt_format]   # HF model id or local folder
+
+``prompt_format`` (a key in hfmt/prompt_formats.py: chat | translategemma; default chat) picks how
+section 7 builds the example prompt; pass ``translategemma`` for a TranslateGemma-style checkpoint.
 
 Builds the model from its config on the meta device: no weights are downloaded and no GPU is
 used, so it runs on a login node in seconds (in the hfmt env: source install/path.sh). Prints:
   1. the model                       5. a training memory estimate (equations + numbers)
   2. module types with counts        6. config highlights
-  3. LoRA candidates (Linear names)  7. tokenizer and chat-template overhead
-  4. parameter counts
-Remote-code models and pre-quantized checkpoints are not supported.
+  3. LoRA candidates (language-model Linear names)   7. tokenizer + prompt overhead
+  4. parameter counts (+ modules not trained)
+Sections 3-5 and the "not trained" line treat the modules outside the language model
+(``NON_LANGUAGE_MODULES``: vision tower, multimodal projector) as frozen, matching training
+(feature 13). Remote-code models and pre-quantized checkpoints are not supported.
 """
 
+import os
 import sys
+import types
 from collections import Counter, defaultdict
 
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root, for hfmt
+from hfmt.mt_model import NON_LANGUAGE_MODULES, resolve_excluded_modules  # noqa: E402
+from hfmt.prompt_formats import PROMPT_FORMATS  # noqa: E402
 
 GIB = 1024 ** 3
 SETTINGS = [(16, 128), (16, 512), (32, 512), (8, 2048)]    # (batch, sequence length) table columns
@@ -32,11 +43,18 @@ def gib(n_bytes):
     return f"{n_bytes / GIB:.2f} GiB"
 
 
-def linear_groups(model, lm_head_name):
-    """Linear modules grouped by the last component of their name (what LoRA target_modules match)."""
+def _under(name, subtrees):
+    """True if ``name`` is one of ``subtrees`` or sits inside one."""
+    return any(name == s or name.startswith(s + ".") for s in subtrees)
+
+
+def linear_groups(model, lm_head_name, excluded_subtrees=()):
+    """Linear modules grouped by the last component of their name (what LoRA target_modules match).
+    Modules inside ``excluded_subtrees`` (the vision tower etc., never trained) are left out, so the
+    table and the adapter-parameter counts reflect the language model only."""
     groups = defaultdict(list)    # name -> [(in, out, parent type), ...]
     for name, module in model.named_modules():
-        if isinstance(module, torch.nn.Linear):
+        if isinstance(module, torch.nn.Linear) and not _under(name, excluded_subtrees):
             parent = type(model.get_submodule(name.rsplit(".", 1)[0])).__name__ if "." in name else ""
             groups[name.rsplit(".", 1)[-1]].append((module.in_features, module.out_features, parent))
     return groups
@@ -47,7 +65,9 @@ def adapter_params(groups, names, r):
     return sum(r * (i + o) for n in names for i, o, _ in groups.get(n, []))
 
 
-def main(checkpoint):
+def main(checkpoint, prompt_format="chat"):
+    if prompt_format not in PROMPT_FORMATS:
+        sys.exit(f"inspect_model: unknown prompt_format {prompt_format!r}; choose one of {sorted(PROMPT_FORMATS)}")
     # Build on the meta device: real shapes, no memory, no download of weights.
     try:
         config = AutoConfig.from_pretrained(checkpoint)
@@ -58,7 +78,10 @@ def main(checkpoint):
     tc = config.get_text_config()
     out_emb, in_emb = model.get_output_embeddings(), model.get_input_embeddings()
     lm_head_name = next(n for n, m in model.named_modules() if m is out_emb)
-    groups = linear_groups(model, lm_head_name)
+    # Modules outside the language model are frozen in training (feature 13); keep them out here too,
+    # so the candidate table and the lora/qlora adapter counts reflect the language model only.
+    excluded_subtrees, _ = resolve_excluded_modules(model, [])
+    groups = linear_groups(model, lm_head_name, excluded_subtrees)
     lm_head_short = lm_head_name.rsplit(".", 1)[-1]
 
     # ------------------------------------------------------------------------------------------
@@ -71,7 +94,7 @@ def main(checkpoint):
         print(f"  {name:40s} {n:6d}")
 
     # ------------------------------------------------------------------------------------------
-    header("3. LoRA candidates: Linear modules by name (what peft.lora.target_modules matches)")
+    header("3. LoRA candidates: language-model Linear modules by name (what peft.lora.target_modules matches)")
     r = 8
     print(f"  {'name':16s} {'count':>5s}  {'in -> out':18s} {'parent':24s} {f'adapter params at r={r}':>24s}")
     for name, items in groups.items():
@@ -105,6 +128,12 @@ def main(checkpoint):
     print(f"  {lm_head_name:30s}{P_head:>16,d}  ({'tied to the input embedding' if tied else 'separate'})")
     print(f"  rest (layers, norms)          {P - P_emb - P_head:>16,d}")
     print(f"  of which Linear weights (P_lin, quantized by qlora): {P_lin:,d}")
+    if excluded_subtrees:
+        print("  not trained (outside the language model; frozen/excluded, see NON_LANGUAGE_MODULES):")
+        for name, m in excluded_subtrees.items():
+            print(f"    {name:38s}{sum(p.numel() for p in m.parameters()):>16,d}")
+    else:
+        print(f"  not trained (outside the language model): none ({', '.join(NON_LANGUAGE_MODULES)} absent)")
 
     # ------------------------------------------------------------------------------------------
     header("5. Training memory estimate (peak *allocated* GPU memory for one training step)")
@@ -193,14 +222,25 @@ def main(checkpoint):
         print("  no chat template")
         return
     word = "Hello"
-    templated = tok.apply_chat_template([{"role": "user", "content": word}], add_generation_prompt=True,
-                                        tokenize=True, return_dict=True)["input_ids"]
+    stub = types.SimpleNamespace(instruction="Translate French to English",
+                                 data=types.SimpleNamespace(src="fr", trg="en"))
+    try:
+        messages = PROMPT_FORMATS[prompt_format].build(stub, word)
+        templated = tok.apply_chat_template(messages, add_generation_prompt=True,
+                                            tokenize=True, return_dict=True)["input_ids"]
+    except Exception as e:
+        print(f"  prompt_format={prompt_format!r} does not render with this checkpoint's chat template: {e}")
+        print(f"  (for a TranslateGemma-style model rerun with: python tools/inspect_model.py {checkpoint} translategemma)")
+        return
     plain = tok(word, add_special_tokens=False)["input_ids"]
-    print(f"  chat template: yes; it adds {len(templated) - len(plain)} tokens around a one-word user message")
-    print("  (includes any default system prompt; counts toward decode.max_length and the sequence length above)")
+    print(f"  chat template: yes. With prompt_format={prompt_format!r} it adds {len(templated) - len(plain)} "
+          f"tokens around the source (includes the instruction / language header).")
+    print("  Set this prompt_format in the experiment yaml; these tokens count toward decode.max_length")
+    print("  and the sequence length in the memory estimate above.")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit("usage: python tools/inspect_model.py <checkpoint>   (Hugging Face model id or local folder)")
-    main(sys.argv[1])
+    if not 2 <= len(sys.argv) <= 3:
+        sys.exit("usage: python tools/inspect_model.py <checkpoint> [prompt_format]   "
+                 "(HF model id or local folder; prompt_format from hfmt/prompt_formats.py, default chat)")
+    main(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else "chat")

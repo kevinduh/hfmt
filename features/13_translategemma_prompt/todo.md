@@ -184,31 +184,36 @@ Ground rules for every phase:
 
 ## D. `tools/inspect_model.py` (plan §5)
 
-- [ ] *(review)* Make `hfmt` importable: `python tools/inspect_model.py` puts `tools/`, not the repo
+- [x] *(review)* Make `hfmt` importable: `python tools/inspect_model.py` puts `tools/`, not the repo
       root, on `sys.path`, and `install/path.sh` sets no `PYTHONPATH`. Insert the repo root (as
       `test_grid.py` does) before the `hfmt` imports.
-- [ ] Section 3: leave modules inside `resolve_excluded_modules`' subtrees out of `linear_groups`, so
+- [x] Section 3: leave modules inside `resolve_excluded_modules`' subtrees out of `linear_groups`, so
       the candidate table and the paste-ready `target_modules` lines show language-model modules
       only. (This also corrects section 5's lora/qlora adapter counts; its full row still counts
       the vision params, inside ±30%, left for later.)
-- [ ] Section 4: a line listing the excluded subtrees with their param counts ("not trained; see
+- [x] Section 4: a line listing the excluded subtrees with their param counts ("not trained; see
       `NON_LANGUAGE_MODULES`"), no `get_decoder` walk.
-- [ ] Section 7: build the message with an explicit `prompt_format` (CLI flag, default `chat`; pass
+- [x] Section 7: build the message with an explicit `prompt_format` (CLI flag, default `chat`; pass
       `translategemma` for a TranslateGemma-style checkpoint) and a stand-in cfg (`data.src=fr`,
       `data.trg=en`, `instruction="Translate French to English"` for `chat`). Print the chosen
       `prompt_format` and the real per-example overhead (saying it includes the instruction) instead
-      of crashing. No auto-detection.
-- [ ] Module docstring: mention the excluded modules and the suggested `prompt_format`.
+      of crashing (a format that doesn't render prints a one-line hint). No auto-detection.
+- [x] Module docstring: mention the excluded modules and the suggested `prompt_format`.
 
 ### Done when (plan Validation 1)
-- [ ] `inspect_model.py google/translategemma-4b-it`: finishes section 7 naming `translategemma`;
-      LoRA candidates show `q_proj` 34; the vision tower and projector are listed as not trained.
-- [ ] `inspect_model.py Qwen/Qwen3.5-0.8B`: section 7 names `chat`; nothing listed as excluded; the
-      LoRA-candidate counts are unchanged (no vision modules to drop); section 7's overhead now
-      includes the instruction.
-- [ ] `inspect_model.py google/gemma-3-4b-it`: section 7 names `chat`; the vision tower and projector
-      are still listed as not trained.
-- [ ] `todo.md` D ticked; commit message presented.
+- [x] `python3 -m py_compile` passes; the `hfmt` imports resolve and section 7's stub-cfg `build`
+      produces the right messages for `chat` and `translategemma` (checked without torch). The runs
+      below need the hfmt env + weights, so they're cluster.
+- [ ] *(cluster)* `inspect_model.py google/translategemma-4b-it translategemma`: section 7 renders
+      (no crash); LoRA candidates show `q_proj` 34 (vision dropped); the vision tower and projector
+      are listed as not trained.
+- [ ] *(cluster)* `inspect_model.py Qwen/Qwen3.5-0.8B` (default `chat`): section 7 renders; nothing
+      listed as excluded; the LoRA-candidate counts are unchanged; the overhead now includes the
+      instruction.
+- [ ] *(cluster)* `inspect_model.py google/gemma-3-4b-it` (default `chat`): section 7 renders; the
+      vision tower and projector are still listed as not trained (exclusion is independent of the
+      prompt format).
+- [x] `todo.md` D ticked; commit message presented.
 
 ## E. Inference and merge on GPU (plan Validation 3–4)
 

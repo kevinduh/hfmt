@@ -27,6 +27,18 @@ from hfmt.prompt_formats import make_prompt_formatter
 DECODE_METRICS = ("eval_bleu", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
 
 
+def config_token_ids(config):
+    """(pad, bos, eos) token ids from a model config, for the diagnostic log that checks them
+    against the tokenizer. Composite multimodal configs (e.g. Gemma3Config for TranslateGemma) keep
+    these on ``config.text_config``, not the top level, so fall back there when absent or None."""
+    def get(name):
+        value = getattr(config, name, None)
+        if value is None:
+            value = getattr(getattr(config, "text_config", None), name, None)
+        return value
+    return get("pad_token_id"), get("bos_token_id"), get("eos_token_id")
+
+
 def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval):
     """Early stopping that also decodes the dev set and adds BLEU/chrF/TER to the eval metrics.
     Dev decoding is expensive, so it runs only every ``interval`` evaluations and at the last step
@@ -226,7 +238,8 @@ def main(cfg: Config) -> None:
                      f"{total:,} ({100 * trainable / total:.4f}%)")
 
     logging.info(f"tokenizer pad/bos/eos: {tokenizer.pad_token_id} {tokenizer.bos_token_id} {tokenizer.eos_token_id}")
-    logging.info(f"model.config         : {model.config.pad_token_id} {model.config.bos_token_id} {model.config.eos_token_id}")
+    config_pad, config_bos, config_eos = config_token_ids(model.config)
+    logging.info(f"model.config         : {config_pad} {config_bos} {config_eos}")
     logging.info(f"generation.config    : {model.generation_config.pad_token_id} {model.generation_config.bos_token_id} {model.generation_config.eos_token_id}")
     logging.info(f"model: {model}")
 

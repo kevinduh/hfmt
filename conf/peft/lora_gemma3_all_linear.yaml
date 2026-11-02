@@ -1,0 +1,12 @@
+# LoRA on every linear layer of a Gemma 3 decoder (bf16 base, no quantization), e.g. TranslateGemma.
+# Gemma 3 has regular attention in every layer (sliding-window and global differ only in window), so
+# lora_default's [q_proj, v_proj] already reaches each layer's attention; this adds k_proj, o_proj and
+# the MLP: 14.9M adapter parameters at r=8 for translategemma-4b-it (vs 2.2M for [q_proj, v_proj]).
+# lm_head is left out (tied to the input embedding). The vision tower's q/k/v/out_proj and fc1/fc2 are
+# kept out by NON_LANGUAGE_MODULES. Names from tools/inspect_model.py google/translategemma-4b-it.
+mode: lora
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

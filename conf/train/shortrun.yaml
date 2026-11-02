@@ -1,0 +1,37 @@
+# Short schedule for the small mmtc fr-en train set (~2.5k pairs: one epoch = ~39 steps at batch 64).
+# 400 steps = ~10 epochs; LoRA at lr 1e-4 peaked at step 200-250 in the 1000-step runs
+# (analysis/2026-10-30). Early stopping is reachable: 400/50 = 8 evaluations, patience 3.
+
+# optimizer and learning rate
+max_steps: 400
+lr_scheduler_type: cosine
+learning_rate: 1e-4
+warmup_steps: 15
+optim: adamw_torch_fused
+seed: 42
+
+# loss function
+weight_decay: 0.01
+label_smoothing_factor: 0.0
+completion_only_loss: true
+
+# batch size
+train_batch_size: 32
+eval_batch_size: 32
+gradient_accumulation_steps: 2
+gradient_checkpointing: true
+packing: false
+
+# logging
+logging_steps: 10
+eval_steps: 50
+save_steps: ${train.eval_steps}
+save_total_limit: 3
+inference_callback_interval: 1   # dev decoding + BLEU every N evaluations (and at the last step); 0 = never
+
+# early stopping
+load_best_model_at_end: true
+metric_for_best_model: eval_bleu
+greater_is_better: true
+early_stopping_patience: 3       # evaluations without a BLEU gain > threshold: stops 150 steps after the best
+early_stopping_threshold: 0.05

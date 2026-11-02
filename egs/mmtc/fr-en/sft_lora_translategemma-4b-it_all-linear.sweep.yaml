@@ -1,0 +1,40 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of translategemma-4b-it, learning rate (4 jobs)
+# The recipe of the Qwen3.5 all-linear sweeps on TranslateGemma. Its matched [q_proj, v_proj] baseline is
+# sft_lora_translategemma-4b-it_q-v-proj.sweep.yaml. Replaces the 1000-step lr x r grid of
+# sft_lora_translategemma-4b-it.sweep.yaml.
+# Schedule: shortrun as is (400 steps, ~10 epochs, eval every 50, early stopping after 3). Checkpoints
+# are picked on dev BLEU 13a lowercase, the target metric.
+# lr 3e-5 extends the usual 5e-5,1e-4,2e-4 bracket downward, in case every layer wants a lower one.
+# Memory: the logits dominate (262k vocabulary: 14*b*s*V bytes, ~28 GiB at batch 16 x 512 tokens), hence
+# batch 16 x accumulation 4 (effective 64, as shortrun's 32 x 2). Every linear layer costs ~0.2 GiB more
+# than [q_proj, v_proj]. The template adds 75 tokens around each source (tools/inspect_model.py).
+# A job that still OOMs is resumed on an 80 GB A100 (bash egs/launch.sh sft <run folder>/run_config.yaml
+# slurm.constraint=80gb).
+# Decodes at the default batch size (16), like the earlier runs: batch size can shift bf16 greedy outputs.
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_translategemma-4b-it_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_translategemma-4b-it_all-linear_sweep-<idx>/; the .grid.txt maps idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_gemma3_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_translategemma-4b-it_all-linear_sweep
+checkpoint: google/translategemma-4b-it
+prompt_format: translategemma
+# TranslateGemma's chat template builds the instruction from data.src/data.trg; no instruction string.
+instruction: null
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 16              # memory only (logits, see above): effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+
+wandb:
+  tags: [sft, fr-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 3e-5,5e-5,1e-4,2e-4

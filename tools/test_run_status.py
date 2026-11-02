@@ -129,6 +129,14 @@ def test_inspect_folder_fields():
     assert info["run_name"] == "sweep" and info["max_steps"] == 400
 
 
+def test_best_from_run_folder_after_checkpoints_deleted():
+    path = make_run(tempfile.mkdtemp(), "sweep-0", model=True, scores=bleu(66.3))   # no checkpoint-*/ left
+    with open(os.path.join(path, "trainer_state.json"), "w") as f:                   # trainer.save_state()
+        json.dump({"global_step": 350, "best_metric": 64.1,
+                   "best_model_checkpoint": os.path.join(path, "checkpoint-200")}, f)
+    assert R.inspect_folder(path)["best"] == {"value": 64.1, "step": 200, "global_step": 350}
+
+
 # --- Slurm -------------------------------------------------------------------
 
 def test_parse_squeue_and_sacct():

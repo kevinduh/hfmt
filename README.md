@@ -84,7 +84,10 @@ job's **run folder**:
   index's values. Change `run_name` when you change a grid's shape.
 
 A run folder holds `run_config.yaml`, `git_rev`, the Slurm log, the training log,
-`dev.step_*.pred`, `model/` (adapter or full weights, plus the tokenizer), and for the test sets
+`dev.step_*.pred`, `trainer_state.json` (the Trainer's final state: every evaluation's loss and
+dev BLEU/chrF/TER in `log_history`, `best_metric`, `best_global_step`), `model/` (adapter or full
+weights, the tokenizer, and `training_info.yaml`: the step whose weights it holds, the best
+`metric_for_best_model` value and step, whether training stopped early), and for the test sets
 `test1.pred.trg`, `test2.pred.trg`, ... (in `data.test.src` order) with `scores.json`. Test
 scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run has the same name as the
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching

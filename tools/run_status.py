@@ -125,7 +125,9 @@ def inspect_folder(path):
         model=os.path.isdir(os.path.join(path, "model")),
         scores=scores,
         checkpoints=checkpoints,
-        best=_best(os.path.join(path, f"checkpoint-{max(complete)}")) if complete else None,
+        # A finished run's final trainer_state.json, which outlives delete_checkpoints.sh; else the
+        # newest complete checkpoint's.
+        best=_best(path) or (_best(os.path.join(path, f"checkpoint-{max(complete)}")) if complete else None),
         job_ids=[_job_id(n) for _, n in logs if LOG_RE.match(n)],   # oldest -> newest
         log=newest,
         error=_last_error(tail),
@@ -176,10 +178,11 @@ def _scores(path):
     return {name: s["bleu"] for name, s in data.items() if isinstance(s, dict) and "bleu" in s}
 
 
-def _best(checkpoint_dir):
-    """{"value", "step", "global_step"} of the best evaluation so far, from a checkpoint's trainer_state.json."""
+def _best(folder):
+    """{"value", "step", "global_step"} of the best evaluation so far, from the trainer_state.json in
+    a checkpoint (or, after training, the run folder); None if there's none."""
     try:
-        with open(os.path.join(checkpoint_dir, "trainer_state.json")) as f:
+        with open(os.path.join(folder, "trainer_state.json")) as f:
             state = json.load(f)
     except (OSError, ValueError):
         return None

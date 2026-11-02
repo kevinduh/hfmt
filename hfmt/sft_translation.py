@@ -39,6 +39,34 @@ def config_token_ids(config):
     return get("pad_token_id"), get("bos_token_id"), get("eos_token_id")
 
 
+def add_dev_scores_to_log_history(log_history, step, scores):
+    """Put the dev ``scores`` (from ``score``) into the Trainer's ``log_history`` as ``eval_<key>``,
+    so ``trainer_state.json`` keeps them. The Trainer adds an evaluation's entry before it calls the
+    callbacks, so the scores join that entry (``eval_bleu`` next to ``eval_loss``); without one, they
+    get their own entry for ``step``."""
+    eval_scores = {f"eval_{k}": v for k, v in scores.items()}
+    last = log_history[-1] if log_history else {}
+    if last.get("step") == step and "eval_loss" in last:
+        last.update(eval_scores)
+    else:
+        log_history.append({**eval_scores, "step": step})
+
+
+def training_info(state, args):
+    """What ``model/`` is, from the Trainer's final ``state`` and ``args``: the step whose weights it
+    holds (the best checkpoint with ``load_best_model_at_end``, as the Trainer reloads it, else the
+    last step), the best ``metric_for_best_model`` value and its step, and whether training stopped
+    before ``max_steps`` (early stopping). Saved as ``model/training_info.yaml``."""
+    loaded_best = args.load_best_model_at_end and state.best_model_checkpoint is not None
+    return {"model_global_step": state.best_global_step if loaded_best else state.global_step,
+            "metric_for_best_model": args.metric_for_best_model,
+            "best_metric": state.best_metric,
+            "best_global_step": state.best_global_step,
+            "global_step": state.global_step,
+            "max_steps": state.max_steps,
+            "stopped_early": state.global_step < state.max_steps}
+
+
 def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval):
     """Early stopping that also decodes the dev set and adds the ``score`` metrics (BLEU,
     lowercased 13a BLEU, chrF, TER) to the eval metrics.
@@ -87,6 +115,9 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
 
             for k, v in scores.items():
                 kwargs["metrics"][f"eval_{k}"] = v
+            # The Trainer already logged this evaluation (without these scores); add them to its
+            # log_history entry so checkpoints' and the final trainer_state.json keep dev BLEU per step.
+            add_dev_scores_to_log_history(state.log_history, state.global_step, scores)
             print(f"EarlyStopping_MT_Callback on_evaluate called at step {state.global_step} with metrics: {kwargs['metrics']} {self.early_stopping_patience_counter = }")
 
             # Log the evaluation metrics to WandB (aggregate scores only)
@@ -345,6 +376,14 @@ def main(cfg: Config) -> None:
     logging.info(f"Peak allocated memory = {torch.cuda.max_memory_allocated() / 1024 ** 3:.2f} GiB")
     model.save_pretrained(os.path.join(outdir, "model"))
     tokenizer.save_pretrained(os.path.join(outdir, "model"))   # so a full fine-tune's model/ works as a checkpoint
+    # Which step model/ is and how it scored, kept after tools/delete_checkpoints.sh removes the
+    # checkpoint-*/ folders: the Trainer's full state (log_history has every evaluation's loss and
+    # dev scores) in the run folder, and a short summary next to the weights.
+    trainer.save_state()                                         # <outdir>/trainer_state.json
+    info = training_info(trainer.state, training_args)
+    OmegaConf.save(OmegaConf.create(info), os.path.join(outdir, "model", "training_info.yaml"))
+    logging.info(f"model/ holds step {info['model_global_step']} "
+                 f"({info['metric_for_best_model']} best {info['best_metric']} at step {info['best_global_step']})")
 
     ###################################
     ## Inference on the test set (skipped when the dataset has no test split)

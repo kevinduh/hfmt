@@ -121,7 +121,10 @@ hfmt/
 - **Dev decoding during training** — the MT callback decodes dev + BLEU every
   `train.inference_callback_interval` evaluations and at the last step (0 = never); early stopping
   runs at every evaluation. With a BLEU-type `metric_for_best_model`, skipped evaluations get a
-  never-best placeholder so the Trainer's best-checkpoint check still works.
+  never-best placeholder so the Trainer's best-checkpoint check still works. The callback also adds the
+  dev scores to the Trainer's `log_history` entry. At the end, training saves the Trainer state as
+  `<run folder>/trainer_state.json` and writes `model/training_info.yaml` (the step `model/` holds, the
+  best metric and its step, early stop), so both survive `tools/delete_checkpoints.sh`.
 - **Saved configs aren't backward compatible** — a run saved before a new required key was added
   fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`).
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a

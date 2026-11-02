@@ -20,7 +20,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
 from hfmt.hydra_config import Config, check_config, register_configs
-from hfmt.mt_model import decode_test_sets, inference_on_eval_data, load_base_model, load_tokenizer, score
+from hfmt.mt_model import decode_test_sets, inference_on_eval_data, load_base_model, load_tokenizer, resolve_excluded_modules, score
 from hfmt.prompt_formats import make_prompt_formatter
 
 
@@ -178,6 +178,20 @@ def main(cfg: Config) -> None:
     finetune_mode = cfg.peft.mode  # one of: full | lora | qlora
     model, use_bf16 = load_base_model(cfg, device)
 
+    ### Only the language model is trained (feature 13): freeze (full) or keep the adapter out of
+    ### (lora/qlora) the modules outside it (vision tower, multimodal projector). Empty for Qwen /
+    ### text-only models. The saved weights still include the unchanged vision tower, and
+    ### PeftModel.from_pretrained rebuilds the adapter wrapping (incl. exclude_modules) from
+    ### adapter_config.json, so load_trained_model / merge_trained_model need no change.
+    target_modules = list(cfg.peft.lora.target_modules) if finetune_mode in ("lora", "qlora") else []
+    excluded_subtrees, excluded_leaves = resolve_excluded_modules(model, target_modules)
+    if excluded_subtrees:
+        logging.info("Not trained (outside the language model): "
+                     + ", ".join(f"{name} {sum(p.numel() for p in m.parameters()):,}"
+                                 for name, m in excluded_subtrees.items()))
+    else:
+        logging.info("Not trained (outside the language model): none")
+
     ### Apply LoRA/QLoRA if needed
     lora_config = None
     if finetune_mode in ("lora", "qlora"):
@@ -188,6 +202,7 @@ def main(cfg: Config) -> None:
             lora_alpha=cfg.peft.lora.alpha, # scaling factor
             lora_dropout=cfg.peft.lora.dropout, # dropout of LoRA layers
             target_modules=list(cfg.peft.lora.target_modules), # exact names, matched at the end of module names
+            exclude_modules=excluded_leaves or None, # keep the adapter out of the vision tower (None = nothing to exclude)
         )
 
         if finetune_mode == "qlora":
@@ -201,9 +216,14 @@ def main(cfg: Config) -> None:
         logging.info("LoRA wraps: " + ", ".join(f"{k} x{v}" for k, v in sorted(wrapped.items())))
         trainable, total = model.get_nb_trainable_parameters()
         logging.info(f"LoRA/QLoRA adapter enabled: trainable params {trainable:,} of {total:,} ({100 * trainable / total:.4f}%)")
-    else: # full fine-tune of all parameters
+    else: # full fine-tune of the language model (vision modules frozen just above)
+        for module in excluded_subtrees.values():
+            module.requires_grad_(False)
         model.config.use_cache = False
-        logging.info(f"Full fine-tuning of base model. #param: {model.num_parameters()}")
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total = sum(p.numel() for p in model.parameters())
+        logging.info(f"Full fine-tuning of the language model: trainable params {trainable:,} of "
+                     f"{total:,} ({100 * trainable / total:.4f}%)")
 
     logging.info(f"tokenizer pad/bos/eos: {tokenizer.pad_token_id} {tokenizer.bos_token_id} {tokenizer.eos_token_id}")
     logging.info(f"model.config         : {model.config.pad_token_id} {model.config.bos_token_id} {model.config.eos_token_id}")

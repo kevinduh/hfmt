@@ -140,32 +140,34 @@ Ground rules for every phase:
 ## C. Only the language model is trained (plan §3 `NON_LANGUAGE_MODULES`, §4 Q3)
 
 ### C1. `hfmt/mt_model.py`
-- [ ] `NON_LANGUAGE_MODULES = ["vision_tower", "multi_modal_projector"]`, commented: applied to
+- [x] `NON_LANGUAGE_MODULES = ["vision_tower", "multi_modal_projector"]`, commented: applied to
       every model whatever its `prompt_format`; a multimodal model with other names (`visual`,
       `audio_tower`, …) → add them here (Risk 8).
-- [ ] `resolve_excluded_modules(model, target_modules) -> (subtrees, leaf_full_names)`:
+- [x] `resolve_excluded_modules(model, target_modules) -> (subtrees, leaf_full_names)`:
   - `subtrees`: the outermost modules whose last name component is in `NON_LANGUAGE_MODULES` (any
     depth);
   - `leaf_full_names`: full names of modules inside those subtrees whose last name component is in
     `target_modules`;
-  - nothing matched → `([], [])`; no heavy imports (also works on a meta-device model).
+  - nothing matched → `({}, [])`; no heavy imports (also works on a meta-device model).
 
 ### C2. `hfmt/sft_translation.py`, after `load_base_model`
-- [ ] Log "Not trained (outside the language model): model.vision_tower <n> params,
+- [x] Log "Not trained (outside the language model): model.vision_tower <n> params,
       model.multi_modal_projector <n> params" ("none" when nothing matches).
-- [ ] `full`: `requires_grad_(False)` on each subtree; the log line becomes "trainable X of Y".
-- [ ] `lora`/`qlora`: `LoraConfig(exclude_modules=leaf_full_names or None)`. *(review)* `None` when
+- [x] `full`: `requires_grad_(False)` on each subtree; the log line becomes "trainable X of Y".
+- [x] `lora`/`qlora`: `LoraConfig(exclude_modules=leaf_full_names or None)`. *(review)* `None` when
       empty, so a Qwen `adapter_config.json` keeps `exclude_modules: null` (not `[]`).
-- [ ] Comment: saved weights keep the unchanged vision tower; `PeftModel.from_pretrained` rebuilds
+- [x] Comment: saved weights keep the unchanged vision tower; `PeftModel.from_pretrained` rebuilds
       the wrapping from `adapter_config.json`, so `load_trained_model`/`merge_trained_model` don't
       change and older adapters still load.
 
 ### Done when
-- [ ] Tests pass.
-- [ ] *(review)* Login node: `resolve_excluded_modules` on TranslateGemma built on the meta device
-      (as `inspect_model.py` builds it) with `[q_proj, v_proj]` → the 2 subtrees and 27 leaf names
-      per target (the SigLIP layers); on Qwen3.5-0.8B → `([], [])`.
-- [ ] GPU smoke runs (plan Validation 2): `p13c_lora` and `p13c_qlora` (one point of each sweep, its
+- [x] Tests pass (25); modules import with no torch; `resolve_excluded_modules` verified on a
+      fake-model structure (translategemma-like → 2 subtrees + the vision q/v_proj leaves, LM leaves
+      kept; full-FT `[]` targets → subtrees only; qwen-like → `({}, [])`).
+- [ ] *(cluster; needs transformers/meta-device)* `resolve_excluded_modules` on TranslateGemma built
+      on the meta device (as `inspect_model.py` builds it) with `[q_proj, v_proj]` → the 2 subtrees
+      and the SigLIP leaf names per target; on Qwen3.5-0.8B → `({}, [])`.
+- [ ] *(cluster)* GPU smoke runs (plan Validation 2): `p13c_lora` and `p13c_qlora` (one point of each sweep, its
       16 × 4 batch, 40 GB A100), `p13c_full` (the full-FT experiment, 80 GB):
   - no "Mismatch between tokenized prompt" warning;
   - the batch dump shows the TranslateGemma prompt, with the prompt labels at -100;
@@ -174,11 +176,11 @@ Ground rules for every phase:
     count agrees;
   - `generation_config` eos includes 106, and dev predictions stop;
   - peak allocated memory logged; note it next to `inspect_model.py`'s estimate.
-- [ ] Qwen regression, `p13c_qwen` (same config as `p13ref_qwen`): the batch dump (decoded text,
+- [ ] *(cluster)* Qwen regression, `p13c_qwen` (same config as `p13ref_qwen`): the batch dump (decoded text,
       `input_ids`, `labels`) and `test1.pred.trg` match the reference (Risk 1, covers B's
       `processing_class` change); "Not trained: none"; LoRA wraps unchanged; `adapter_config.json`
       identical to the reference's (`exclude_modules: null`).
-- [ ] `todo.md` C ticked; commit message presented.
+- [x] `todo.md` C ticked; commit message presented.
 
 ## D. `tools/inspect_model.py` (plan §5)
 

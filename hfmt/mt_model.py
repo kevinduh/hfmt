@@ -14,6 +14,39 @@ import logging
 from hfmt.prompt_formats import make_prompt_formatter
 
 
+# Only the language model is trained (feature 13): a module whose last name component is one of these
+# is frozen (full fine-tune) or kept out of the LoRA adapter (lora/qlora). Applied to every model
+# whatever its prompt_format -- the architecture decides (e.g. Gemma 3 4B uses the `chat` format but
+# has a vision tower). A model with none of them (Qwen, text-only Gemma 3) is unaffected; a future
+# multimodal model with other names (`visual`, `audio_tower`, ...) needs its names added here.
+NON_LANGUAGE_MODULES = ["vision_tower", "multi_modal_projector"]
+
+
+def resolve_excluded_modules(model, target_modules):
+    """Modules outside the language model that must not be trained. Returns ``(subtrees,
+    leaf_full_names)``:
+
+    - ``subtrees`` -- ``{full_name: module}`` for the outermost modules whose last name component is
+      in ``NON_LANGUAGE_MODULES`` (matched by name, so nesting depth doesn't matter). Used to freeze
+      the vision modules (full) and to report what isn't trained.
+    - ``leaf_full_names`` -- full names of the modules inside those subtrees whose last name
+      component is in ``target_modules``, for ``LoraConfig(exclude_modules=...)`` (lora/qlora). Exact
+      full names, so PEFT's matching rule doesn't matter.
+
+    ``({}, [])`` for a model with none of these modules. No heavy imports, so
+    ``tools/inspect_model.py`` can call it on a meta-device model."""
+    excluded, targets = set(NON_LANGUAGE_MODULES), set(target_modules or [])
+    subtrees = {}
+    for name, module in model.named_modules():
+        if name and name.rsplit(".", 1)[-1] in excluded \
+                and not any(name == s or name.startswith(s + ".") for s in subtrees):
+            subtrees[name] = module      # outermost: skip anything under an already-found subtree
+    leaf_full_names = [name for name, _ in model.named_modules()
+                       if name.rsplit(".", 1)[-1] in targets
+                       and any(name == s or name.startswith(s + ".") for s in subtrees)]
+    return subtrees, leaf_full_names
+
+
 def load_tokenizer(checkpoint):
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)

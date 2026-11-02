@@ -474,3 +474,34 @@ in the same folder with the same config.
 
   A GPU check against an uninterrupted run matched in steps and LR, and was within noise in losses
   and test BLEU (61.08 vs 61.02).
+
+## TranslateGemma and the prompt-format key (feature 13_translategemma_prompt)
+
+**Decision:** how a source sentence becomes a chat prompt is chosen by an explicit `prompt_format`
+key in the experiment yaml (a key in `hfmt/prompt_formats.py`: `chat` | `translategemma`), not
+derived from the checkpoint. This lets `google/translategemma-4b-it` be fine-tuned (full/lora/qlora),
+decoded and merged like any other model.
+
+- **Explicit key, not guessed from the chat template.** A model's required prompt format can live
+  only in its model card, and an explicit key is visible in `run_config.yaml`/W&B and validated at
+  launch. We deliberately do **not** inspect the checkpoint's chat template to pick or verify the
+  format: the key is the single source of truth. A mismatch surfaces when the template is applied —
+  a format the template rejects (e.g. `chat` on TranslateGemma) crashes there; one it renders anyway
+  (e.g. `translategemma` content stringified by a plain-chat template) is the user's responsibility.
+  The launch-time checks are config-value only: unknown format; `chat` needs an instruction;
+  `translategemma` needs `instruction: null` and `data.src`/`data.trg`. (Earlier drafts added a
+  job-start template "marker" check and a `detect_prompt_format` helper; both were dropped as not
+  worth the complexity once the key is explicit.)
+- **`processing_class=tokenizer` for the `SFTTrainer`.** TranslateGemma and Qwen3.5 ship a VL
+  processor, so without this TRL loads `AutoProcessor`, switches to its multimodal path and rewrites
+  the assistant turn until the template rejects it. Passing the tokenizer keeps TRL on the text path
+  and reuses one tokenizer object for training and our decoding.
+- **Only the language model is trained**, via one list `NON_LANGUAGE_MODULES` (`hfmt/mt_model.py`:
+  `vision_tower`, `multi_modal_projector`) applied to every model — the architecture decides, not the
+  prompt format (Gemma 3 4B uses `chat` but has the same vision tower). Full fine-tune freezes those
+  subtrees; lora/qlora pass their leaf names as PEFT `exclude_modules`. With no `pixel_values` the
+  vision tower never runs, so this fixes reported/trained counts and adapter size rather than the
+  result; a new multimodal model with other module names needs them added to the list.
+- **Sweep batch size (Q4).** The two TranslateGemma sweeps use `train_batch_size: 16` /
+  `gradient_accumulation_steps: 4` (effective batch 64) to fit the 40 GB A100 pool; a job that still
+  OOMs is resumed on a bigger GPU (feature 12).

@@ -231,25 +231,27 @@ No code expected here; a fix is committed under the phase whose code it changes.
 
 ## F. Docs (plan §7)
 
-- [ ] `CLAUDE.md`:
-  - project structure: a `prompt_formats.py` line;
+- [x] `CLAUDE.md`:
+  - project structure: a `prompt_formats.py` line (and `[prompt_format]` on the inspect_model line);
   - Configuration bullet: an experiment sets `run_name`, `checkpoint`, `prompt_format`, `instruction`;
   - Prompting bullet: causal-LM prompts come from `hfmt/prompt_formats.py`; adding a format = one
     entry;
   - only the language model is trained (`NON_LANGUAGE_MODULES` in `mt_model.py`); when adding a
-    multimodal model, look for a vision/audio tower (`inspect_model.py` section 1) and extend the list.
-- [ ] README "Running SFT experiments": the `prompt_format` key in the experiment description; a
+    multimodal model, look for a vision/audio tower (`inspect_model.py` model print) and extend the list.
+- [x] README "Running SFT experiments": the `prompt_format` key in the experiment description; a
       short TranslateGemma note (`prompt_format: translategemma`, `instruction: null`, language codes
       from `data.src`/`data.trg`); old run configs need `prompt_format=chat` for `inf`, or the line
       added by hand for `merge`/resume.
-- [ ] `decisions.md`, feature 13 entry:
+- [x] `decisions.md`, feature 13 entry:
   - explicit `prompt_format` key, not derived from the template (a model's format may be documented
-    only in its card; the key shows in `run_config.yaml`/W&B and is checked at launch);
+    only in its card; the key shows in `run_config.yaml`/W&B and is checked at launch); notes the
+    dropped job-start template check;
   - `processing_class=tokenizer`;
   - only the language model is trained, via one list of module names applied to every model (not
-    per prompt format: Gemma 3 4B uses `chat` but has a vision tower).
-- [ ] Re-read the `hydra_config.py` comments for `prompt_format` and `instruction` (A2).
-- [ ] Tests pass. `todo.md` F ticked; commit message presented.
+    per prompt format: Gemma 3 4B uses `chat` but has a vision tower); plus the Q4 sweep batch note.
+- [x] Re-read the `hydra_config.py` comments for `prompt_format` and `instruction` (A2) — accurate,
+      no change needed.
+- [x] Tests pass (25). `todo.md` F ticked; commit message presented.
 
 ## G. Developer validation
 

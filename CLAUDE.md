@@ -38,7 +38,8 @@ hfmt/
 │   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
 │   ├── inf_translation.py   # decoder-only MT inference (trained run or downloaded checkpoint) — Hydra-driven
 │   ├── merge_model.py       # merge a run's lora/qlora adapter into model_merged/ (launch.sh merge)
-│   ├── mt_model.py          # model loading, prompting, decoding, scoring shared by SFT + inference
+│   ├── mt_model.py          # model loading, decoding, scoring, NON_LANGUAGE_MODULES — shared by SFT + inference
+│   ├── prompt_formats.py    # prompt-format registry (chat | translategemma): build the user turn from cfg
 │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore): types only, no defaults
 │   ├── grid.py              # login-node checks + job folders for egs/launch.sh (sft grid, inf, merge)
 │   └── decode_summarization.py  # zero/few-shot summarization
@@ -53,7 +54,7 @@ hfmt/
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
 │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
-│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate),
+│                            #   inspect_model.py <checkpoint> [prompt_format] (module names, LoRA candidates, memory, not-trained modules),
 │                            #   run_status.py <outputs dir> (run folder states + fix commands; prints only)
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
@@ -73,7 +74,7 @@ hfmt/
   must be read by code (or, for the optional `data.data_root/src/trg`, by `dataset.yaml`).
   An experiment is a yaml in `egs/<dataset>/<src>-<trg>/` whose defaults start with `- config`
   and `- dataset` (the `dataset.yaml` next to it: `data_root`, `src`, `trg`, split file lists),
-  then `override <group>: <option>` lines; it sets `run_name`, `checkpoint` and `instruction`.
+  then `override <group>: <option>` lines; it sets `run_name`, `checkpoint`, `prompt_format` and `instruction`.
   `data_root` comes from `$HFMT_DATA_ROOT`, set in the folder's untracked `local_setting.sh`
   (copy `local_setting.sh.example`); a dataset yaml may instead list absolute paths. Launch with
   `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
@@ -137,8 +138,18 @@ hfmt/
 - **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed per split (SFT: in the
   experiment's `dataset.yaml`; other recipes: a YAML manifest) and loaded via
   `datasets.load_dataset("text", ...)`. Summarization uses JSONL (`text`/`summary`).
-- **Prompting**: seq2seq uses an instruction prefix; causal LM uses `apply_chat_template`
-  (with a plain-concat fallback).
+- **Prompting**: seq2seq uses an instruction prefix. Causal-LM prompts are built by
+  `hfmt/prompt_formats.py`: each experiment sets `prompt_format` (`chat` | `translategemma`), the
+  user turn is built from the config and rendered with `apply_chat_template`. `chat` prefixes
+  `instruction` to the source; `translategemma` sets `instruction: null` and builds the instruction
+  from `data.src`/`data.trg` (the language codes). The key is explicit, never guessed from the
+  checkpoint's template; adding a model with special requirements is one more `PROMPT_FORMATS` entry.
+- **Only the language model is trained**: a module named in `NON_LANGUAGE_MODULES` (`hfmt/mt_model.py`:
+  `vision_tower`, `multi_modal_projector`) is frozen (full) or kept out of the LoRA adapter
+  (lora/qlora), so logs and `tools/inspect_model.py` count language-model params only. This is
+  architecture-based, not per `prompt_format` (Gemma 3 4B uses `chat` but has a vision tower). For a
+  new multimodal model with other module names (`visual`, `audio_tower`, …), check the model print in
+  `tools/inspect_model.py` and add them to the list.
 - **Tracking/metrics**: W&B (`WANDB_PROJECT="hfmt"`); `sacrebleu` (BLEU/CHRF/TER), ROUGE.
 - Known friction points (duplication, no shared package, module-level globals, magic numbers,
   no CI) are catalogued in `overview.md` §4–5.

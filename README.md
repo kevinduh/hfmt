@@ -41,10 +41,22 @@ type but holds no default values; each default lives in exactly one yaml:
     left out). A dataset yaml may also list absolute paths instead.
   * `local_setting.sh` (untracked, one per machine): `export HFMT_DATA_ROOT=...`, where this
     machine keeps the data. Copy `local_setting.sh.example` to create it.
-  * `sft_lora.yaml`: a **single-run** experiment (one job). It sets `run_name`, `checkpoint` and
-    `instruction`, and picks options with `override <group>: <option>` lines.
+  * `sft_lora.yaml`: a **single-run** experiment (one job). It sets `run_name`, `checkpoint`,
+    `prompt_format` and `instruction`, and picks options with `override <group>: <option>` lines.
   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
+
+**Prompt format.** Each experiment sets `prompt_format` next to `checkpoint`:
+
+* `prompt_format: chat` (every model so far) — `instruction` is prefixed to each source sentence.
+* `prompt_format: translategemma` — for `google/translategemma-4b-it`, whose chat template builds
+  the instruction from the language codes: set `instruction: null`, and `data.src`/`data.trg` (e.g.
+  `fr`/`en`) must be the BCP-47 codes its template expects.
+
+The key is explicit (there is no default; it's checked at launch), so a `run_config.yaml` saved
+before this feature has none: pass `prompt_format=chat` on a `launch.sh inf` command, and for
+`merge` or resume (which accept only `slurm.*`) add `prompt_format: chat` to the saved config by
+hand first.
 
 ### Training
 

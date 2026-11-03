@@ -227,7 +227,8 @@ def main(checkpoint, prompt_format="chat"):
     try:
         messages = PROMPT_FORMATS[prompt_format].build(stub, word)
         templated = tok.apply_chat_template(messages, add_generation_prompt=True,
-                                            tokenize=True, return_dict=True)["input_ids"]
+                                            tokenize=True, return_dict=True,
+                                            **PROMPT_FORMATS[prompt_format].template_kwargs)["input_ids"]
     except Exception as e:
         print(f"  prompt_format={prompt_format!r} does not render with this checkpoint's chat template: {e}")
         print(f"  (for a TranslateGemma-style model rerun with: python tools/inspect_model.py {checkpoint} translategemma)")

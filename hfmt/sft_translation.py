@@ -21,7 +21,7 @@ from omegaconf import OmegaConf
 
 from hfmt.hydra_config import Config, check_config, register_configs
 from hfmt.mt_model import decode_test_sets, inference_on_eval_data, load_base_model, load_tokenizer, resolve_excluded_modules, score
-from hfmt.prompt_formats import make_prompt_formatter
+from hfmt.prompt_formats import chat_template_kwargs, make_prompt_formatter
 
 
 DECODE_METRICS = ("eval_bleu", "eval_bleu_13a_lowercase", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
@@ -67,7 +67,8 @@ def training_info(state, args):
             "stopped_early": state.global_step < state.max_steps}
 
 
-def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval):
+def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval,
+                     template_kwargs):
     """Early stopping that also decodes the dev set and adds the ``score`` metrics (BLEU,
     lowercased 13a BLEU, chrF, TER) to the eval metrics.
     Dev decoding is expensive, so it runs only every ``interval`` evaluations and at the last step
@@ -104,7 +105,8 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
 
         def _decode_dev(self, args, state, control, **kwargs):
             logging.info(f"Tokenizer setting in TrainerCallback on_evaluate {tokenizer.padding_side = } {tokenizer.truncation_side = }")
-            preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, format_prompt, decode, 'src')
+            preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, format_prompt, decode, 'src',
+                                           template_kwargs=template_kwargs)
             scores = score(preds, self.refs)
 
             # Local log only (examples never go to W&B, CLAUDE.md).
@@ -173,6 +175,8 @@ def main(cfg: Config) -> None:
     ## User settings
     tokenizer = load_tokenizer(cfg.checkpoint)
     format_prompt = make_prompt_formatter(cfg)   # builder for cfg.prompt_format (validated at launch)
+    template_kwargs = chat_template_kwargs(cfg)  # e.g. enable_thinking=False; same for training and decoding
+    logging.info(f"prompt_format={cfg.prompt_format}: apply_chat_template kwargs {template_kwargs}")
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logging.info(f"Using device: {device}")
@@ -187,7 +191,12 @@ def main(cfg: Config) -> None:
     def preprocess_fn(samples):
         prompt = [format_prompt(s) for s in samples["src"]]
         completion = [[{"content":t, "role":"assistant"}] for t in samples["trg"]]
-        return {"prompt": prompt, "completion": completion}
+        out = {"prompt": prompt, "completion": completion}
+        # TRL passes an example's chat_template_kwargs to both renders (prompt, prompt + completion).
+        # Only added when non-empty: Arrow can't store an empty struct.
+        if template_kwargs:
+            out["chat_template_kwargs"] = [dict(template_kwargs) for _ in prompt]
+        return out
 
 
     def get_data():
@@ -354,6 +363,7 @@ def main(cfg: Config) -> None:
                                           format_prompt=format_prompt,
                                           decode=cfg.decode,
                                           interval=cfg.train.inference_callback_interval,
+                                          template_kwargs=template_kwargs,
                                           ))
 
     ###################################

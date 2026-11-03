@@ -11,7 +11,7 @@ Heavy imports (torch, transformers, ...) live inside functions so config-only us
 import time
 import logging
 
-from hfmt.prompt_formats import make_prompt_formatter
+from hfmt.prompt_formats import chat_template_kwargs, make_prompt_formatter
 
 
 # Only the language model is trained (feature 13): a module whose last name component is one of these
@@ -139,8 +139,12 @@ def merge_trained_model(cfg, model_dir, out_dir, device):
     return warning
 
 
-def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, format_prompt, decode, text_field='text'):
+def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, format_prompt, decode, text_field='text',
+                           template_kwargs=None):
+    """``template_kwargs``: the prompt format's extra ``apply_chat_template`` arguments
+    (``prompt_formats.chat_template_kwargs``), the same ones training rendered its prompts with."""
     from torch.utils.data import DataLoader
+    template_kwargs = template_kwargs or {}
     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
     original_padding_side = tokenizer.padding_side
     original_truncation_side = tokenizer.truncation_side
@@ -159,7 +163,8 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
             prompts = [format_prompt(s) for s in eval_batch[text_field]]
             test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
                                                         max_length=decode.max_length, truncation=True, padding=True,
-                                                        return_tensors="pt", return_dict=True).to(device)
+                                                        return_tensors="pt", return_dict=True,
+                                                        **template_kwargs).to(device)
 
             boundary = test_inputs["input_ids"].shape[1]
             test_outputs = model.generate(**test_inputs, max_new_tokens=decode.max_new_tokens, num_beams=decode.num_beams, do_sample=decode.do_sample)[:, boundary:]
@@ -170,7 +175,8 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
                 all_testout.append(testout)
 
             # check if prompts get cut off by max_length
-            lengths = [len(ids) for ids in tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, return_dict=True)["input_ids"]]
+            lengths = [len(ids) for ids in tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, return_dict=True,
+                                                                         **template_kwargs)["input_ids"]]
             n_cut += sum(n > decode.max_length for n in lengths)
             longest = max(longest, *lengths)
 
@@ -201,7 +207,7 @@ def decode_test_sets(cfg, tokenizer, model, outdir, device):
         logging.info(f"Decoding {name}: {src}")
         data = load_dataset("text", data_files=[src], streaming=False, split="train")
         preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir, f"{name}.pred.trg"), device,
-                                       format_prompt, cfg.decode)
+                                       format_prompt, cfg.decode, template_kwargs=chat_template_kwargs(cfg))
         results[name] = {"src": src, "trg": trg}
         if trg is not None:
             refs = load_dataset("text", data_files=[trg], streaming=False, split="train")["text"]

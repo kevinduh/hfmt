@@ -148,6 +148,9 @@ hfmt/
   `instruction` to the source; `translategemma` sets `instruction: null` and builds the instruction
   from `data.src`/`data.trg` (the language codes). The key is explicit, never guessed from the
   checkpoint's template; adding a model with special requirements is one more `PROMPT_FORMATS` entry.
+  A format's `template_kwargs` go to every `apply_chat_template` call (training via TRL's
+  `chat_template_kwargs` column, decoding): `chat` sets `enable_thinking=False`, because Qwen3.5-4B's
+  template thinks by default (0.8B/2B don't).
 - **Only the language model is trained**: a module named in `NON_LANGUAGE_MODULES` (`hfmt/mt_model.py`:
   `vision_tower`, `multi_modal_projector`) is frozen (full) or kept out of the LoRA adapter
   (lora/qlora), so logs and `tools/inspect_model.py` count language-model params only. This is

@@ -17,7 +17,7 @@ surfaces when the template is applied, not through any guessing here.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, List
 
 
@@ -27,10 +27,13 @@ class PromptFormat:
 
     ``build(cfg, text)`` returns the user-turn messages for one source sentence. ``check(cfg)``
     validates the config at launch and raises ``ValueError`` whose message states the fix.
+    ``template_kwargs`` go to every ``apply_chat_template`` call that renders these messages
+    (training via TRL's ``chat_template_kwargs`` column, decoding, ``tools/inspect_model.py``).
     """
 
     build: Callable[[object, str], List[dict]]
     check: Callable[[object], None]
+    template_kwargs: dict = field(default_factory=dict)
 
 
 def _build_chat(cfg, text):
@@ -63,7 +66,12 @@ def _check_translategemma(cfg):
 
 
 PROMPT_FORMATS = {
-    "chat": PromptFormat(build=_build_chat, check=_check_chat),
+    # enable_thinking=False: Qwen3.5-4B's template thinks by default (generation prompt `<think>\n`,
+    # so the model writes its reasoning as the translation); 0.8B/2B already default to off. Off, the
+    # generation prompt ends with the empty `<think>\n\n</think>\n\n` that the training targets start
+    # with. Templates without the variable (Gemma) ignore it, so their prompts are unchanged.
+    "chat": PromptFormat(build=_build_chat, check=_check_chat,
+                         template_kwargs={"enable_thinking": False}),
     "translategemma": PromptFormat(build=_build_translategemma, check=_check_translategemma),
 }
 
@@ -75,6 +83,11 @@ def check_prompt_format(cfg) -> None:
     if name not in PROMPT_FORMATS:
         raise ValueError(f"prompt_format={name!r}: unknown; choose one of {sorted(PROMPT_FORMATS)}")
     PROMPT_FORMATS[name].check(cfg)
+
+
+def chat_template_kwargs(cfg) -> dict:
+    """Extra ``apply_chat_template`` arguments for ``cfg.prompt_format`` (a copy; may be empty)."""
+    return dict(PROMPT_FORMATS[cfg.prompt_format].template_kwargs)
 
 
 def make_prompt_formatter(cfg):

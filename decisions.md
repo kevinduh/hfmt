@@ -505,3 +505,26 @@ decoded and merged like any other model.
 - **Sweep batch size (Q4).** The two TranslateGemma sweeps use `train_batch_size: 16` /
   `gradient_accumulation_steps: 4` (effective batch 64) to fit the 40 GB A100 pool; a job that still
   OOMs is resumed on a bigger GPU (feature 12).
+
+## GPU startup race and requeue (cluster admin advice, 2026-11-03)
+
+**Decision:** `egs/job.sh` waits for its GPU before starting, every sbatch gets `--requeue
+--open-mode=append`, and a requeued training task resumes from its last checkpoint.
+
+- **Why.** The cluster's GPUs run in exclusive-process mode. Tasks that start in the same second
+  race for GPUs, and the losers exit at once with "CUDA-capable device(s) is/are busy or
+  unavailable", so some tasks of a submission fail and others run. The admin recommended `%N`
+  throttling (already `slurm.array_parallelism`), arrays instead of sbatch loops (already one
+  array per launch), and `--requeue`.
+- **`--requeue` doesn't retry a failed exit here.** `scontrol show config` has `RequeueExit =
+  (null)`, so a task that exits with an error is never requeued; requeue happens only after a node
+  failure, preemption or `scontrol requeue` (`JobRequeue = 1` already makes every batch job
+  requeueable, `MaxBatchRequeue = 5`). So the retry is in `job.sh`: up to 6 tries to create a CUDA
+  context, 30 s apart, before Python (and the W&B run) starts. `%N` only caps the burst: the first
+  N tasks still start together.
+- **Requeue resumes training.** A requeued task runs `job.sh` from the top; for `sft` with
+  `SLURM_RESTART_COUNT > 0` and a `checkpoint-*` it switches to `sft_resume` (feature 12) instead
+  of overwriting its folder from step 0 with a second W&B run. `--open-mode=append` keeps the
+  first attempt's log (same job id, same `slurm-*.out`).
+- **Hard-coded, not `slurm:` keys:** a new required key would break resume/inf/merge for every
+  saved `run_config.yaml`. `tools/run_status.py`'s rerun command adds the same two flags.

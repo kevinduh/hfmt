@@ -169,6 +169,7 @@ def test_fix_commands():
     cmd = R.fix_command("failed", failed, [("exclude", "c[07-08]"), ("gres", "gpu:l40s:1")])
     assert cmd.startswith("sbatch --partition=gpu --gres=gpu:l40s:1 --time=4:00:00 --mem=25G --cpus-per-task=1 ")
     assert "'--exclude=c[07-08]'" in cmd                                   # quoted for the shell
+    assert " --requeue --open-mode=append " in cmd                         # as hfmt/grid.py's sbatch
     assert f"--job-name=sweep-6 --output={failed['path']}/slurm-%j.out egs/job.sh sft {failed['path']}" in cmd
     assert "--constraint" not in cmd                                       # unset in the saved config
 

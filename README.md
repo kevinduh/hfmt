@@ -173,7 +173,7 @@ bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml                     # decodi
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml decode.num_beams=5 inf_name=beam5
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml \
     'data.test.src=[/path/a.fr,/path/b.fr]' 'data.test.trg=[/path/a.en,null]' inf_name=ab
-for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; done
+for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; sleep 3; done
 ```
 
 Output goes to `<run folder>/inf/<inf_name>/` for a trained run, and to

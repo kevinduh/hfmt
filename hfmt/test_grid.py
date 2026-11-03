@@ -53,6 +53,7 @@ def test_single_is_one_job_without_suffix():
     out, dirs, stdout = run(SINGLE)
     assert dirs == ["sft_lora"]
     assert "--array=0-0%4" in stdout and "--gres=gpu:a100:1" in stdout
+    assert "--requeue --open-mode=append" in stdout                    # always added, not slurm: keys
 
 
 def test_sweep_runs_full_grid():

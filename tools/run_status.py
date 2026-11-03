@@ -288,7 +288,8 @@ def fix_command(state, info, overrides=()):
     if state in ("failed", "not_started"):
         slurm = {**info["slurm"], **dict(overrides)}
         flags = [flag.format(slurm[k]) for k, flag in SBATCH_FLAGS.items() if slurm.get(k) not in (None, "")]
-        flags += [f"--job-name={os.path.basename(info['path'])}",
+        flags += ["--requeue", "--open-mode=append",                       # as hfmt/grid.py's sbatch
+                  f"--job-name={os.path.basename(info['path'])}",
                   f"--output={os.path.join(info['path'], 'slurm-%j.out')}"]
         return "sbatch " + " ".join(shlex.quote(f) for f in flags) + f" egs/job.sh sft {shlex.quote(info['path'])}"
     if state == "bad_checkpoint":

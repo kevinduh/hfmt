@@ -116,10 +116,14 @@ def _save(job_dir, name, cfg, git_rev):
 def _print_jobs(job_dirs, s, job_name, log):
     """Print the bash that launch.sh evals (see the module docstring): JOBS = job folders, in array
     order; SBATCH_ARGS = sbatch options from the slurm: block ``s``. ``log`` is sbatch's --output
-    pattern (%A = job id, %a = array index)."""
+    pattern (%A = job id, %a = array index).
+
+    Always added, not slurm: keys (a new required key would break every saved run_config.yaml):
+    --requeue reruns a task after a node failure or preemption (egs/job.sh then resumes training),
+    and --open-mode=append keeps the earlier attempt's log (a requeued task keeps its job id)."""
     sbatch = [f"--array=0-{len(job_dirs) - 1}%{s.array_parallelism}", f"--partition={s.partition}",
               f"--gres={s.gres}", f"--time={s.time}", f"--mem={s.mem_gb}G", f"--cpus-per-task={s.cpus}",
-              f"--job-name={job_name}", f"--output={log}"]
+              "--requeue", "--open-mode=append", f"--job-name={job_name}", f"--output={log}"]
     if s.constraint:
         sbatch.append(f"--constraint={s.constraint}")
     if s.exclude:

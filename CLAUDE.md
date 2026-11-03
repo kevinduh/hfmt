@@ -139,8 +139,7 @@ hfmt/
 - **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
   still plain shell scripts that source `install/path.sh`, set shell vars, and call an
   `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable. Those calling `sft_translation.py` or
-  `inf_translation.py` (`egs/mmtc/zh-en/`, `egs/synth_lrl/*/inf*.sh`) use the old argparse CLIs
-  and are stale.
+  `inf_translation.py` (`egs/synth_lrl/*/inf*.sh`) use the old argparse CLIs and are stale.
 - **Pinned Transformers submodule** for reproducibility — the HF training APIs change often.
 - **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed per split (SFT: in the
   experiment's `dataset.yaml`; other recipes: a YAML manifest) and loaded via

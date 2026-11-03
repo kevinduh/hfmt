@@ -1,0 +1,33 @@
+# Sweep experiment: LoRA ([q_proj, v_proj]) fine-tune of Qwen3.5-2B, learning rate (2 jobs)
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml: same recipe; run_name
+# carries the pair so the two pairs' W&B groups don't merge.
+# Baseline for sft_lora_qwen-3.5-2b_all-linear.sweep.yaml: same schedule and checkpoint selection,
+# lora_default's target modules (the 6 full-attention layers of 24, no MLP).
+# Schedule: shortrun as is (400 steps, eval every 50, early stopping after 3), tuned on fr-en's ~2.5k
+# training pairs. Checkpoints are picked on dev BLEU 13a lowercase, the target metric.
+# lr 1e-4 was the best [q_proj, v_proj] value on fr-en at 0.8B and 2B (vs 1e-5); 2e-4 checks above it.
+# Decodes at the default batch size (16), like the fr-en runs: batch size can shift bf16 greedy outputs.
+# Launch:  bash tools/run_on_free_gpu.sh sft egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-2b_zh-en_q-v-proj_sweep-<idx>/; the .grid.txt maps idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_default
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-2b_zh-en_q-v-proj_sweep
+checkpoint: Qwen/Qwen3.5-2B
+prompt_format: chat
+instruction: "Translate Chinese to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+
+wandb:
+  tags: [sft, zh-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,2e-4

@@ -1,0 +1,36 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of Qwen3.5-4B, learning rate (4 jobs)
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml: same recipe; run_name
+# carries the pair so the two pairs' W&B groups don't merge.
+# sft_lora_qwen-3.5-2b_all-linear.sweep.yaml one size up; compare with the 4B full fine-tune
+# (sft_full_qwen-3.5-4b.sweep.yaml). Its matched [q_proj, v_proj] baseline is
+# sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml.
+# Schedule: shortrun as is (400 steps, eval every 50, early stopping after 3), tuned on fr-en's ~2.5k
+# training pairs. Checkpoints are picked on dev BLEU 13a lowercase, the target metric.
+# lr 3e-5 extends the usual 5e-5,1e-4,2e-4 bracket downward, in case every layer wants a lower one.
+# Memory (tools/inspect_model.py): bf16 weights 7.8 GiB + 3.6 MiB per token in a batch (mostly logits):
+# batch 32 fits a 40 GB A100 while padded sequences stay under ~250 tokens; if longer, use batch 16 x 4.
+# Decodes at the default batch size (16), like the fr-en runs: batch size can shift bf16 greedy outputs.
+# Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-4b_zh-en_all-linear_sweep-<idx>/; the .grid.txt maps idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_zh-en_all-linear_sweep
+checkpoint: Qwen/Qwen3.5-4B
+prompt_format: chat
+instruction: "Translate Chinese to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+
+wandb:
+  tags: [sft, zh-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 3e-5,5e-5,1e-4,2e-4

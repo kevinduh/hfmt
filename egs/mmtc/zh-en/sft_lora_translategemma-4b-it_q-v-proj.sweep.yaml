@@ -1,0 +1,41 @@
+# Sweep experiment: LoRA ([q_proj, v_proj]) fine-tune of translategemma-4b-it, learning rate (3 jobs)
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_translategemma-4b-it_q-v-proj.sweep.yaml: same recipe;
+# run_name carries the pair so the two pairs' W&B groups don't merge.
+# Baseline for sft_lora_translategemma-4b-it_all-linear.sweep.yaml: same schedule and checkpoint
+# selection, lora_default's target modules. Unlike Qwen3.5, every Gemma 3 layer has q_proj/v_proj, so
+# this reaches all 34 layers' attention (2.2M adapter parameters at r=8; no k/o, no MLP).
+# Schedule: shortrun as is (400 steps, eval every 50, early stopping after 3), tuned on fr-en's ~2.5k
+# training pairs. Checkpoints are picked on dev BLEU 13a lowercase, the target metric.
+# lr brackets 1e-4 (the best [q_proj, v_proj] value on fr-en Qwen3.5) both ways, as on fr-en.
+# Language codes: the chat template turns data.src/data.trg (zh/en) into the instruction; fr-en only
+# tested fr. A code the template doesn't know fails at job start (Jinja UndefinedError), not at launch.
+# Memory and batch: as in the all-linear sweep (logits dominate; batch 16 x accumulation 4).
+# Decodes at the default batch size (16), like the fr-en runs: batch size can shift bf16 greedy outputs.
+# Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_translategemma-4b-it_q-v-proj.sweep.yaml
+# Jobs land in outputs/sft_lora_translategemma-4b-it_zh-en_q-v-proj_sweep-<idx>/; the .grid.txt maps
+# idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_default
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_translategemma-4b-it_zh-en_q-v-proj_sweep
+checkpoint: google/translategemma-4b-it
+prompt_format: translategemma
+# TranslateGemma's chat template builds the instruction from data.src/data.trg; no instruction string.
+instruction: null
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 16              # memory only (logits): effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+
+wandb:
+  tags: [sft, zh-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 5e-5,1e-4,2e-4

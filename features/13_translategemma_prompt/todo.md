@@ -127,14 +127,16 @@ Ground rules for every phase:
       hfmt/sft_translation.py tools/` is empty; modules import with no torch (heavy imports stay in
       functions); `make_prompt_formatter` build logic verified (chat + translategemma message
       structures) with a small script.
-- [ ] *(cluster; not runnable in this sandbox — no hfmt env, TranslateGemma is gated)* Login node,
+- [x] *(cluster; not runnable in this sandbox — no hfmt env, TranslateGemma is gated)* Login node,
       scratch script (plan Validation 1), TranslateGemma tokenizer: applying its template to the
       translategemma prompt and prompt+completion renders; prompt tokens are a prefix of
       prompt+completion; exactly one BOS; the completion ends with `<end_of_turn>`. (A `chat` prompt or
       an unsupported code raises — ordinary transformers behavior, no longer pre-checked.)
       *2026-11-04: run after the fact; the prefix check FAILED (template whitespace leaked into the
       assistant turn). Fixed by `fix_template` in `hfmt/prompt_formats.py`; see `decisions.md`
-      "TranslateGemma chat-template whitespace fix". Re-tick after `test.py` passes with the fix.*
+      "TranslateGemma chat-template whitespace fix". Passed with the fix (2026-11-04, login node,
+      transformers 5.8.0 / TRL 1.14.1): prompt is a token prefix, unmasked span is exactly the
+      target + `<end_of_turn>\n`, one BOS, inference prompt unchanged.*
 - [ ] *(cluster)* Same script, Qwen2.5-1.5B-Instruct and Qwen3.5-0.8B tokenizers: `chat` renders the
       same string as `format_input_prompt` did. (This is B's Qwen gate; the GPU batch-dump regression
       runs once at the end of C, since C is a no-op for Qwen.)

@@ -44,7 +44,7 @@ def main(cfg: Config) -> None:
     datasets.config.HF_DATASETS_OFFLINE = True
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    tokenizer = load_tokenizer(cfg.checkpoint)
+    tokenizer = load_tokenizer(cfg.checkpoint, cfg.prompt_format)
     if cfg.model_dir is None:   # experiment yaml: the checkpoint as downloaded (zero-shot), no adapter
         logging.info(f"No model_dir: decoding the base checkpoint {cfg.checkpoint} (peft.mode={cfg.peft.mode} sets the precision)")
         model, _ = load_base_model(cfg, device)

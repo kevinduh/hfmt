@@ -173,7 +173,7 @@ def main(cfg: Config) -> None:
 
     ###################################
     ## User settings
-    tokenizer = load_tokenizer(cfg.checkpoint)
+    tokenizer = load_tokenizer(cfg.checkpoint, cfg.prompt_format)
     format_prompt = make_prompt_formatter(cfg)   # builder for cfg.prompt_format (validated at launch)
     template_kwargs = chat_template_kwargs(cfg)  # e.g. enable_thinking=False; same for training and decoding
     logging.info(f"prompt_format={cfg.prompt_format}: apply_chat_template kwargs {template_kwargs}")

@@ -152,7 +152,11 @@ hfmt/
   checkpoint's template; adding a model with special requirements is one more `PROMPT_FORMATS` entry.
   A format's `template_kwargs` go to every `apply_chat_template` call (training via TRL's
   `chat_template_kwargs` column, decoding): `chat` sets `enable_thinking=False`, because Qwen3.5-4B's
-  template thinks by default (0.8B/2B don't).
+  template thinks by default (0.8B/2B don't). A format's `fix_template` patches a defect in the shipped
+  template, applied in `mt_model.load_tokenizer` (every path loads its tokenizer there):
+  `translategemma` removes whitespace TranslateGemma's template leaks into assistant turns, which
+  made the prompt not a token prefix of prompt + reply. A new format must keep that prefix property:
+  TRL's "Mismatch between tokenized prompt" warning in a training log means it doesn't.
 - **Only the language model is trained**: a module named in `NON_LANGUAGE_MODULES` (`hfmt/mt_model.py`:
   `vision_tower`, `multi_modal_projector`) is frozen (full) or kept out of the LoRA adapter
   (lora/qlora), so logs and `tools/inspect_model.py` count language-model params only. This is

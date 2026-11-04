@@ -528,3 +528,26 @@ decoded and merged like any other model.
   first attempt's log (same job id, same `slurm-*.out`).
 - **Hard-coded, not `slurm:` keys:** a new required key would break resume/inf/merge for every
   saved `run_config.yaml`. `tools/run_status.py`'s rerun command adds the same two flags.
+
+## TranslateGemma chat-template whitespace fix (2026-11-04)
+
+**Decision:** the `translategemma` prompt format patches TranslateGemma's shipped chat template
+(`fix_template` in `hfmt/prompt_formats.py`, applied by `mt_model.load_tokenizer`) instead of
+carrying a corrected copy of the template.
+
+- **Why.** The shipped template writes an assistant turn as `<start_of_turn>model\n` plus a
+  leaked line break and 8 spaces of template indentation before the reply. The generation prompt
+  ends at `<start_of_turn>model\n`, so the two newlines merged into one token, the prompt was not a
+  token prefix of prompt + reply, and TRL warned on every example (4485 in
+  `sft_full_translategemma-4b-it`; 0 in the Qwen `chat` runs). The mask still fell after the
+  header, so every target token was trained, but the model trained on a reply start it never sees
+  when decoding. Decoded outputs are stripped, so no score carried whitespace artifacts. Every
+  TranslateGemma result before this fix was trained this way. Feature 13's login-node prefix check
+  (todo B) would have caught it; it was never run.
+- **Patch, not copy.** Adding the whitespace-control dash to the one content tag keeps the rest
+  of Google's template (including its `languages` table) as shipped. List-form assistant content
+  is not an option: the template rejects it.
+- **Fails loudly.** A template without the expected tag (upstream change) raises instead of
+  training on an unchecked format; an already-fixed template (hfmt-saved `model/`,
+  `model_merged/`) passes unchanged. Prompts render exactly as before, so decoding old runs is
+  unaffected; only training targets change.

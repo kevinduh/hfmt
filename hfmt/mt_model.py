@@ -11,7 +11,7 @@ Heavy imports (torch, transformers, ...) live inside functions so config-only us
 import time
 import logging
 
-from hfmt.prompt_formats import chat_template_kwargs, make_prompt_formatter
+from hfmt.prompt_formats import chat_template_kwargs, fix_chat_template, make_prompt_formatter
 
 
 # Only the language model is trained (feature 13): a module whose last name component is one of these
@@ -47,9 +47,12 @@ def resolve_excluded_modules(model, target_modules):
     return subtrees, leaf_full_names
 
 
-def load_tokenizer(checkpoint):
+def load_tokenizer(checkpoint, prompt_format):
+    """``checkpoint``'s tokenizer with ``prompt_format``'s chat-template fix applied
+    (``prompt_formats.fix_chat_template``). Every hfmt path loads its tokenizer here."""
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    fix_chat_template(tokenizer, prompt_format)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     return tokenizer
@@ -135,7 +138,7 @@ def merge_trained_model(cfg, model_dir, out_dir, device):
         logging.warning(warning)
     model = PeftModel.from_pretrained(base, model_dir).merge_and_unload()
     model.save_pretrained(out_dir)
-    load_tokenizer(cfg.checkpoint).save_pretrained(out_dir)
+    load_tokenizer(cfg.checkpoint, cfg.prompt_format).save_pretrained(out_dir)
     return warning
 
 

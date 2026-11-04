@@ -125,19 +125,22 @@ Check `squeue` first: never resume a job that is still running.
 **To change a run, don't resume it.** Launch the experiment yaml again with overrides and a new
 `run_name`, e.g. `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=1 run_name=sft_lora-seed1`.
 
-**Checking many runs at once.** `tools/run_status.py` lists every run folder's state and prints the
-command that fixes each unfinished one. It only prints; you review and run the commands. States:
-- finished, or queued/running (from `squeue`);
+**Checking many runs at once.** `tools/run_status.py` lists every run folder with its training and
+test-inference state and prints the command that fixes each unfinished one. It only prints; you
+review and run the commands. States:
+- finished: trained, and `launch.sh inf` has scored the test sets; or queued/running (from `squeue`);
+- trained, inference not run, failed or queued (it prints `launch.sh inf` when nothing is queued);
 - interrupted (it prints the resume command above);
 - failed before its first checkpoint (it prints an `sbatch egs/job.sh sft <run folder>` that reruns
   just that folder from its saved config; resume refuses these);
-- trained but missing test scores (it prints `launch.sh inf`).
+- a `checkpoint-N/` or `model/` cut off while saving (it says which folder to delete).
 
-For failed jobs it also shows the error line and the node, and points out nodes where several jobs
-failed:
+Each row shows the test scores of training's own end-of-run decoding and of `launch.sh inf`, and
+whether inference reproduced training (same scores, identical `test<i>.pred.trg`). For failed jobs it
+also shows the error line and the node, and points out nodes where several jobs failed:
 
 ```bash
-python tools/run_status.py egs/mmtc/fr-en/outputs                         # summary + unfinished runs
+python tools/run_status.py egs/mmtc/fr-en/outputs                         # every run + fix commands
 python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=node07  # fix commands avoid node07
 ```
 

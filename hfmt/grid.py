@@ -219,7 +219,9 @@ def main_resume(exp_dir, exp_name, args, parsed):
     _log(f"resuming {exp_dir} from checkpoint-{max(steps)} (step {max(steps)} of {cfg.train.max_steps})")
 
     # 4. Print the bash for launch.sh: the job folder is the run folder; KIND picks job.sh sft_resume.
-    _print_jobs([exp_dir], cfg.slurm, cfg.run_name, os.path.join(exp_dir, "slurm-%A.out"))
+    #    The job is named after the folder, so tools/run_status.py can tell a grid folder's queued
+    #    resume from its siblings'.
+    _print_jobs([exp_dir], cfg.slurm, os.path.basename(exp_dir), os.path.join(exp_dir, "slurm-%A.out"))
     print("KIND=sft_resume")
 
 
@@ -237,7 +239,7 @@ def main_inf(exp_dir, exp_name, args, parsed):
             sys.exit(f"grid --inf: no trained model in {model_dir}")
         cfg = _compose_checked(exp_dir, exp_name, [f"model_dir={model_dir}"] + args)
         inf_dir = os.path.join(exp_dir, "inf", cfg.inf_name)
-        job_name = f"{cfg.run_name}-inf"
+        job_name = f"{os.path.basename(exp_dir)}-inf"   # per folder, for tools/run_status.py
     else:
         # 2b. Experiment: decode the checkpoint as downloaded (model_dir stays unset; the peft
         # option only sets the load precision). A sweep file would silently use its base values,

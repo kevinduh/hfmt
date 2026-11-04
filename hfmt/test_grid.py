@@ -302,6 +302,18 @@ def test_inf_default_name_is_test():
     assert os.path.isfile(os.path.join(run_dir, "inf", "test", "inf_config.yaml"))
 
 
+def test_grid_folder_resume_and_inf_jobs_are_named_after_the_folder():
+    # So tools/run_status.py can tell one grid folder's queued job from its siblings' (all share run_name).
+    out, _, _ = run(SWEEP)
+    run_dir = os.path.join(out, "sft_lora_sweep-1")
+    rc = os.path.join(run_dir, "run_config.yaml")
+    os.makedirs(os.path.join(run_dir, "checkpoint-40"))
+    open(os.path.join(run_dir, "checkpoint-40", "trainer_state.json"), "w").close()
+    assert "--job-name=sft_lora_sweep-1 " in resume(rc) + " "
+    os.makedirs(os.path.join(run_dir, "model"))
+    assert "--job-name=sft_lora_sweep-1-inf" in inf(rc)
+
+
 def test_inf_errors_fail_before_writing():
     run_dir, rc = trained_run()
     for bad in [("decode.num_beams=1,5",),                # comma list

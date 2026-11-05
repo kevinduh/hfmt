@@ -127,7 +127,12 @@ hfmt/
   never-best placeholder so the Trainer's best-checkpoint check still works. The callback also adds the
   dev scores to the Trainer's `log_history` entry. At the end, training saves the Trainer state as
   `<run folder>/trainer_state.json` and writes `model/training_info.yaml` (the step `model/` holds, the
-  best metric and its step, early stop), so both survive `tools/delete_checkpoints.sh`.
+  best metric and its step, early stop), so both survive `tools/delete_checkpoints.sh`. For a full
+  fine-tune, the best checkpoint (and the last one on resume) is loaded by
+  `mt_model.load_checkpoint_weights` (`from_pretrained`, then a strict `load_state_dict`): the Trainer's
+  own in-place reload matches the saved weight names against the module names, and for Qwen3.5
+  (`model.language_model.*` vs `model.*`) it loads nothing and only warns, so `model/` and `scores.json`
+  held the last step in every full run before 2026-11-05 (see `decisions.md`).
 - **Saved configs aren't backward compatible** — a run saved before a new required key was added
   fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`).
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a

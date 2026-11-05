@@ -93,6 +93,12 @@ scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run ha
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
 into an existing folder prints a warning and reuses it (training restarts from scratch).
 
+Full fine-tunes trained before 2026-11-05 (Qwen3.5 for sure; any run whose Slurm log has
+"There were missing keys in the checkpoint model loaded"): `model/`, both `scores.json` and
+`training_info.yaml`'s `model_global_step` are the *last* step, not the best checkpoint — the
+Trainer's reload loaded nothing (see `decisions.md`). `checkpoint-<best_global_step>/` is kept, so
+decode it instead (an experiment yaml with `checkpoint:` set to that folder, `peft=full_finetune`).
+
 **Resume** a job that was cancelled midway (time limit, OOM, node failure, `scancel`) from its
 last `checkpoint-N/`, by passing its run folder's `run_config.yaml`:
 

@@ -20,7 +20,8 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
 from hfmt.hydra_config import Config, check_config, register_configs
-from hfmt.mt_model import decode_test_sets, inference_on_eval_data, load_base_model, load_tokenizer, resolve_excluded_modules, score
+from hfmt.mt_model import (decode_test_sets, inference_on_eval_data, load_base_model, load_checkpoint_weights, load_tokenizer,
+                           resolve_excluded_modules, score)
 from hfmt.prompt_formats import chat_template_kwargs, make_prompt_formatter
 
 
@@ -54,8 +55,9 @@ def add_dev_scores_to_log_history(log_history, step, scores):
 
 def training_info(state, args):
     """What ``model/`` is, from the Trainer's final ``state`` and ``args``: the step whose weights it
-    holds (the best checkpoint with ``load_best_model_at_end``, as the Trainer reloads it, else the
-    last step), the best ``metric_for_best_model`` value and its step, and whether training stopped
+    holds (the best checkpoint with ``load_best_model_at_end``, reloaded after training -- by the
+    Trainer, or for a full fine-tune by ``load_checkpoint_weights`` -- else the last step), the best
+    ``metric_for_best_model`` value and its step, and whether training stopped
     before ``max_steps`` (early stopping). Saved as ``model/training_info.yaml``."""
     loaded_best = args.load_best_model_at_end and state.best_model_checkpoint is not None
     return {"model_global_step": state.best_global_step if loaded_best else state.global_step,
@@ -370,12 +372,25 @@ def main(cfg: Config) -> None:
     ## Training
     logging.info(f"======== Training ========")
     start_time = time.time()
+    # The Trainer's in-place weight reloads (the last checkpoint on resume, the best one at the end)
+    # load nothing for a full fine-tune of a model whose saved weight names differ from its module
+    # names (Qwen3.5) and only warn, see load_checkpoint_weights: load those checkpoints through it.
+    # lora/qlora reload their adapter through PEFT, which is fine.
+    reload_full_weights = finetune_mode == "full"
+    if resume and reload_full_weights:
+        from transformers.trainer_utils import get_last_checkpoint
+        last_checkpoint = get_last_checkpoint(outdir)
+        if last_checkpoint is not None:   # else trainer.train raises: no checkpoint to resume from
+            load_checkpoint_weights(model, last_checkpoint)
     trainer_stats = trainer.train(resume_from_checkpoint=True if resume else None)   # True: the last checkpoint-N
     end_time = time.time()
     logging.info(f"Training - Elapsed time: {end_time-start_time:.1f}s")
 
     logging.info(f"{trainer_stats.metrics['train_runtime']} seconds used for training.")
     logging.info(f"{pformat(trainer_stats.metrics)}")
+
+    if reload_full_weights and training_args.load_best_model_at_end and trainer.state.best_model_checkpoint is not None:
+        load_checkpoint_weights(model, trainer.state.best_model_checkpoint)   # same condition as training_info
 
     gpu_stats = torch.cuda.get_device_properties(0)
     used_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024)

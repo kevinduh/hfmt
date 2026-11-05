@@ -551,3 +551,29 @@ carrying a corrected copy of the template.
   training on an unchecked format; an already-fixed template (hfmt-saved `model/`,
   `model_merged/`) passes unchanged. Prompts render exactly as before, so decoding old runs is
   unaffected; only training targets change.
+
+## Full fine-tunes: the best checkpoint is reloaded through `from_pretrained` (2026-11-05)
+
+**Decision:** for `peft.mode=full`, `sft_translation.py` loads the checkpoint the Trainer is
+supposed to reload in place — the best one at the end of training, the last one on resume —
+with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a strict
+`load_state_dict` into the training model. The Trainer's own reload is left in place (harmless).
+
+- **Why.** The Trainer reloads full-model checkpoints with a plain non-strict `load_state_dict`
+  (`_load_best_model`, `_load_from_checkpoint`), but `save_pretrained` writes the Hub's weight
+  names, which `from_pretrained` converts to the module names on load. For Qwen3.5 they differ
+  (`model.language_model.*` vs `model.*`), so no key matched, nothing loaded, and the Trainer only
+  warned ("There were missing keys in the checkpoint model loaded"). Every Qwen3.5 full run's
+  `model/`, `scores.json` (training's and `launch.sh inf`'s) and `training_info.yaml`
+  (`model_global_step`) are therefore the last step, not the best checkpoint: dev
+  `metric_for_best_model` 24.74 instead of 34.33 for `sft_full_qwen-3.5-2b_zh-en`, 62.63 instead
+  of 65.01 for `sft_full_qwen-3.5-4b_sweep-1`. A resumed full run would have continued from the
+  base weights with the checkpoint's optimizer state. LoRA/QLoRA runs reload through PEFT's
+  `load_adapter` and were correct. TranslateGemma: Gemma 3 has a rename too
+  (`language_model.model.*`); a run is affected iff its Slurm log has the warning.
+- **Why this fix.** `from_pretrained` is the public path that applies the conversion (it is how
+  `inf_translation.py` loads `model/` already); `strict=True` turns the next silent mismatch into
+  a failed run. Saving checkpoints under module names instead would need Transformers' private
+  `_weight_conversions`. Cost: one CPU copy of the weights, as the Trainer's reload already needs.
+- **Old runs:** `checkpoint-<best_global_step>/` is kept by `save_total_limit`, so an affected run
+  can be decoded without retraining (`checkpoint:` set to that folder, `peft=full_finetune`).

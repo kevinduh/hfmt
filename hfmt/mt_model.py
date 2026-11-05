@@ -93,6 +93,25 @@ def load_base_model(cfg, device):
     return model, use_bf16
 
 
+def load_checkpoint_weights(model, checkpoint_dir):
+    """Copy the full weights saved in ``checkpoint_dir`` (a Trainer ``checkpoint-N/``) into ``model``
+    in place, through ``from_pretrained``.
+
+    The Trainer reloads a full model's checkpoint (the best one at the end of training, the last one
+    on resume) with a plain non-strict ``load_state_dict``, but ``save_pretrained`` writes the
+    checkpoint's original (Hub) weight names, which ``from_pretrained`` converts to the module names
+    on load: for Qwen3.5, ``model.language_model.*`` in the files vs ``model.*`` in the model. So
+    nothing matches, nothing loads, and the Trainer only warns ("There were missing keys in the
+    checkpoint model loaded"), leaving the weights as they were. Loading the checkpoint as a model
+    applies the conversion; copying its weights with ``strict=True`` makes any mismatch fail the run.
+    Needs CPU RAM for one copy of the weights, as the Trainer's own reload does."""
+    dtype = next(model.parameters()).dtype
+    logging.info(f"Loading the weights of {checkpoint_dir} into the model (dtype {dtype})")
+    saved = type(model).from_pretrained(checkpoint_dir, dtype=dtype)   # on the CPU
+    model.load_state_dict(saved.state_dict(), strict=True)
+    del saved
+
+
 def load_trained_model(cfg, model_dir, device):
     """Load what ``sft_translation.py`` saved in ``model_dir``: full weights for ``full``, or an
     adapter on the base from ``load_base_model`` for ``lora``/``qlora``. A ``qlora`` base gets the

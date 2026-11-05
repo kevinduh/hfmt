@@ -29,8 +29,14 @@ used other decode.* or data.test settings, so the two aren't comparable.
 --slurm KEY=VALUE replaces that slurm setting of the saved config in the commands (partition, gres, time,
 mem_gb, cpus, constraint, exclude). Without squeue/sacct (or with --no-slurm), queued jobs aren't detected.
 
-Logs and predictions hold example text (CLAUDE.md): only the end of each log is read and only matched
-error lines are printed (truncated); prediction files are compared, never printed.
+Checks failed: runs that finished but not as intended -- a known-bad library warning in a training log
+(BAD_WARNINGS: the Trainer's checkpoint reload loaded nothing, so model/ is the last step; TRL's prompt not
+a token prefix of prompt + reply) or model/training_info.yaml's model_dev_check not "ok" (the saved model's
+dev BLEU differs from the dev BLEU of the step it holds). See decisions.md 2026-11-04 and 2026-11-05.
+
+Logs and predictions hold example text (CLAUDE.md): only the end of each log is read for errors, whole
+logs are searched for BAD_WARNINGS, and only matched error lines (truncated) and labels are printed;
+prediction files are compared, never printed.
 """
 
 import argparse
@@ -61,6 +67,12 @@ SBATCH_FLAGS = {"partition": "--partition={}", "gres": "--gres={}", "time": "--t
                 "mem_gb": "--mem={}G", "cpus": "--cpus-per-task={}", "constraint": "--constraint={}",
                 "exclude": "--exclude={}"}
 DECODE_METRICS = ("bleu", "bleu_13a_lowercase", "chrf", "ter")   # scores.json keys (hfmt/mt_model.py score)
+# Library warnings that mean a finished run trained or saved something other than intended (decisions.md
+# 2026-11-04, 2026-11-05): (text in the log, label printed). Whole training logs are searched.
+BAD_WARNINGS = [
+    ("There were missing keys in the checkpoint model loaded", "checkpoint reload loaded nothing: model/ is the last step"),
+    ("Mismatch between tokenized prompt", "prompt not a token prefix of prompt + reply (chat template)"),
+]
 QUEUE_STATES = {"RUNNING": "running", "COMPLETING": "running", "CONFIGURING": "running",
                 "PENDING": "pending", "REQUEUED": "pending"}
 STATE_ORDER = ["running", "pending", "finished", "inf_running", "inf_pending", "no_inference", "bad_model",
@@ -156,8 +168,32 @@ def inspect_folder(path):
         inf_log=inf_logs[-1] if inf_logs else None,
         inf_error=_last_error(inf_tail),
         match=compare_test_outputs(path, inf_dir, cfg, inf_cfg, scores, inf_scores),
+        warnings=_bad_warnings(path, logs),
+        model_check=_model_dev_check(path),
     )
     return info
+
+
+def _bad_warnings(folder, logs):
+    """Labels of the BAD_WARNINGS found in the folder's training logs, in BAD_WARNINGS order. Whole files:
+    the warnings come mid-run, long before the tail."""
+    found = []
+    for name in logs:
+        try:
+            with open(os.path.join(folder, name), "rb") as f:
+                text = f.read().decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        found += [label for pattern, label in BAD_WARNINGS if pattern in text and label not in found]
+    return [label for _, label in BAD_WARNINGS if label in found]
+
+
+def _model_dev_check(path):
+    """model/training_info.yaml's model_dev_check (hfmt/sft_translation.py check_model_dev_scores) when it
+    failed ("MISMATCH: ..."); None when ok, unchecked (no dev decode at that step) or absent (runs before
+    2026-11-05)."""
+    check = _load_yaml(os.path.join(path, "model", "training_info.yaml"))[0].get("model_dev_check")
+    return check if isinstance(check, str) and check.startswith("MISMATCH") else None
 
 
 def _load_yaml(path):
@@ -474,6 +510,14 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note=""):
     differ = [os.path.relpath(info["path"], start) for info in infos if (info["match"] or "").startswith("NO")]
     if differ:
         lines += ["", f"Inference doesn't reproduce training's test output ({len(differ)}): " + ", ".join(differ)]
+
+    checks = [(os.path.relpath(info["path"], start),
+               info["warnings"] + ([f"model/ dev check {info['model_check']}"] if info["model_check"] else []))
+              for info in infos]
+    checks = [(folder, items) for folder, items in checks if items]
+    if checks:
+        lines += ["", f"Checks failed ({len(checks)}): the run finished, but not as intended (see decisions.md)"]
+        lines += [f"  {folder}: {'; '.join(items)}" for folder, items in checks]
 
     fixes = defaultdict(list)
     for info, state in zip(infos, states):

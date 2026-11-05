@@ -6,7 +6,7 @@
 # 4.21B parameters, + 3.6 MiB per token in a batch: needs an 80 GB A100 (not a 40 GB A100 or a 48 GB
 # L40S). Per-device batch 4 x accumulation 16 keeps the effective batch at 64, as in
 # sft_translategemma-4b-it.yaml.
-# Disk: each checkpoint holds fp32 weights + AdamW state, ~50 GB; save_total_limit 3 keeps ~150 GB per
+# Disk: each checkpoint holds fp32 weights + AdamW state, ~50 GB; save_total_limit 2 keeps ~100 GB per
 # job: clear checkpoints when done (tools/delete_checkpoints.sh).
 # Decodes at the default batch size (16), like the earlier runs: batch size can shift greedy outputs.
 # Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml [overrides]

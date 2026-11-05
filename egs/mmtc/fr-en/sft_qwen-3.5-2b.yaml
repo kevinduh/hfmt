@@ -1,18 +1,24 @@
-# Single-run experiment: full fine-tune of all Qwen3.5-0.8B parameters
-# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_qwen-3.5-0.8b.yaml [overrides]
+# Single-run experiment: full fine-tune of all Qwen3.5-2B parameters
+# lr 1e-5: the earlier run (sft_full_qwen-3.5-2b, midrun: lr 2e-5, 1000 steps) peaked on dev at its
+# first evaluation (step 50; on zh-en it then fell 2.2 BLEU-lc by step 100), so 2e-5 overshoots.
+# 1e-5 is untested.
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_qwen-3.5-2b.yaml [overrides]
 # Debug:   source egs/mmtc/fr-en/local_setting.sh &&
-#          python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_qwen-3.5-0.8b
+#          python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_qwen-3.5-2b
 defaults:
   - config                          # conf/config.yaml: schema + default components
   - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
   - override peft: full_finetune
-  - override train: midrun          # cosine, 2e-5, 1000 steps, BLEU-selected
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
   - _self_
 
-run_name: sft_full_qwen-3.5-2b
+run_name: sft_full_qwen-3.5-2b_short
 checkpoint: Qwen/Qwen3.5-2B
 prompt_format: chat
 instruction: "Translate French to English"
+
+train:
+  learning_rate: 1e-5
 
 wandb:
   tags: [sft, fr-en, full]

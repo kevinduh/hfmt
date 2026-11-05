@@ -2,7 +2,7 @@
 # zh-en counterpart of egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml: same recipe; run_name
 # carries the pair so the two pairs' W&B groups don't merge.
 # sft_lora_qwen-3.5-2b_all-linear.sweep.yaml one size up; compare with the 4B full fine-tune
-# (sft_full_qwen-3.5-4b.sweep.yaml). Its matched [q_proj, v_proj] baseline is
+# (sft_qwen-3.5-4b.yaml). Its matched [q_proj, v_proj] baseline is
 # sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml.
 # Schedule: shortrun as is (400 steps, eval every 50, early stopping after 3), tuned on fr-en's ~2.5k
 # training pairs. Checkpoints are picked on dev BLEU 13a lowercase, the target metric.

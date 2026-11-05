@@ -1,6 +1,7 @@
 # Single-run experiment: full fine-tune of all translategemma-4b-it parameters
 # zh-en counterpart of egs/mmtc/fr-en/sft_translategemma-4b-it.yaml: same recipe; run_name carries the
 # pair so the two pairs' W&B groups don't merge.
+# lr 5e-6, as Qwen3.5-4B (same size); see the fr-en file. Untested on this model.
 # Language codes: the chat template turns data.src/data.trg (zh/en) into the instruction; fr-en only
 # tested fr. A code the template doesn't know fails at job start (Jinja UndefinedError), not at launch.
 # Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_translategemma-4b-it.yaml [overrides]
@@ -10,10 +11,10 @@ defaults:
   - config                          # conf/config.yaml: schema + default components
   - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
   - override peft: full_finetune
-  - override train: midrun          # cosine, 2e-5, 1000 steps, BLEU-selected
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
   - _self_
 
-run_name: sft_full_translategemma-4b-it_zh-en
+run_name: sft_full_translategemma-4b-it_zh-en_short
 checkpoint: google/translategemma-4b-it
 prompt_format: translategemma
 # TranslateGemma's chat template builds the instruction from data.src/data.trg (the language codes),
@@ -21,14 +22,16 @@ prompt_format: translategemma
 instruction: null
 
 train:
+  learning_rate: 5e-6
   # 4.3B full FT: fixed weights+grads+AdamW alone = ~64 GiB (tools/inspect_model.py), leaving
-  # little of an 80GB A100 for activations. midrun's batch 32 needs ~124 GiB (OOM). Tiny per-device
+  # little of an 80GB A100 for activations. Batch 32 needs ~124 GiB (OOM). Tiny per-device
   # batch + accumulation keeps the effective batch at 64. Even this is tight; drop to 2 x 32 if it OOMs.
   train_batch_size: 4
   gradient_accumulation_steps: 16
 
 slurm:
   constraint: 80gb   # 4B full FT (fp32 + Adam) needs an 80GB A100
+  mem_gb: 48         # the fp32 model (~16 GB) is loaded in CPU memory, and again to reload the best checkpoint
 
 wandb:
   tags: [sft, zh-en, full]

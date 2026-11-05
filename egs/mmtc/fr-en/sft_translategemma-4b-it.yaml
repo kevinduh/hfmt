@@ -1,4 +1,7 @@
 # Single-run experiment: full fine-tune of all translategemma-4b-it parameters
+# lr 5e-6, as Qwen3.5-4B (same size): the earlier run (sft_full_translategemma-4b-it, midrun: lr 2e-5,
+# 1000 steps) peaked on dev at step 50, 4.4 BLEU-lc below its all-linear LoRA, and never recovered.
+# 5e-6 is untested on this model.
 # Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_translategemma-4b-it.yaml [overrides]
 # Debug:   source egs/mmtc/fr-en/local_setting.sh &&
 #          python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_translategemma-4b-it
@@ -6,10 +9,10 @@ defaults:
   - config                          # conf/config.yaml: schema + default components
   - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
   - override peft: full_finetune
-  - override train: midrun          # cosine, 2e-5, 1000 steps, BLEU-selected
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
   - _self_
 
-run_name: sft_full_translategemma-4b-it
+run_name: sft_full_translategemma-4b-it_short
 checkpoint: google/translategemma-4b-it
 prompt_format: translategemma
 # TranslateGemma's chat template builds the instruction from data.src/data.trg (the language codes),
@@ -17,14 +20,16 @@ prompt_format: translategemma
 instruction: null
 
 train:
+  learning_rate: 5e-6
   # 4.3B full FT: fixed weights+grads+AdamW alone = ~64 GiB (tools/inspect_model.py), leaving
-  # little of an 80GB A100 for activations. midrun's batch 32 needs ~124 GiB (OOM). Tiny per-device
+  # little of an 80GB A100 for activations. Batch 32 needs ~124 GiB (OOM). Tiny per-device
   # batch + accumulation keeps the effective batch at 64. Even this is tight; drop to 2 x 32 if it OOMs.
   train_batch_size: 4
   gradient_accumulation_steps: 16
 
 slurm:
   constraint: 80gb   # 4B full FT (fp32 + Adam) needs an 80GB A100
+  mem_gb: 48         # the fp32 model (~16 GB) is loaded in CPU memory, and again to reload the best checkpoint
 
 wandb:
   tags: [sft, fr-en, full]

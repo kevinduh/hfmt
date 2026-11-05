@@ -577,3 +577,12 @@ with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a st
   `_weight_conversions`. Cost: one CPU copy of the weights, as the Trainer's reload already needs.
 - **Old runs:** `checkpoint-<best_global_step>/` is kept by `save_total_limit`, so an affected run
   can be decoded without retraining (`checkpoint:` set to that folder, `peft=full_finetune`).
+- **Guards added the same day.** (1) Training decodes dev once more with the saved `model/` and
+  records `model_dev_scores` and `model_dev_check` in `training_info.yaml`: the measured dev BLEU
+  against the MT callback's at `model_global_step` (`DEV_SCORE_TOLERANCE` 1 BLEU: the callback decodes
+  under Accelerate's autocast wrapper, the final decode unwrapped). Before, the file asserted what the
+  Trainer should have done. A mismatch is logged as an error, not fatal: the weights and scores are
+  still written, and the check is what makes them suspect. (2) `tools/run_status.py` searches whole
+  training logs for known-bad library warnings (`BAD_WARNINGS`: this reload warning, TRL's prompt-prefix
+  mismatch) and prints "Checks failed" with any `MISMATCH`. Both this bug and the template bug would have
+  been visible the day they first ran.

@@ -55,7 +55,8 @@ hfmt/
 │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
 │                            #   inspect_model.py <checkpoint> [prompt_format] (module names, LoRA candidates, memory, not-trained modules),
-│                            #   run_status.py <outputs dir> (training + inference states and scores, fix commands; prints only)
+│                            #   run_status.py <outputs dir> (training + inference states and scores, fix commands,
+│                            #     failed checks: known-bad log warnings, model/ dev-score mismatch; prints only)
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
@@ -132,7 +133,11 @@ hfmt/
   `mt_model.load_checkpoint_weights` (`from_pretrained`, then a strict `load_state_dict`): the Trainer's
   own in-place reload matches the saved weight names against the module names, and for Qwen3.5
   (`model.language_model.*` vs `model.*`) it loads nothing and only warns, so `model/` and `scores.json`
-  held the last step in every full run before 2026-11-05 (see `decisions.md`).
+  held the last step in every full run before 2026-11-05 (see `decisions.md`). Training then decodes dev
+  once more with the saved model (`dev.model.pred`) and records in `training_info.yaml` its scores
+  (`model_dev_scores`) and `model_dev_check` (`ok` | `MISMATCH: ...` | `unchecked: ...`) against the
+  callback's dev BLEU at the step `model/` holds (`DEV_SCORE_TOLERANCE`); a mismatch is logged, not fatal.
+  `tools/run_status.py` reports mismatches and known-bad library warnings found in the logs (`BAD_WARNINGS`).
 - **Saved configs aren't backward compatible** — a run saved before a new required key was added
   fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`).
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a

@@ -26,6 +26,9 @@ from hfmt.prompt_formats import chat_template_kwargs, make_prompt_formatter
 
 
 DECODE_METRICS = ("eval_bleu", "eval_bleu_13a_lowercase", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
+# BLEU difference allowed between model/'s dev decode and the MT callback's at the same step: the callback
+# decodes under Accelerate's autocast wrapper, the final decode with the unwrapped model.
+DEV_SCORE_TOLERANCE = 1.0
 
 
 def config_token_ids(config):
@@ -67,6 +70,23 @@ def training_info(state, args):
             "global_step": state.global_step,
             "max_steps": state.max_steps,
             "stopped_early": state.global_step < state.max_steps}
+
+
+def check_model_dev_scores(log_history, model_global_step, scores, tolerance=DEV_SCORE_TOLERANCE):
+    """Does ``model/`` decode dev to the score of the step it claims to hold? ``scores`` is ``score()`` of
+    the saved model's dev decode; the expectation is that step's ``eval_bleu`` in ``log_history`` (the MT
+    callback's; missing when that evaluation skipped dev decoding). Returns the ``training_info.yaml``
+    fields ``model_dev_scores`` and ``model_dev_check``: "ok", "unchecked: ..." or "MISMATCH: ...". A
+    mismatch means the saved weights aren't that step's, as when the Trainer's reload silently loaded
+    nothing (decisions.md 2026-11-05): the run goes on, ``tools/run_status.py`` reports it."""
+    expected = next((e["eval_bleu"] for e in log_history if e.get("step") == model_global_step and "eval_bleu" in e), None)
+    if expected is None:
+        check = f"unchecked: no dev BLEU at step {model_global_step} in log_history"
+    elif abs(scores["bleu"] - expected) > tolerance:
+        check = f"MISMATCH: model/ dev bleu {scores['bleu']} vs {expected} at step {model_global_step} (tolerance {tolerance})"
+    else:
+        check = "ok"
+    return {"model_dev_scores": dict(scores), "model_dev_check": check}
 
 
 def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval,
@@ -399,6 +419,7 @@ def main(cfg: Config) -> None:
     # Allocated = what tensors actually used; reserved also counts what the caching allocator kept.
     # Compare with tools/inspect_model.py's estimate.
     logging.info(f"Peak allocated memory = {torch.cuda.max_memory_allocated() / 1024 ** 3:.2f} GiB")
+    model = trainer.accelerator.unwrap_model(model, keep_fp32_wrapper=False)   # as inference decodes it
     model.save_pretrained(os.path.join(outdir, "model"))
     tokenizer.save_pretrained(os.path.join(outdir, "model"))   # so a full fine-tune's model/ works as a checkpoint
     # Which step model/ is and how it scored, kept after tools/delete_checkpoints.sh removes the
@@ -406,17 +427,26 @@ def main(cfg: Config) -> None:
     # dev scores) in the run folder, and a short summary next to the weights.
     trainer.save_state()                                         # <outdir>/trainer_state.json
     info = training_info(trainer.state, training_args)
+    # Measure, don't assume: decode dev with the saved weights and compare with the dev BLEU the MT
+    # callback got at the step model/ claims to hold. A mismatch is logged and recorded, not fatal.
+    logging.info(f"======== Dev decoding of model/ ========")
+    dev_preds = inference_on_eval_data(tokenizer, model, D["dev"], os.path.join(outdir, "dev.model.pred"), device,
+                                       format_prompt, cfg.decode, 'src', template_kwargs=template_kwargs)
+    info.update(check_model_dev_scores(trainer.state.log_history, info["model_global_step"], score(dev_preds, D["dev"]["trg"])))
+    log = logging.error if info["model_dev_check"].startswith("MISMATCH") else logging.info
+    log(f"model/ dev check: {info['model_dev_check']} (dev scores {info['model_dev_scores']})")
     OmegaConf.save(OmegaConf.create(info), os.path.join(outdir, "model", "training_info.yaml"))
     logging.info(f"model/ holds step {info['model_global_step']} "
                  f"({info['metric_for_best_model']} best {info['best_metric']} at step {info['best_global_step']})")
+    import wandb
+    if wandb.run is not None:                                      # numbers only (CLAUDE.md)
+        wandb.run.summary.update({f"dev/model/{k}": v for k, v in info["model_dev_scores"].items()})
 
     ###################################
     ## Inference on the test set (skipped when the dataset has no test split)
     logging.info(f"======== Testing ========")
-    model = trainer.accelerator.unwrap_model(model, keep_fp32_wrapper=False)
     if cfg.data.test is not None and cfg.data.test.src:
         results = decode_test_sets(cfg, tokenizer, model, outdir, device)   # test<i>.pred.trg + scores.json
-        import wandb
         if wandb.run is not None:                                          # numbers only, no paths (CLAUDE.md)
             for name, r in results.items():
                 for k in ("bleu", "bleu_13a_lowercase", "chrf", "ter"):

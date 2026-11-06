@@ -1,0 +1,41 @@
+# Single-run experiment: LoRA (every linear layer) fine-tune of google/gemma-3-4b-it
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml: same recipe; run_name carries
+# the pair so the two pairs' W&B groups don't merge.
+# TranslateGemma (translategemma-4b-it) is this model fine-tuned for translation; on zh-en it only ties
+# Qwen3.5-2B after SFT (32.97 vs 32.77 test BLEU-lc) and its zero-shot score is still missing
+# (analysis/2026-11-06_mmtc_results_review). This runs TranslateGemma's all-linear recipe on its base model,
+# through the fixed-template code path, so it is also a clean comparison point for the zh-en TranslateGemma
+# runs whose template status is unknown.
+# Same architecture as TranslateGemma: same peft option (lora_gemma3_all_linear), vision tower kept out by
+# NON_LANGUAGE_MODULES, and the same memory: the logits dominate (262k vocabulary), hence batch 16 x
+# accumulation 4 (effective 64, as shortrun's 32 x 2). A job that OOMs is resumed on an 80 GB A100
+# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
+# Prompt: the plain `chat` format (instruction + source in the user turn, Gemma 3's own chat template).
+# Check the training log for TRL's "Mismatch between tokenized prompt" warning (tools/run_status.py flags
+# it); a hit means Gemma 3's shipped template has TranslateGemma's whitespace defect and needs a format entry.
+# Recipe: as sft_lora_translategemma-4b-it_all-linear.sweep.yaml at lr 1e-4 (the lr axis was within 0.36
+# here): shortrun, 400-step cosine, eval every 50, early stopping after 3, BLEU-lc selection.
+# Launch:    bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+# Zero-shot: bash egs/launch.sh inf egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+#            -> outputs/sft_lora_gemma-3-4b-it_zh-en_all-linear/base_ckpt_inf/test/scores.json
+# Test:      bash egs/launch.sh inf egs/mmtc/zh-en/outputs/sft_lora_gemma-3-4b-it_zh-en_all-linear/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_gemma3_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_gemma-3-4b-it_zh-en_all-linear
+checkpoint: google/gemma-3-4b-it
+prompt_format: chat
+instruction: "Translate Chinese to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 16              # memory only (logits, see above): effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+
+wandb:
+  tags: [sft, zh-en, lora]

@@ -1,0 +1,38 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of Qwen3.5-4B, seeds (3 jobs)
+# Noise measurement for the best recipe. Every result so far is one seed (42), and the noise band is
+# inferred indirectly (template-fix pairs: -0.59..+0.33; rank pairs: +-0.55 test BLEU-lc). The all-linear
+# lr axis is inside that band and dev and test disagree on its order (analysis/2026-11-06_mmtc_results_review),
+# so this runs seeds 1,2,3 at lr 1e-4 (dev's preferred lr; its seed-42 run scored 67.90 test / 65.09 dev)
+# with the recipe of sft_lora_qwen-3.5-4b_all-linear.sweep.yaml UNCHANGED (shortrun: 400-step cosine, eval
+# every 50, early stopping after 3, BLEU-lc selection), so the existing run is a 4th sample.
+# Read: the spread of the 4 seeds on dev AND on test (launch.sh inf each run) is the noise band; only
+# differences beyond it elsewhere in the grid mean anything. Add train.learning_rate=2e-4 on the command
+# line (a single value pins it; keep run_name distinct) to measure the other lr too.
+# train.seed seeds the data order and LoRA init (TRL/Transformers set_seed); bf16 greedy decoding is
+# deterministic given the weights.
+# Memory as the 400-step sweep: batch 32 on a 40 GB A100 or an L40S (slurm.gres=gpu:l40s:1).
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seeds.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-4b_all-linear_seeds_sweep-<idx>/; the .grid.txt maps idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping: as the seed-42 run
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_all-linear_seeds_sweep
+checkpoint: Qwen/Qwen3.5-4B
+prompt_format: chat
+instruction: "Translate French to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+
+wandb:
+  tags: [sft, fr-en, lora, seeds]
+
+hydra:
+  sweeper:
+    params:
+      train.seed: 1,2,3

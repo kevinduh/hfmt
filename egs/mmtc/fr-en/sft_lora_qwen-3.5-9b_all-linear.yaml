@@ -1,0 +1,44 @@
+# Single-run experiment: LoRA (every linear layer) fine-tune of Qwen3.5-9B
+# The next size up in the series 0.8B 60.66 -> 2B 65.55 -> 4B 68.20 test BLEU-lc (best run per model), which
+# had not flattened at 4B (analysis/2026-11-06_mmtc_results_review). The 4B all-linear recipe unchanged
+# (sft_lora_qwen-3.5-4b_all-linear.sweep.yaml at lr 1e-4; the all-linear lr axis is flat within noise), so
+# the result slots straight into the series: shortrun, 400-step cosine, eval every 50, early stopping after
+# 3, BLEU-lc selection, r 8, alpha 32. Zero-shot first: Qwen3.5-4B leads TranslateGemma by 8.5 zero-shot
+# and the two tie after SFT; the 9B zero-shot score says how much more pretraining knows about this domain.
+# Same hybrid architecture as 4B (8 of 32 layers full attention), so the same all-linear module names
+# (lora_qwen3_5_all_linear; confirm with tools/inspect_model.py Qwen/Qwen3.5-9B). The `chat` format's
+# enable_thinking=False applies (the 4B template thinks by default; assume 9B does too).
+# Memory (scaled from the 4B numbers in sft_lora_qwen-3.5-4b_all-linear.sweep.yaml: bf16 weights 7.8 GiB
+# + 3.6 MiB per token, mostly logits): ~18 GiB of weights + the same per-token cost, so batch 16 x
+# accumulation 4 (effective 64, as shortrun's 32 x 2) stays under 40 GB with gradient checkpointing while
+# padded sequences stay under ~250 tokens. Not measured: if it OOMs, resume on an 80 GB A100
+# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb) or halve the batch again
+# (8 x 8). Decoding at the default batch size (16) fits.
+# A comma list on the command line adds an lr axis (train.learning_rate=1e-4,2e-4; change run_name).
+# Launch:    bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+# Zero-shot: bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+#            -> outputs/sft_lora_qwen-3.5-9b_all-linear/base_ckpt_inf/test/scores.json
+# Test:      bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora_qwen-3.5-9b_all-linear/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-9b_all-linear
+checkpoint: Qwen/Qwen3.5-9B
+prompt_format: chat
+instruction: "Translate French to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 16              # memory only (see above): effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+
+slurm:
+  mem_gb: 40                        # the bf16 model (~18 GB) passes through CPU memory at load
+
+wandb:
+  tags: [sft, fr-en, lora]

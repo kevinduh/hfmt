@@ -1,0 +1,39 @@
+# Single-run experiment: LoRA (every linear layer) fine-tune of Qwen3.5-9B
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml: same recipe; run_name carries
+# the pair so the two pairs' W&B groups don't merge.
+# The next size up in the series 2B 32.77 -> 4B 34.53 test BLEU-lc. On this pair fine-tuning gains far less
+# than on fr-en (+11 vs +26 at 2B) and the zero-shot gap between sizes is small (0.8B 19.76, 2B 21.54), a
+# data ceiling at ~1.6k pairs (analysis/2026-11-06_mmtc_results_review). Zero-shot first: the question is
+# whether 9B's pretraining knows this domain better, which SFT can then sharpen.
+# Recipe: the 4B all-linear recipe unchanged (lr 1e-4, the lr axis was within 0.23 here): shortrun, 400-step
+# cosine, eval every 50, early stopping after 3, BLEU-lc selection, r 8, alpha 32.
+# Memory: see the fr-en file (~18 GiB bf16 weights + ~3.6 MiB per token): batch 16 x accumulation 4
+# (effective 64) under 40 GB with gradient checkpointing; not measured. If it OOMs, resume on an 80 GB A100
+# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb) or halve the batch (8 x 8).
+# Launch:    bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+# Zero-shot: bash egs/launch.sh inf egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+#            -> outputs/sft_lora_qwen-3.5-9b_zh-en_all-linear/base_ckpt_inf/test/scores.json
+# Test:      bash egs/launch.sh inf egs/mmtc/zh-en/outputs/sft_lora_qwen-3.5-9b_zh-en_all-linear/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-9b_zh-en_all-linear
+checkpoint: Qwen/Qwen3.5-9B
+prompt_format: chat
+instruction: "Translate Chinese to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 16              # memory only (see above): effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+
+slurm:
+  mem_gb: 40                        # the bf16 model (~18 GB) passes through CPU memory at load
+
+wandb:
+  tags: [sft, zh-en, lora]

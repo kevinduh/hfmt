@@ -209,6 +209,38 @@ def test_best_from_run_folder_after_checkpoints_deleted():
     assert R.inspect_folder(path)["best"] == {"value": 64.1, "step": 200, "global_step": 350}
 
 
+
+RELOAD_WARNING = "WARNING:transformers.trainer:There were missing keys in the checkpoint model loaded: ['lm_head.weight'].\n"
+RELOAD_LABEL = "checkpoint reload loaded nothing: model/ is the last step"
+
+
+def _full_run(dev_check, log):
+    """A finished run whose training log is ``log`` and whose training_info.yaml has ``dev_check`` (None:
+    a run from before the dev check existed)."""
+    path = make_run(tempfile.mkdtemp(), "full", model=True, scores=bleu(66.3), logs=[("slurm-10.out", log)])
+    if dev_check is not None:
+        with open(os.path.join(path, "model", "training_info.yaml"), "w") as f:
+            yaml.safe_dump({"model_global_step": 200, "model_dev_check": dev_check}, f)
+    return R.inspect_folder(path)
+
+
+def test_reload_warning_only_counts_without_a_dev_check():
+    # Before the fix: no measured check, so the warning is the only evidence.
+    old = _full_run(None, RELOAD_WARNING)
+    assert old["warnings"] == [RELOAD_LABEL] and old["model_check"] is None
+    # After it the Trainer's own reload still warns, load_checkpoint_weights redoes it, the check measures it.
+    for check in ("ok", "unchecked: no dev BLEU at step 200 in log_history"):
+        fixed = _full_run(check, RELOAD_WARNING)
+        assert fixed["warnings"] == [] and fixed["model_check"] is None
+    bad = _full_run("MISMATCH: model/ dev bleu 24.74 vs 34.33 at step 200 (tolerance 1.0)", RELOAD_WARNING)
+    assert bad["warnings"] == [] and bad["model_check"].startswith("MISMATCH")
+
+
+def test_prompt_mismatch_warning_counts_with_a_dev_check():
+    info = _full_run("ok", "WARNING: Mismatch between tokenized prompt and the start of tokenized prompt+completion\n")
+    assert info["warnings"] == ["prompt not a token prefix of prompt + reply (chat template)"]
+
+
 # --- Slurm -------------------------------------------------------------------
 
 def test_parse_squeue_and_sacct():

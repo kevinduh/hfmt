@@ -586,3 +586,8 @@ with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a st
   training logs for known-bad library warnings (`BAD_WARNINGS`: this reload warning, TRL's prompt-prefix
   mismatch) and prints "Checks failed" with any `MISMATCH`. Both this bug and the template bug would have
   been visible the day they first ran.
+- **Correction (2026-11-06).** The Trainer's reload is still there, so it still warns in every Qwen3.5
+  full run after the fix too: the warning marks an affected run only when `training_info.yaml` has no
+  `model_dev_check` (runs from before this fix). The first `_short` runs were flagged by the log scan
+  although their dev check was `ok`. `run_status.py` now reports the reload warning only for runs
+  without a dev check; for the others, the measured check decides.

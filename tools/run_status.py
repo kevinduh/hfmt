@@ -31,8 +31,11 @@ mem_gb, cpus, constraint, exclude). Without squeue/sacct (or with --no-slurm), q
 
 Checks failed: runs that finished but not as intended -- a known-bad library warning in a training log
 (BAD_WARNINGS: the Trainer's checkpoint reload loaded nothing, so model/ is the last step; TRL's prompt not
-a token prefix of prompt + reply) or model/training_info.yaml's model_dev_check not "ok" (the saved model's
-dev BLEU differs from the dev BLEU of the step it holds). See decisions.md 2026-11-04 and 2026-11-05.
+a token prefix of prompt + reply) or model/training_info.yaml's model_dev_check a "MISMATCH" (the saved model's
+dev BLEU differs from the dev BLEU of the step it holds). The reload warning counts only for runs without a
+model_dev_check (before 2026-11-05): later full runs still log it, from the Trainer's own reload, which
+load_checkpoint_weights then redoes correctly, and the dev check measures the result. See decisions.md
+2026-11-04 and 2026-11-05.
 
 Logs and predictions hold example text (CLAUDE.md): only the end of each log is read for errors, whole
 logs are searched for BAD_WARNINGS, and only matched error lines (truncated) and labels are printed;
@@ -68,10 +71,14 @@ SBATCH_FLAGS = {"partition": "--partition={}", "gres": "--gres={}", "time": "--t
                 "exclude": "--exclude={}"}
 DECODE_METRICS = ("bleu", "bleu_13a_lowercase", "chrf", "ter")   # scores.json keys (hfmt/mt_model.py score)
 # Library warnings that mean a finished run trained or saved something other than intended (decisions.md
-# 2026-11-04, 2026-11-05): (text in the log, label printed). Whole training logs are searched.
+# 2026-11-04, 2026-11-05): (text in the log, label printed, whether model_dev_check supersedes it). Whole
+# training logs are searched. The Trainer's reload still warns in every Qwen3.5 full run after the fix
+# (sft_translation.py reloads the checkpoint again through load_checkpoint_weights), so for a run with a
+# model_dev_check that measured check is what counts, not the warning.
 BAD_WARNINGS = [
-    ("There were missing keys in the checkpoint model loaded", "checkpoint reload loaded nothing: model/ is the last step"),
-    ("Mismatch between tokenized prompt", "prompt not a token prefix of prompt + reply (chat template)"),
+    ("There were missing keys in the checkpoint model loaded", "checkpoint reload loaded nothing: model/ is the last step",
+     True),
+    ("Mismatch between tokenized prompt", "prompt not a token prefix of prompt + reply (chat template)", False),
 ]
 QUEUE_STATES = {"RUNNING": "running", "COMPLETING": "running", "CONFIGURING": "running",
                 "PENDING": "pending", "REQUEUED": "pending"}
@@ -134,6 +141,7 @@ def inspect_folder(path):
     complete = [step for step, ok in checkpoints if ok]
     logs = _logs(path)
     tail = _tail(os.path.join(path, logs[-1])) if logs else ""
+    dev_check = _model_dev_check(path)
     scores = _scores(os.path.join(path, "scores.json"))           # training's test decoding
     # launch.sh inf <run>/run_config.yaml: inf_config.yaml when launched, scores.json when done.
     inf_dir = os.path.join(path, "inf", str(cfg.get("inf_name") or "test"))
@@ -168,15 +176,16 @@ def inspect_folder(path):
         inf_log=inf_logs[-1] if inf_logs else None,
         inf_error=_last_error(inf_tail),
         match=compare_test_outputs(path, inf_dir, cfg, inf_cfg, scores, inf_scores),
-        warnings=_bad_warnings(path, logs),
-        model_check=_model_dev_check(path),
+        warnings=_bad_warnings(path, logs, dev_checked=dev_check is not None),
+        model_check=dev_check if dev_check and dev_check.startswith("MISMATCH") else None,
     )
     return info
 
 
-def _bad_warnings(folder, logs):
-    """Labels of the BAD_WARNINGS found in the folder's training logs, in BAD_WARNINGS order. Whole files:
-    the warnings come mid-run, long before the tail."""
+def _bad_warnings(folder, logs, dev_checked=False):
+    """Labels of the BAD_WARNINGS found in the folder's training logs, in BAD_WARNINGS order, leaving out
+    those the model/ dev check supersedes when the run has one (``dev_checked``). Whole files: the warnings
+    come mid-run, long before the tail."""
     found = []
     for name in logs:
         try:
@@ -184,16 +193,16 @@ def _bad_warnings(folder, logs):
                 text = f.read().decode("utf-8", errors="replace")
         except OSError:
             continue
-        found += [label for pattern, label in BAD_WARNINGS if pattern in text and label not in found]
-    return [label for _, label in BAD_WARNINGS if label in found]
+        found += [label for pattern, label, _ in BAD_WARNINGS if pattern in text and label not in found]
+    return [label for _, label, superseded in BAD_WARNINGS if label in found and not (superseded and dev_checked)]
 
 
 def _model_dev_check(path):
-    """model/training_info.yaml's model_dev_check (hfmt/sft_translation.py check_model_dev_scores) when it
-    failed ("MISMATCH: ..."); None when ok, unchecked (no dev decode at that step) or absent (runs before
-    2026-11-05)."""
+    """model/training_info.yaml's model_dev_check (hfmt/sft_translation.py check_model_dev_scores): "ok",
+    "unchecked: ..." (no dev decode at that step) or "MISMATCH: ..."; None when absent (runs before
+    2026-11-05, or not finished)."""
     check = _load_yaml(os.path.join(path, "model", "training_info.yaml"))[0].get("model_dev_check")
-    return check if isinstance(check, str) and check.startswith("MISMATCH") else None
+    return check if isinstance(check, str) else None
 
 
 def _load_yaml(path):

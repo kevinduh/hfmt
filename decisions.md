@@ -506,20 +506,19 @@ decoded and merged like any other model.
   `gradient_accumulation_steps: 4` (effective batch 64) to fit the 40 GB A100 pool; a job that still
   OOMs is resumed on a bigger GPU (feature 12).
 
-## GPU startup race and requeue (cluster admin advice, 2026-11-03)
+## GPU startup race and requeue (2026-11-03)
 
 **Decision:** `egs/job.sh` waits for its GPU before starting, every sbatch gets `--requeue
 --open-mode=append`, and a requeued training task resumes from its last checkpoint.
 
-- **Why.** The cluster's GPUs run in exclusive-process mode. Tasks that start in the same second
-  race for GPUs, and the losers exit at once with "CUDA-capable device(s) is/are busy or
-  unavailable", so some tasks of a submission fail and others run. The admin recommended `%N`
+- **Why.** GPUs in exclusive-process mode (one process per GPU) make tasks that start in the same
+  second race for GPUs, and the losers exit at once with "CUDA-capable device(s) is/are busy or
+  unavailable", so some tasks of a submission fail and others run. The recommended practice is `%N`
   throttling (already `slurm.array_parallelism`), arrays instead of sbatch loops (already one
   array per launch), and `--requeue`.
-- **`--requeue` doesn't retry a failed exit here.** `scontrol show config` has `RequeueExit =
-  (null)`, so a task that exits with an error is never requeued; requeue happens only after a node
-  failure, preemption or `scontrol requeue` (`JobRequeue = 1` already makes every batch job
-  requeueable, `MaxBatchRequeue = 5`). So the retry is in `job.sh`: up to 6 tries to create a CUDA
+- **`--requeue` doesn't retry a failed exit here.** Slurm requeues a task only after a node
+  failure, preemption or `scontrol requeue`, never because it exited with an error (it is not
+  configured to requeue on exit codes). So the retry is in `job.sh`: up to 6 tries to create a CUDA
   context, 30 s apart, before Python (and the W&B run) starts. `%N` only caps the burst: the first
   N tasks still start together.
 - **Requeue resumes training.** A requeued task runs `job.sh` from the top; for `sft` with

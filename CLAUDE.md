@@ -88,10 +88,10 @@ hfmt/
   Hydra run of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
   sbatch command. Run folders: `<output_root>/<run_name>` (1 job) or `<run_name>-<idx>` (grid);
   `output_root` defaults to `<experiment folder>/outputs`. No timestamps: an existing folder
-  only warns. W&B run name = run folder name, group = `run_name`. The GPUs are exclusive-process,
-  so `job.sh` waits for its GPU before starting (tasks starting together race for GPUs);
+  only warns. W&B run name = run folder name, group = `run_name`. Tasks starting together can race
+  for GPUs (exclusive-process mode), so `job.sh` waits for its GPU before starting;
   every sbatch has `--requeue --open-mode=append`, and a requeued `sft` task resumes from its last
-  checkpoint (`RequeueExit` is unset, so Slurm never retries a failed exit itself).
+  checkpoint (Slurm requeues only after a node failure or preemption, never after a failed exit).
 - **Resume (feature 12)** — `bash egs/launch.sh sft <run folder>/run_config.yaml [slurm.* overrides]`
   continues a run cancelled midway from its last checkpoint, in the same folder with the same
   config. It never re-runs or renames a run: change a run via its experiment yaml + a new

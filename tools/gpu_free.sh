@@ -4,7 +4,7 @@
 # least-contended type before launching a run (e.g. choose a100 vs l40s for egs/launch.sh).
 #
 # Usage (run on a Slurm login node):
-#   bash tools/gpu_free.sh                 # summary for a100 and l40s (our 4gpu_tier bf16 set)
+#   bash tools/gpu_free.sh                 # summary for a100 and l40s (the bf16 types we use)
 #   bash tools/gpu_free.sh a100 l40s v100  # summary for the GPU types you name
 #   bash tools/gpu_free.sh -v              # also list each node that has a free GPU
 #
@@ -12,16 +12,16 @@
 # (DOWN/DRAIN/MAINT/RESV/etc are treated as 0 free). "NODES+" = how many nodes have >=1 free
 # GPU of that type -- what matters for a 1-GPU job.
 #
-# NOTE: this is raw CLUSTER availability. Your 4gpu_tier still caps you at gres/gpu=4 total,
-# so you can occupy at most 4 GPUs regardless of what is free here.
+# NOTE: this is raw CLUSTER availability. Your per-user GPU quota still caps how many GPUs you
+# can occupy at once, regardless of what is free here (GPU_CAP, default 4, in the summary line).
 set -euo pipefail
 
 command -v sinfo >/dev/null 2>&1 || {
   echo "gpu_free.sh: 'sinfo' not found -- run this on a Slurm login node." >&2
   exit 1
 }
-# Data source is `sinfo -N` (one row per node) with the GresUsed field: this cluster's
-# `scontrol show node --oneliner` omits GresUsed (allocation only shows up in AllocTRES),
+# Data source is `sinfo -N` (one row per node) with the GresUsed field:
+# `scontrol show node --oneliner` can omit GresUsed (allocation only shows up in AllocTRES),
 # whereas sinfo reports GRES_USED directly, so netting free = configured - used is reliable.
 
 verbose=0; emit=0
@@ -94,10 +94,10 @@ END{
 '
 
 if [[ "$emit" == "0" ]]; then
-  # Your remaining quota: how many GPUs you are already running, out of the 4gpu_tier cap.
+  # Your remaining quota: how many GPUs you are already running, out of your per-user cap.
   used_by_me=$(squeue -u "$USER" -h -t RUNNING -o "%b" 2>/dev/null \
                | awk -F: '/gpu/{s+=$NF} END{print s+0}')
   echo
-  echo "4gpu_tier cap: 4 GPUs total (gres/gpu=4). You are currently using: ${used_by_me:-0}."
+  echo "Per-user GPU cap: ${GPU_CAP:-4} GPUs at once. You are currently using: ${used_by_me:-0}."
   echo "To auto-pick the freest type and launch, use: tools/run_on_free_gpu.sh"
 fi

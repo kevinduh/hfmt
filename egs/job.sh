@@ -15,9 +15,9 @@ kind=$1
 shift
 shift "${SLURM_ARRAY_TASK_ID:-0}"
 
-# The cluster's GPUs are in exclusive-process mode (one process per GPU): tasks that start at the
+# GPUs in exclusive-process mode (one process per GPU) make tasks that start at the
 # same moment race for GPUs, and a loser fails with "CUDA-capable device(s) is/are busy or
-# unavailable". Slurm doesn't retry a failed task (RequeueExit is unset), so wait here, before
+# unavailable". Slurm doesn't retry a task that failed on its own, so wait here, before
 # anything is written (e.g. a W&B run).
 if [ -n "${SLURM_JOB_ID}" ]; then
     for try in 1 2 3 4 5 6; do

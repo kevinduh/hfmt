@@ -43,6 +43,23 @@ def config_token_ids(config):
     return get("pad_token_id"), get("bos_token_id"), get("eos_token_id")
 
 
+def wandb_privacy_settings(wandb_module):
+    """Keyword arguments for ``wandb.Settings`` that keep everything but metrics and config off W&B
+    (CLAUDE.md): no console upload (the local log has example text), no code or git upload, and no run
+    metadata (W&B's wandb-metadata.json otherwise records the compute node's hostname, the Unix
+    username, the executable, the working directory and the command line). The metadata switch is
+    ``x_disable_meta`` (wandb >= 0.19); a wandb without it keeps the metadata and a warning says so.
+    System metrics (GPU memory, utilization) stay on: they are numbers, and analysis/pull_wandb.py reads them.
+    """
+    settings = {"console": "off", "disable_code": True, "disable_git": True}
+    if "x_disable_meta" in getattr(wandb_module.Settings, "model_fields", {}):
+        settings["x_disable_meta"] = True
+    else:
+        logging.warning("wandb.Settings has no x_disable_meta: W&B receives the run metadata "
+                        "(hostname, username, command line)")
+    return settings
+
+
 def add_dev_scores_to_log_history(log_history, step, scores):
     """Put the dev ``scores`` (from ``score``) into the Trainer's ``log_history`` as ``eval_<key>``,
     so ``trainer_state.json`` keeps them. The Trainer adds an evaluation's entry before it calls the
@@ -179,8 +196,9 @@ def main(cfg: Config) -> None:
     logging.info(f"Resume from the last checkpoint: {resume}")
 
     # W&B (main process only): name = run folder, group = run_name. Only the data-free config
-    # (paths, hyperparameters, instruction) and aggregate metrics go to W&B (CLAUDE.md); the
-    # Trainer's report_to="wandb" reuses this run.
+    # (paths, hyperparameters, instruction) and aggregate metrics go to W&B (CLAUDE.md); console, code,
+    # git and run metadata (hostname, username, command line) are not uploaded (wandb_privacy_settings).
+    # The Trainer's report_to="wandb" reuses this run.
     # On a resume, the run ID comes from the local wandb/latest-run (run-<date>_<time>-<id>); with no
     # earlier W&B run (it was off) a new one starts.
     if cfg.wandb.enabled and int(os.environ.get("RANK", "0")) == 0:
@@ -191,7 +209,7 @@ def main(cfg: Config) -> None:
                    group=cfg.run_name, tags=list(cfg.wandb.tags), dir=outdir,
                    config={"hfmt": OmegaConf.to_container(cfg, resolve=True), "run_dir": outdir},
                    id=run_id, resume="allow" if run_id else None,
-                   settings=wandb.Settings(console="off"))
+                   settings=wandb.Settings(**wandb_privacy_settings(wandb)))
 
     ###################################
     ## User settings

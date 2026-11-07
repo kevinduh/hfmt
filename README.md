@@ -148,7 +148,7 @@ also shows the error line and the node, and points out nodes where several jobs 
 
 ```bash
 python tools/run_status.py egs/mmtc/fr-en/outputs                         # every run + fix commands
-python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=node07  # fix commands avoid node07
+python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node>  # fix commands avoid that node
 ```
 
 To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass

@@ -3,7 +3,7 @@
 unfinished one.
 
     python tools/run_status.py egs/mmtc/fr-en/outputs                  # every run folder + fix commands
-    python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=node07 --slurm gres=gpu:a100:1
+    python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node> --slurm gres=gpu:a100:1
 
 Read-only: it prints the commands, you review and run them (from the repo root, on a login node). A run
 folder is any folder with a run_config.yaml (written by hfmt/grid.py); folders under a complete/ folder
@@ -101,7 +101,7 @@ def parse_args(argv=None):
     p.add_argument("dirs", nargs="+", help="folders to search for run folders, e.g. egs/mmtc/fr-en/outputs")
     p.add_argument("--slurm", action="append", default=[], metavar="KEY=VALUE",
                    help="slurm setting for the printed commands, replacing the saved one, e.g. "
-                        "exclude=node07 or gres=gpu:a100:1 (repeatable)")
+                        "exclude=<node> or gres=gpu:a100:1 (repeatable)")
     p.add_argument("--no-slurm", action="store_true", help="don't call squeue/sacct")
     args = p.parse_args(argv)
     overrides = []

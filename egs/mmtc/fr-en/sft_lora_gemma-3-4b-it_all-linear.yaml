@@ -9,6 +9,13 @@
 # logits dominate (262k vocabulary), hence batch 16 x accumulation 4 (effective 64, as shortrun's 32 x 2).
 # A job that OOMs is resumed on an 80 GB A100 (bash egs/launch.sh sft <run folder>/run_config.yaml
 # slurm.constraint=80gb).
+# Inspected (tools/inspect_model.py google/gemma-3-4b-it, 2026-11-06): same language model as TranslateGemma
+# (34 layers, 7 all-linear names, 14.9M adapter parameters at r=8, lm_head tied), vision tower (417M) and
+# projector (3M) reported as not trained; bf16 weights 8.0 GiB + 3.78 MiB per token. The `chat` format adds
+# 14 tokens around the source (TranslateGemma's adds ~75), so batch 16 fits with more headroom than there.
+# Template checked (login node, 2026-11-06): the generation prompt is a token prefix of prompt + reply
+# (15 of 18 tokens), so Gemma 3's shipped template does not have TranslateGemma's whitespace defect and
+# needs no fix_template. TRL's mismatch warning should not appear; if it does, something else changed.
 # Prompt: the plain `chat` format (instruction + source in the user turn, Gemma 3's own chat template;
 # enable_thinking is ignored by templates without it). TranslateGemma's fix_template does not apply here:
 # check the training log for TRL's "Mismatch between tokenized prompt" warning (tools/run_status.py

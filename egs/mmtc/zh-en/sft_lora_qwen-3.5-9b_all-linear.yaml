@@ -7,9 +7,10 @@
 # whether 9B's pretraining knows this domain better, which SFT can then sharpen.
 # Recipe: the 4B all-linear recipe unchanged (lr 1e-4, the lr axis was within 0.23 here): shortrun, 400-step
 # cosine, eval every 50, early stopping after 3, BLEU-lc selection, r 8, alpha 32.
-# Memory: see the fr-en file (~18 GiB bf16 weights + ~3.6 MiB per token): batch 16 x accumulation 4
-# (effective 64) under 40 GB with gradient checkpointing; not measured. If it OOMs, resume on an 80 GB A100
-# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb) or halve the batch (8 x 8).
+# Memory: see the fr-en file (tools/inspect_model.py: 16.7 GiB bf16 weights + 3.71 MiB per token):
+# batch 8 x accumulation 8 (effective 64) and eval batch 16 fit any 40 GB+ GPU with a wide margin. Not
+# measured on a GPU yet; if it OOMs, resume on an 80 GB A100
+# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
 # Launch:    bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
 # Zero-shot: bash egs/launch.sh inf egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
 #            -> outputs/sft_lora_qwen-3.5-9b_zh-en_all-linear/base_ckpt_inf/test/scores.json
@@ -29,8 +30,9 @@ instruction: "Translate Chinese to English"
 train:
   learning_rate: 1e-4
   metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
-  train_batch_size: 16              # memory only (see above): effective batch 16 x 4 = 64
-  gradient_accumulation_steps: 4
+  train_batch_size: 8               # memory only (see above): effective batch 8 x 8 = 64
+  gradient_accumulation_steps: 8
+  eval_batch_size: 16               # memory only: the eval loss still materialises the logits
 
 slurm:
   mem_gb: 40                        # the bf16 model (~18 GB) passes through CPU memory at load

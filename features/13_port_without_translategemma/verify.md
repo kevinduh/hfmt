@@ -49,6 +49,41 @@ bash egs/launch.sh sft egs/mmtc/fr-en/sft_qwen-3.5-0.8b.yaml run_name=port_check
 This is the only cheap way to exercise `load_checkpoint_weights` (the best-checkpoint reload) and the
 end-of-training dev check of `model/`.
 
+## 2b. Full fine-tune save check: Qwen3.5-4B, 10 steps, eval and save every step
+
+The quickest way to see the best-checkpoint reload (`load_checkpoint_weights`) and the dev check of
+`model/` work on the model that exposed the bug. Overrides checked to compose through `grid.py`
+(10 steps, eval and save every step, metric `eval_bleu_13a_lowercase`, 80 GB A100 from the experiment):
+
+```bash
+bash egs/launch.sh sft egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml \
+    run_name=port_check_full_qwen-3.5-4b \
+    train.max_steps=10 \
+    train.eval_steps=1 \
+    train.warmup_steps=2 \
+    train.logging_steps=1 \
+    train.early_stopping_patience=100 \
+    slurm.time=2:00:00
+```
+
+- `train.eval_steps=1` also sets `save_steps` (`full_finetune_short.yaml` has `save_steps: ${train.eval_steps}`);
+  dev decoding runs at every evaluation because that config has `inference_callback_interval: 1`.
+- `train.warmup_steps=2` replaces the default 10, which would otherwise equal the whole run.
+- `train.early_stopping_patience=100` keeps the run from stopping before step 10.
+- `save_total_limit` stays at 2: the best and the latest checkpoint on disk at a time.
+
+What proves saving works, in `egs/mmtc/fr-en/outputs/port_check_full_qwen-3.5-4b/`:
+
+- `model/training_info.yaml` has `model_dev_check: ok`, and `model_global_step` equals `best_global_step`
+  rather than 10. The best step will almost surely not be the last one, which is what exercises the reload.
+- The Slurm log shows `Loading the weights of .../checkpoint-<best> into the model` after training, and
+  the `model/ dev check:` line reports `ok`.
+- `python tools/run_status.py egs/mmtc/fr-en/outputs` shows the run as finished with no failed checks.
+
+Cost: each save writes a ~50 GB fp32 checkpoint with optimizer state, so the 10 saves dominate the
+runtime, and the dev set is decoded 11 times (10 evaluations plus the final check of `model/`). Free the
+~100 GB afterwards: `bash tools/delete_checkpoints.sh egs/mmtc/fr-en/outputs/port_check_full_qwen-3.5-4b`.
+
 ## 3. Read the results with the new tooling
 
 ```bash

@@ -1,4 +1,4 @@
-# Sweep experiment
+# Sweep experiment (the README example): 2 learning rates x 2 LoRA ranks = 4 jobs
 # Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml [overrides]
 # Always runs the full grid; a command-line comma list adds an axis, a single value pins one.
 # Jobs land in outputs/sft_lora_sweep-<idx>/; outputs/sft_lora_sweep.grid.txt maps idx -> values.
@@ -9,7 +9,7 @@ defaults:
   - _self_
 
 run_name: sft_lora_sweep
-checkpoint: Qwen/Qwen2.5-1.5B-Instruct
+checkpoint: Qwen/Qwen3.5-2B
 instruction: "Translate French to English"
 
 wandb:

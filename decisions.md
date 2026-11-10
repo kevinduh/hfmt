@@ -1,284 +1,17 @@
 # Decisions
 
-Important, non-obvious decisions and their context. Update infrequently.
+Important, non-obvious decisions and their context, in chronological order. Update infrequently.
+Headings are `## YYYY-MM-DD: title (feature directory, if any)`. The decisions of the first Hydra
+integration (features 00–07, branch `hydra2`), superseded by the 2026-10-17 rebuild, are in
+`decisions_hydra2.md`.
 
 ---
 
-## Experiments are config + a single generic launcher (feature 00_hydra)
-
-**Decision:** An experiment is defined by a config file in `conf/experiment/<name>.yaml`
-(all tunable parameters) and launched with one generic script, `egs/run.sh <name>` — not
-by a per-experiment shell script.
-
-**Context:** Pre-Hydra, each experiment was its own shell script under `egs/<task>/<pair>/`
-(e.g. `sft1.sh`) that hard-coded parameters and invoked the trainer. After the Hydra
-migration, parameters live in the experiment YAML, so a per-experiment `.sh` would only
-duplicate the experiment name and boilerplate. We therefore removed `egs/mmtc/fr-en/sft1.sh`
-and added `egs/run.sh`, which activates the env (`install/path.sh`) and submits to Slurm via
-the submitit launcher (`-m +experiment=<name> hydra/launcher=slurm`). Run it from a login
-node — do **not** `sbatch` it; submitit generates and submits the job.
-
-Trade-off accepted: slightly less "browse `egs/` to see experiments" discoverability than a
-file-per-experiment, in exchange for a single source of truth (the YAML) and no shell
-boilerplate. This matches the `egs/run.sh` direction suggested in `overview.md` §5.5.
-
-Scope: applies to the `sft_translation.py` workflow (feature 00_hydra). The other entry
-points and the legacy W&B sweep tooling (`egs/mmtc/fr-en/sweep*.{yaml,sh}`) are not yet
-migrated.
-
----
-
-## Key Hydra technical choices (feature 00_hydra)
-
-Non-obvious implementation decisions, for future readers/maintainers:
-
-- **`hydra.job.chdir=false`.** The code targets the Hydra run dir explicitly (via
-  `HydraConfig.runtime.output_dir`) and resolves data paths from `${oc.env:HFMT_ROOT}`, so it
-  is CWD-independent and we don't let Hydra change the working directory.
-- **Heavy imports are lazy** (inside `main()`/helpers; `transformers.EarlyStoppingCallback`
-  guarded at module top). This keeps `--cfg job` and config composition runnable on a CPU-only
-  box without torch/bitsandbytes installed — the basis for all pre-cluster validation.
-- **We own the W&B run** (`init_wandb`, main process only), then the HF Trainer's WandbCallback
-  reuses it. `run_id` is derived from the run-dir basename so it is unique per launch but stable
-  across a Slurm requeue (`resume="allow"` reattaches). Config logged to `wandb.config` is
-  data-free by construction (paths + hyperparams only); `WANDB_LOG_MODEL=false`.
-- **Slurm via `hydra-submitit-launcher`**, not hand-written sbatch. The compute-node env is
-  bootstrapped through the launcher's `setup:` (`source install/path.sh`), which is the only
-  hook guaranteed to run before Python on the node.
-
-Deferred (for the future sweep request): external/proprietary data root (`conf/data` still
-points in-repo via `HFMT_ROOT`), `.gitignore`/`path.sh` data hardening, and migrating the
-W&B sweep tooling to Hydra's sweeper. Considering a move to `uv` for env management.
-*(The W&B-sweep → Hydra-sweeper migration is now done — see below.)*
-
----
-
-## Parameter sweeps use Hydra's basic grid sweeper (feature 02_hydra_sweep)
-
-**Decision:** Sweeps are plain Hydra `--multirun` grids over config knobs, fanned out to Slurm
-by the existing submitit launcher. Reusable grids are committed under `conf/sweep/<name>.yaml`
-(selected with `+sweep=<name>`); ad-hoc comma-list overrides also work. The legacy W&B-sweep
-tooling (`egs/mmtc/fr-en/sweep*.{yaml,sh}`) is removed.
-
-**Context:** The fan-out already existed — `egs/run.sh` runs `--multirun` with
-`hydra/launcher=slurm`, and each job already got a unique output dir + W&B run id. So this
-feature added ergonomics and legibility, not fan-out:
-
-- **Basic grid, not Optuna.** Chose Hydra's built-in sweeper: zero new deps and no need for
-  `main()` to return an objective. Bayesian/pruning search (the old `sweep.yaml`'s
-  bayes+hyperband) is explicitly out of scope; it would need the Optuna plugin + objective
-  reporting. Grid is enough for "experiment over multiple parameters."
-- **W&B identifiability.** In multirun, `derive_run_identity()` groups a sweep's runs under
-  `<base-group>-sweep-<timestamp>` and names/tags each run by its swept values. The sweep id is
-  the **shared timestamp in the run-dir basename** (unique per launch, shared across its jobs),
-  *not* `hydra.sweep.dir` — which is just `outputs/<experiment>` and identical across all sweeps
-  of an experiment. Confidentiality: `data`/path-bearing overrides are stripped from names/tags.
-- **Concurrency cap.** `array_parallelism: 4` in the Slurm launcher (the node-tier size) bounds
-  how many array tasks run at once; grids are cross-products, so job counts multiply fast.
-
----
-
-## Run outputs are aligned with W&B names (feature 03_output_wandb_align)
-
-**Decision:** The output directory layout mirrors the W&B group→run hierarchy, and the run-dir
-basename **is** the W&B run name, so a W&B run maps 1:1 to its files on disk. A sweep lands at
-`outputs/<experiment>/sweep-<ts>/<run_label>/` and a plain run at `outputs/<experiment>/<ts>/`;
-the trained adapter is saved inside the run dir as `model/` (was the `outdir + "_b"` sibling).
-
-**Context:** Previously the run dir (`<job.num>_<ts>`) bore no resemblance to the W&B run name
-(the swept-param string), so you couldn't get from a W&B run to its `eval.pred.trg` to score it.
-
-- **Single source of truth.** `build_run_label()` turns Hydra's `override_dirname` into a
-  strict, shell-safe (`[A-Za-z0-9._-]`), descriptive label (group prefix stripped, leaf keys
-  kept verbatim — `lora_r`, `lora_target`, … — pairs joined by `__`). It is exposed to
-  `hydra.sweep.subdir` via a custom OmegaConf resolver (`hfmt_runlabel`, registered at import),
-  and `derive_run_identity()` reads the same string back off the path for the W&B name. One
-  function feeds both, so dir and W&B name cannot drift.
-- **Sweep id moved up to `hydra.sweep.dir`** (`sweep-<ts>`), **evolving the 02 decision.** In 02
-  the shared timestamp lived in the subdir basename; here it moves to the sweep root so all
-  jobs of a launch share one `sweep-<ts>/` parent (resolved once on the login node, stable
-  across a requeue). `derive_run_identity` now derives the W&B group from that parent dir
-  (`<base-group>-sweep-<ts>`) and the run name/tags from the run-dir basename — superseding 02's
-  `job.partition("_")` parsing and retiring `_sweep_param_tokens()`.
-- **Confidentiality is centralized** in `build_run_label()`: it drops `data`/`data.*` keys and
-  any `/`-bearing value, so no data path enters the dir name (hence the W&B run name). The label
-  being the sole confidentiality chokepoint is deliberate — audit it if the filter changes.
-- **Descriptive, not abbreviated** (developer preference): keys stay verbatim and `lora` is kept
-  in LoRA params to avoid confusion. Note values are resolved numbers, so `2e-4` → `0.0002`.
-- **Forward-only.** Existing `outputs/` dirs from before this change are not migrated.
-
----
-
-## Config is atomistic components + experiments in egs/ (feature 04_config_structure_change)
-
-**Decision:** `conf/` holds only atomistic, mix-and-match components — `basemodel`, `lora`,
-`data`, `train`, `decode` — and nothing else. An *experiment* composes them (plus inline `wandb`
-and `sweep` blocks) and lives under `egs/experiment/<name>.yaml`, discovered via
-`hydra.searchpath`. The old `model` group is split into `basemodel` (checkpoint + quantization +
-load `dtype`) and `lora` (adapter, with an `enabled` toggle); `conf/wandb/`, `conf/experiment/`
-and `conf/sweep/` are removed. LoRA can be turned off (`lora.enabled=false`, requires
-`basemodel.load_in_4bit=false`) to fully fine-tune the base model.
-
-**Context:** Feature 00 put everything in `conf/`, including experiments and (feature 02) sweep
-presets; the `model` group conflated the base model with the adaptation method. This feature
-makes the base model and the adaptation independent components, moves experiments next to the
-other recipes under `egs/`, and folds wandb/sweep into the experiment so one file fully describes
-a run.
-
-- **`hydra.searchpath` over `--config-dir`.** `conf/config.yaml` adds
-  `file://${oc.env:HFMT_ROOT}/egs` to the search path, so `+experiment=<name>` resolves from
-  `egs/experiment/` under *any* launcher (`run.sh`, direct `python -m`, the compose API) — not
-  just when `run.sh` passes a flag. Verified on the pinned Hydra (1.3.7).
-- **Sweep toggle via a compose probe, not `hydra.sweeper.params` on the CLI.** *(Superseded by
-  feature 07: two kinds of experiment, no toggle/probe — see below.)* Hydra has no
-  native on/off for the basic sweeper and *rejects* `hydra.sweeper.params.*` as a CLI override
-  ("Sweeping over Hydra's configuration is not supported"). So the grid lives in a typed
-  `sweep: {enabled, params}` block and `egs/run.sh` runs `hfmt/sweep_probe.py` (compose-only, no
-  `transformers`) which, when `sweep.enabled`, emits bare `<axis>=<csv>` overrides the sweeper
-  fans out. We always `--multirun` (submitit only runs in multirun); disabled → no axes → one
-  job. The probe honors `sweep.enabled` from the CLI; adding an *axis* from the CLI uses a bare
-  override (`basemodel=a,b`), not `sweep.params.*` (a comma value breaks single-run compose).
-- **Sweep over whole component files; label by file name.** Axes may be group choices
-  (`basemodel: "qwen2.5-7b,qwen2.5-1.5b"`), so `build_run_label` labels such a job
-  `basemodel-qwen2.5-7b` — the selected YAML file, not the checkpoint value inside. A bare
-  `data=<name>` config name is now allowed in labels (a name, not a path); dotted `data.<leaf>`
-  and any `/`-bearing value are still dropped (confidentiality unchanged).
-- **Full fine-tune support.** `sft_translation.py` makes quantization conditional on
-  `basemodel.load_in_4bit` and the adapter conditional on `lora.enabled`, with a fail-fast
-  guardrail when LoRA is off but the base is 4-bit. Full-FT inference needs no new code — load
-  `<run_dir>/model` as `inf_translation.py --checkpoint` with no `--peft`.
-- **Refinement sweep is now an experiment.** The old `conf/sweep/mmtc_fr-en_refine1.yaml` (which
-  both fixed values and swept others) became `egs/experiment/mmtc_fr-en_sft1_refine1.yaml`,
-  since "a refined sweep" is just another experiment in the new model.
-- **Plain runs are named by the experiment, not `job0`.** `run.sh` always uses `--multirun`
-  (submitit needs it), so a single non-swept run reached the sweep naming path and got the
-  `job0` fallback label and a `-sweep-<ts>` W&B group. Now `main` distinguishes a real sweep
-  job (its `override_dirname` carries informative tokens) from a plain run: a plain run falls
-  back to the `<experiment>` name for the run-dir leaf and W&B run name (so disk and W&B still
-  match), keeps the base W&B group without the `-sweep-<ts>` suffix, and drops the `sweep` tag.
-  `${experiment}` is threaded into the `hfmt_runlabel` resolver for the dir leaf (verified it
-  interpolates inside `hydra.sweep.subdir`). Real sweeps are unchanged.
-- **Launcher is a selectable component, not a forced flag.** The Slurm settings (GPU type,
-  walltime, memory, concurrency) live in `conf/hydra/launcher/` profiles — `slurm` (QLoRA
-  baseline) and `slurm_fullft` (extends `slurm`, bumps RAM/walltime for full fine-tunes) — and
-  each experiment *selects* one in its defaults (`- override /hydra/launcher: <profile>`), so the
-  experiment stays a flat list of choices with the complex presets in their own files.
-  `egs/run.sh` no longer hardcodes `hydra/launcher=slurm`. **Why not a primary-config default:**
-  Hydra ignores an experiment's launcher group-override once the primary config sets one (verified),
-  so defaulting it in `conf/config.yaml` would silently block per-experiment selection. The trade-off
-  is a footgun — an experiment that selects no launcher falls back to the local `basic` launcher —
-  so every committed experiment selects a slurm profile. Per-run tweaks still work on the CLI
-  (`hydra.launcher.timeout_min=120`, `hydra/launcher=local`).
-
----
-
-## W&B run names prefix the experiment (feature 05_wandb_run_name_prefix)
-
-**Decision:** A sweep job's W&B run *name* is `<experiment>-<label>` (e.g.
-`mmtc_fr-en_sft1-basemodel-qwen2.5-0.5b`), not the bare swept-param `<label>`. The run
-*directory* leaf still keeps the bare label, so name and dir basename now differ by exactly
-the `<experiment>-` prefix. This **loosens the feature 03 invariant** that the run-dir basename
-*is* the W&B run name — on disk it still is; in W&B it is prefixed.
-
-**Context:** Sweep run names collided across experiments. Any two experiments that sweep the
-same axis (the `fullft`/`lora` model-sweeps both sweep `basemodel`) emitted byte-identical names
-like `basemodel-qwen2.5-0.5b`, indistinguishable in W&B's flat run list even though their
-*groups* differed. Plain runs were already prefixed (`<experiment>-<label>` since feature 04);
-the sweep branch was the lone holdout.
-
-- **One-line change, consistent with plain runs.** Only `derive_run_identity`'s `is_sweep`
-  branch changed (`run_name = cfg.wandb.name or f"{exp}-{label}"`), mirroring the plain-run
-  branch. The `cfg.wandb.name` manual override still wins.
-- **`run_id` and grouping are untouched.** `run_id` already embedded the experiment, so
-  requeue/`resume` behavior is unchanged; the group stays `<base-group>-sweep-<ts>`.
-- **Confidentiality unchanged.** The experiment name is config, not data; the label is still the
-  sole data-path chokepoint (`build_run_label`). No data content enters the name.
-- **Trade-off.** Names get longer and the prefix is redundant inside a single group's view, but
-  the flat cross-experiment list — the view that was broken — is now unambiguous.
-
----
-
-## Dataset/lang directory hierarchy + inline data (feature 06_hydra_config_directory_hierarchy)
-
-**Decision:** Experiments move from the flat `egs/experiment/<name>.yaml` into
-`egs/<dataset>/<src>-<trg>/<name>.yaml`, each beside a per-lang-pair `dataset.yaml` **template**.
-The `conf/data` config group is removed: an experiment now declares its data **inline**
-(`data.data_root`/`src`/`trg`/`instruction`) and names the template (`data.dataset_file`, default
-`dataset.yaml`); the template's `$DATA_ROOT`/`$SRC`/`$TRG` placeholders are **inflated in code**
-into absolute `train`/`dev`/`test` paths. Run outputs move under `egs/<dataset>/<src>-<trg>/outputs/`.
-
-**Context:** A flat `egs/experiment/` got cluttered across datasets and language pairs, and the
-data config was a separate group file disconnected from the experiment that used it. Embedding
-the dataset/lang in the directory and the data knobs in the experiment makes each recipe
-self-contained and self-describing.
-
-- **Nested-group addressing, unchanged searchpath (verified by a compose spike).** `egs/run.sh`
-  takes the experiment's `egs`-relative `.yaml` path, splits it into the directory (a nested
-  Hydra config group) and basename (the option), and selects `+<dataset>/<src>-<trg>=<name>`
-  against the existing `hydra.searchpath: [file://$HFMT_ROOT/egs]`. No per-run searchpath
-  rewrite; `run.sh` stays `dirname`/`basename` and depth-agnostic. **Why not keep a fixed
-  `experiment` group:** that would force an `egs/experiment/<dataset>/<lang>/` path, not the
-  requested `egs/<dataset>/<lang>/`. The one cost is that the selector key now contains `/`, so
-  `_label_pairs` drops `/`-bearing keys (a one-line, symmetric extension of the existing
-  `/`-in-value rule) to keep the structural selector out of run-dir/W&B names and the `is_sweep`
-  check. `run.sh` injects `data.dataset_dir` (the experiment's own dir) and
-  `output_root=egs/<group>/outputs`.
-- **Template inflated in code, not via OmegaConf interpolation.** `dataset.yaml` stays a plain
-  shell-`$VAR` template (not a Hydra config). Inflation parses the YAML **first**, then
-  substitutes only in string *values* — so a stray `$`/`${...}` in a template comment can't break
-  it (found and fixed during migration). Inflated paths are written back into `cfg.data` so the
-  logged/resolved config carries real paths (paths are W&B-safe; only data *content* is forbidden).
-- **`test` split is optional.** When the `test` block is absent or its source file(s) don't exist
-  on disk, the end-of-run held-out inference pass is skipped (no error). `train`/`dev` stay
-  required (`dev` drives `eval_loss`/early-stopping). The `evalset` terminology is retired in
-  favour of `cfg.data.test.src`.
-- **Validation fails fast.** The named template must exist in the experiment's directory
-  (`dataset_file` a bare basename ending in `.yaml`); this is checked authoritatively at the start
-  of `main()` and again as a cheap login-node fast-fail in `sweep_probe.py` (before the Slurm
-  submit), so a missing/mistyped template aborts early rather than deep in data loading.
-- **Confidentiality.** Outputs now live inside the tracked `egs/` tree, so `egs/**/outputs/` is
-  gitignored (they hold `*.pred`/`eval.pred.trg` dumps). Only paths + hyperparameters + the
-  instruction string reach W&B, never data content.
-- **Scope.** Only the Hydra SFT workflow (`sft_translation.py`) is migrated; the other
-  (unmigrated) entry points — seq2seq, inference, summarization — keep their plain-manifest/shell
-  recipes.
-
-## Two kinds of experiment instead of a sweep toggle (feature 07_hydra_sweep_refactor)
-
-**Decision:** An experiment is either a **single-run** file (no grid → one job) or a **sweep** file
-whose grid lives in Hydra's native `hydra.sweeper.params` and always runs in full (example pair:
-`egs/mmtc/fr-en/sft_lora.yaml` / `sft_lora.sweep.yaml`). The feature-04 toggle — the typed
-`sweep: {enabled, params}` block, `hfmt/sweep_probe.py`, and `sweep.enabled=true` — is removed.
-This **supersedes** the feature-04 entry "Sweep toggle via a compose probe".
-
-- **Why.** The probe existed only to give an on/off switch: `run.sh` must always `--multirun`
-  (submitit), and Hydra can't switch off a config-stored grid from the CLI. With separate files the
-  switch is unnecessary, so the launch path is now just `run.sh → python -m hfmt.sft_translation
-  --multirun` with no intermediate compose. Goal: fewer lines and an easier-to-follow job start.
-- **Verified on Hydra 1.3.7.** `hydra.sweeper.params` in a `# @package _global_` experiment selected
-  via `+<dataset>/<pair>=<name>` is honoured (including config-group axes despite the file's own
-  `override /basemodel`); a dotted option name (`sft_lora.sweep`) works; CLI comma-lists add axes and
-  a single-value CLI override pins a swept axis; sweeper-generated overrides land in
-  `override_dirname`, so run labels / W&B identity are unchanged.
-- **Correction to the feature-04 rationale.** Hydra rejects only *comma-list* values on `hydra.*`
-  keys from the CLI ("Sweeping over Hydra's configuration is not supported");
-  `hydra.sweeper.params.<k>=<v>` with a single value is accepted. What the CLI really can't do is
-  remove the grid: `~hydra.sweeper.params` errors and `hydra.sweeper.params={}` is ignored.
-- **Trade-offs accepted.** Single-run and sweep files duplicate their data/wandb/component lines
-  (chosen over inheritance for readability). The login-node dataset fast-fail moved from the probe
-  to a one-line shell check in `run.sh` that only covers the default `dataset.yaml` name; `main()`
-  still validates `data.dataset_file` authoritatively. Grid info before submission comes from the
-  submitit launcher's existing per-job `#<idx> : <overrides>` log — no new code.
-- **Pruned examples.** The fr-en experiments were reduced to the `sft_lora` pair; the
-  `slurm_fullft` launcher was deleted. A full fine-tune is `train.finetune_mode=full` plus CLI
-  launcher overrides (`hydra.launcher.mem_gb=64 hydra.launcher.timeout_min=720`), documented in the
-  README.
-
-## Hydra redone from scratch: sbatch launcher, run_name folders, saved configs (feature 08_hydra_redo)
+## 2026-10-17: Hydra redone from scratch: sbatch launcher, run_name folders, saved configs (08_hydra_redo)
 
 **Decision:** On branch `hydra3` (from `main`), the SFT workflow's Hydra integration was rebuilt
-in one feature, using the lessons of features 00–07 (kept above as history, on branch `hydra2`).
-The entries above are **superseded** where they conflict: submitit and `--multirun` (00, 02),
+in one feature, using the lessons of features 00–07 (branch `hydra2`; their decisions are kept in
+`decisions_hydra2.md`). Those entries are **superseded** where they conflict: submitit and `--multirun` (00, 02),
 run labels from `override_dirname` and the `hfmt_runlabel` resolver (03, 05), the
 `hydra.searchpath` + nested-group selector and the sweep probe (04), and the `dataset.yaml`
 template filled in by code (06). Feature 07's two kinds of experiment are kept.
@@ -325,7 +58,7 @@ template filled in by code (06). Feature 07's two kinds of experiment are kept.
 
 ---
 
-## Types-only schema, peft group, local data location, Hydra inference (feature 09_hydra_detailed_reorg)
+## 2026-10-18: Types-only schema, peft group, local data location, Hydra inference (09_hydra_detailed_reorg)
 
 **Decision:** Each config key has exactly one home, and the code is split so training and
 inference share model handling.
@@ -372,7 +105,9 @@ inference share model handling.
   (`use_gradient_checkpointing=False`). The model is saved before test decoding so a crash there
   doesn't lose it.
 
-## Base-model inference, per-file test sets, merging, dev-decoding interval (feature 10_inference_more_options)
+---
+
+## 2026-10-18: Base-model inference, per-file test sets, merging, dev-decoding interval (10_inference_more_options)
 
 **Decision:** Inference, merging and training share one launcher, and the yaml you give it decides
 what happens.
@@ -414,7 +149,9 @@ what happens.
 - `grid.py` was split into `main_sft` / `main_inf` / `main_merge` with step comments, and
   `launch.sh` was commented block by block, since both had become hard to follow.
 
-## LoRA target modules as explicit lists, short keys, model inspection (feature 11_hydra_lora)
+---
+
+## 2026-10-18: LoRA target modules as explicit lists, short keys, model inspection (11_hydra_lora)
 
 **Decision:** LoRA layers are named, not chosen from presets, and a script shows the names.
 
@@ -437,7 +174,9 @@ what happens.
   larger GPUs, so training now also logs peak allocated. For large-vocabulary models (tiny-aya,
   262k) the logits term dominates.
 
-## Resuming a cancelled SFT run (feature 12_resume_sft)
+---
+
+## 2026-10-19: Resuming a cancelled SFT run (12_resume_sft)
 
 **Decision:** `launch.sh sft <run folder>/run_config.yaml` means *resume*, and nothing else.
 It continues a run cancelled midway from its last checkpoint with TRL's `resume_from_checkpoint`,
@@ -475,36 +214,9 @@ in the same folder with the same config.
   A GPU check against an uninterrupted run matched in steps and LR, and was within noise in losses
   and test BLEU (61.08 vs 61.02).
 
-## Prompt rendering: one builder, hardcoded `enable_thinking=False` (port of 2026-11-07)
+---
 
-**Decision:** causal-LM prompts are built by the single `mt_model.format_input_prompt` (instruction,
-newline, source) and every `apply_chat_template` call passes `mt_model.CHAT_TEMPLATE_KWARGS`
-(`enable_thinking=False`). The `hydra3-translategemma` branch had a `prompt_format` registry
-(`chat` | `translategemma`), a chat-template patch for TranslateGemma and a vision-tower freeze
-(`NON_LANGUAGE_MODULES`); this branch ports that work without TranslateGemma support
-(`features/13_port_without_translategemma/porting.md`), so none of that exists here.
-
-- **Why hardcode.** The only model family kept, Qwen3.5, needs one thing from a prompt format:
-  Qwen3.5-4B's template thinks by default (generation prompt `<think>\n`, so the model writes its
-  reasoning as the translation; 0.8B/2B default to off). Off, the generation prompt ends with the empty
-  `<think>\n\n</think>\n\n` the training targets start with. Templates without the variable (Gemma)
-  ignore it. One constant used by training (TRL's per-example `chat_template_kwargs` column), dev/test
-  decoding, inference and `tools/inspect_model.py` keeps every render identical; a schema key that
-  every experiment must set bought nothing once there is one format.
-- **`processing_class=tokenizer` for the `SFTTrainer`** (kept). Qwen3.5 and Gemma 3 ship a VL
-  processor, so without this TRL loads `AutoProcessor`, switches to its multimodal path and rewrites
-  the assistant turn until the template rejects it. Passing the tokenizer keeps TRL on the text path
-  and reuses one tokenizer object for training and our decoding.
-- **No vision-tower freeze.** Qwen3.5 under `AutoModelForCausalLM` has no vision modules. Gemma 3 4B
-  (a kept LoRA experiment) does: its tower's `q/k/v_proj` are wrapped by the all-linear adapter too,
-  but with no `pixel_values` the tower never runs, so those adapters get no gradient and the result is
-  unchanged; only the trainable-parameter count and adapter size grow. Bring back `3743e17` + `9c66f6a`
-  from `hydra3-translategemma` if that matters.
-- **Saved configs.** `run_config.yaml`s written on `hydra3-translategemma` carry `prompt_format:`,
-  which this schema has no key for: delete that line by hand before `launch.sh inf|merge|sft` on
-  such a folder.
-
-## GPU startup race and requeue (2026-11-03)
+## 2026-11-03: GPU startup race and requeue
 
 **Decision:** `egs/job.sh` waits for its GPU before starting, every sbatch gets `--requeue
 --open-mode=append`, and a requeued training task resumes from its last checkpoint.
@@ -526,7 +238,9 @@ newline, source) and every `apply_chat_template` call passes `mt_model.CHAT_TEMP
 - **Hard-coded, not `slurm:` keys:** a new required key would break resume/inf/merge for every
   saved `run_config.yaml`. `tools/run_status.py`'s rerun command adds the same two flags.
 
-## Full fine-tunes: the best checkpoint is reloaded through `from_pretrained` (2026-11-05)
+---
+
+## 2026-11-05: Full fine-tunes: the best checkpoint is reloaded through `from_pretrained`
 
 **Decision:** for `peft.mode=full`, `sft_translation.py` loads the checkpoint the Trainer is
 supposed to reload in place — the best one at the end of training, the last one on resume —
@@ -565,3 +279,71 @@ with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a st
   `model_dev_check` (runs from before this fix). The first `_short` runs were flagged by the log scan
   although their dev check was `ok`. `run_status.py` now reports the reload warning only for runs
   without a dev check; for the others, the measured check decides.
+
+---
+
+## 2026-11-07: Prompt rendering: one builder, hardcoded `enable_thinking=False` (13_port_without_translategemma)
+
+**Decision:** causal-LM prompts are built by the single `mt_model.format_input_prompt` (instruction,
+newline, source) and every `apply_chat_template` call passes `mt_model.CHAT_TEMPLATE_KWARGS`
+(`enable_thinking=False`). The `hydra3-translategemma` branch had a `prompt_format` registry
+(`chat` | `translategemma`), a chat-template patch for TranslateGemma and a vision-tower freeze
+(`NON_LANGUAGE_MODULES`); this branch ports that work without TranslateGemma support
+(`features/13_port_without_translategemma/porting.md`), so none of that exists here.
+
+- **Why hardcode.** Of the two model families kept (Qwen3.5 and Gemma 3), only Qwen3.5 needs anything
+  from a prompt format: Qwen3.5-4B's template thinks by default (generation prompt `<think>\n`, so the model writes its
+  reasoning as the translation; 0.8B/2B default to off). Off, the generation prompt ends with the empty
+  `<think>\n\n</think>\n\n` the training targets start with. Templates without the variable (Gemma)
+  ignore it. One constant used by training (TRL's per-example `chat_template_kwargs` column), dev/test
+  decoding, inference and `tools/inspect_model.py` keeps every render identical; a schema key that
+  every experiment must set bought nothing once there is one format.
+- **`processing_class=tokenizer` for the `SFTTrainer`** (kept). Qwen3.5 and Gemma 3 ship a VL
+  processor, so without this TRL loads `AutoProcessor`, switches to its multimodal path and rewrites
+  the assistant turn until the template rejects it. Passing the tokenizer keeps TRL on the text path
+  and reuses one tokenizer object for training and our decoding.
+- **No vision-tower freeze.** Qwen3.5 under `AutoModelForCausalLM` has no vision modules. Gemma 3 4B
+  (a kept LoRA experiment) does: its tower's `q/k/v_proj` are wrapped by the all-linear adapter too,
+  but with no `pixel_values` the tower never runs, so those adapters get no gradient and the result is
+  unchanged; only the trainable-parameter count and adapter size grow. Bring back `3743e17` + `9c66f6a`
+  from `hydra3-translategemma` if that matters.
+- **Saved configs.** `run_config.yaml`s written on `hydra3-translategemma` carry `prompt_format:`,
+  which this schema has no key for. Since 2026-11-10 `grid.py` refuses such a file (`RETIRED_KEYS`)
+  and prints the `sed` command that removes the line; before, Hydra failed with a struct error.
+
+---
+
+## 2026-11-10: Docs and config consolidation
+
+**Decision:** a review of `decisions.md`, `CLAUDE.md` and `README.md` against the repo found stale
+statements and duplication; the fixes below change how the docs are organized and which train
+schedule is the default. No training behaviour changes: every committed experiment except the two
+tutorial files composes to a byte-identical `run_config.yaml` before and after (checked over all 28
+experiments).
+
+- **Each document has one job.** README says *how* to use the workflow and is the only place that
+  lists the `conf/` options; `CLAUDE.md` holds the rules (confidentiality, workflow, conventions) with
+  one-line summaries that point into README; `decisions.md` says *why*. The Inference, Merging, Dev
+  decoding and Resume bullets of `CLAUDE.md` had become near-copies of README sections and were cut
+  to summaries. The superseded hydra2 history (features 00–07, 245 lines) moved to
+  `decisions_hydra2.md`, and the remaining entries got dated headings in chronological order.
+- **Train schedules stay self-contained.** Having each of the five `conf/train` schedules inherit a
+  shared `common.yaml` (Hydra `defaults: [common, _self_]`) was tried and reverted the same day: the
+  developer prefers every schedule to be readable as one complete file, the same choice feature 07
+  made for experiment files. The cost is ~25 repeated lines per schedule.
+- **`shortrun` is the project default; `conf/train/default.yaml` is gone.** The old default (200
+  steps, reduce-on-plateau, `eval_loss` selection, batch 16) was reached only by the two tutorial
+  experiments and matched nothing anyone ran. The tutorial files (`sft_lora.yaml`,
+  `sft_lora.sweep.yaml`) now fine-tune Qwen3.5-2B (was Qwen2.5-1.5B-Instruct, a model no other
+  experiment uses) with the default schedule.
+- **`grid.py` refuses saved configs with retired keys** (`RETIRED_KEYS`, currently `prompt_format`)
+  and prints the exact `sed` fix, instead of Hydra's struct error. Removing the line by hand was the
+  documented procedure; the check is cheap and the message is the procedure.
+- **Smaller fixes.** `install/install_hf_custom.sh` now installs `hydra-core==1.3.7` (it never
+  installed Hydra; `check_versions.py` reports it). `wandb.entity` is `Optional[str] = None` like
+  every other optional key (it was `MISSING` with `null` in `config.yaml`). The stale
+  `egs/synth_lrl/*/inf*.sh` recipes (the argparse CLI they called was removed in feature 09) are
+  deleted. The zh-en `local_setting.sh.example` uses a placeholder path like fr-en's. Only
+  `analysis/run_sacrebleu.py` is tracked under `analysis/`; the dated analysis folders and the W&B
+  export script stay local. References to a non-existent `overview.md` are gone.
+  Feature numbers in code comments are kept on purpose: they link code to `features/` directories.

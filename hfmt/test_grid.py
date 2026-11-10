@@ -168,7 +168,7 @@ def test_peft_mode_must_match_blocks():
 
 def test_inference_callback_interval():
     out, _, _ = run(SINGLE)
-    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/default.yaml
+    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/shortrun.yaml (the default)
     out, _, _ = run(SINGLE, "train=longrun", "train.inference_callback_interval=0")
     assert saved(out, "sft_lora").train.inference_callback_interval == 0   # every train option sets it
     assert fails(SINGLE, "train.inference_callback_interval=-1")
@@ -355,6 +355,18 @@ def test_merge_refusals():
             assert False, rc_bad
         except SystemExit:
             pass
+
+
+def test_saved_config_with_retired_key_names_the_fix():
+    run_dir, rc = trained_run()
+    open(rc, "a").write("prompt_format: chat\n")       # written by the code before 2026-11-07
+    for call in (lambda: inf(rc), lambda: merge(rc), lambda: run(rc)):
+        try:
+            call()
+            assert False, "should have refused"
+        except SystemExit as e:
+            assert "prompt_format" in str(e.code) and "sed -i" in str(e.code)
+    assert os.listdir(os.path.join(run_dir)).count("inf") == 0   # nothing written
 
 
 if __name__ == "__main__":

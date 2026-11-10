@@ -60,6 +60,22 @@ def _log(msg):
     print(msg, file=sys.stderr)
 
 
+# Keys that older saved configs carry but the schema no longer has (the port of 2026-11-07 dropped
+# prompt_format). Hydra would reject them with a struct error deep in composition; refuse them here with
+# the command that fixes the file.
+RETIRED_KEYS = ("prompt_format",)
+
+
+def _check_saved_config_keys(path):
+    """Exit with the fix command if a saved run_config.yaml / inf_config.yaml has a retired top-level key."""
+    retired = [k for k in RETIRED_KEYS if any(line.startswith(f"{k}:") for line in open(path))]
+    if retired:
+        pattern = "|".join(retired)
+        sys.exit(f"grid: {path} has a key the schema no longer has: {', '.join(retired)} (written by an older "
+                 f"version of the code). Remove the line and launch again:\n"
+                 f"    sed -i -E '/^({pattern}):/d' {shlex.quote(path)}")
+
+
 def _compose(exp_dir, exp_name, overrides, with_hydra=False):
     """Compose ``<exp_dir>/<exp_name>.yaml`` + overrides the way ``@hydra.main`` would, with conf/ on
     the search path (for ``- config`` and the groups). ``with_hydra`` also returns the ``hydra:``
@@ -292,6 +308,8 @@ def main(argv):
         sys.exit(f"grid: {exp_path}: an experiment can't be named config.yaml (clashes with conf/config.yaml)")
     if not os.path.isfile(exp_path):
         sys.exit(f"grid: experiment not found: {exp_path}")
+    if exp_name == SAVED:
+        _check_saved_config_keys(exp_path)
     register_configs()                   # the schema, as Hydra's `base_config`
 
     parser = OverridesParser.create()

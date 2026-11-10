@@ -230,8 +230,8 @@ reworded), `processing_class=tokenizer` (comment reworded), the resume/best-chec
 
 Consequence: `run_config.yaml` / `inf_config.yaml` files written on the feature branch carry a
 `prompt_format:` line the schema has no key for. On this branch `launch.sh inf|merge|sft` on such a
-folder fails Hydra's struct check until that line is removed by hand. One-liner for a tree of runs
-(review the list first):
+folder is refused by `grid.py` (`RETIRED_KEYS`, added 2026-11-10), which prints the `sed` command that
+removes the line. One-liner for a tree of runs (review the list first):
 
 ```bash
 grep -l '^prompt_format: chat$' egs/mmtc/*/outputs/*/run_config.yaml | xargs sed -i '/^prompt_format: chat$/d'
@@ -347,10 +347,10 @@ Not verifiable here, to check on the cluster:
 
 ## 6. Developer follow-ups
 
-- **Untracked files that import the removed module** and will break `pytest` collection:
-  `hfmt/test_prompt_formats.py` (tests the TranslateGemma template fix) and `test.py` (a scratch
-  script defaulting to a TranslateGemma run). They are untracked on both branches and were left in
-  place; delete them if they are no longer wanted. `benchmark_plan.md`, `config_reference.md`,
+- **Files that import the removed module** and break `pytest` collection: `hfmt/test_prompt_formats.py`
+  (tests the TranslateGemma template fix) was tracked and got committed with the port in `ef4ac04`; it was
+  `git rm`'d on 2026-11-10. `test.py` (an untracked scratch script defaulting to a TranslateGemma run) is
+  still in the working tree; delete it if it is no longer wanted. `benchmark_plan.md`, `config_reference.md`,
   `inference_overview.md` and `results.md` (also untracked) still describe `prompt_format`.
 - **Saved configs** from the feature branch: remove the `prompt_format:` line before resuming,
   merging or decoding them (§3.3).

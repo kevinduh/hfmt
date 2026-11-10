@@ -1,0 +1,33 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of Qwen3.5-4B, annealed short schedule
+# (max_steps, 2 jobs)
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml; run_name carries
+# the pair so the two pairs' W&B groups don't merge.
+# Follow-up to sft_lora_qwen-3.5-4b_all-linear.sweep.yaml (400-step cosine, eval every 50): with ~1.6k
+# training pairs (~25 steps per epoch) its first evaluation at step 50 was already 2 epochs, and the lr
+# 5e-5, 1e-4 and 2e-4 jobs all selected it; the dev curve then collapsed (last-step penalty 3.6-5.3 BLEU-lc;
+# analysis/2026-11-06_mmtc_results_review). The peak is probably at or before one epoch and was never seen.
+# Schedule: lora_anneal_short (cosine to zero over max_steps, warmup 5, eval + dev BLEU every 10 steps,
+# no early stopping). max_steps 50 (2 epochs) anneals at the old selected step; 80 (~3.2 epochs) past it.
+# lr 1e-4, the best on test (34.53); the whole lr axis was within 0.23 here, so one lr is enough.
+# Memory as the 400-step sweep: batch 32 on a 40 GB A100 or an L40S (slurm.gres=gpu:l40s:1).
+# Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-4b_zh-en_all-linear_anneal_sweep-<idx>/; the .grid.txt maps
+# idx -> values.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: lora_anneal_short   # cosine to zero, eval every 10, BLEU-lc selected, no early stop
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_zh-en_all-linear_anneal_sweep
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate Chinese to English"
+
+wandb:
+  tags: [sft, zh-en, lora, anneal]
+
+hydra:
+  sweeper:
+    params:
+      train.max_steps: 50,80

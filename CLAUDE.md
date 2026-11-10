@@ -38,7 +38,7 @@ hfmt/
 │   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
 │   ├── inf_translation.py   # decoder-only MT inference (trained run or downloaded checkpoint) — Hydra-driven
 │   ├── merge_model.py       # merge a run's lora/qlora adapter into model_merged/ (launch.sh merge)
-│   ├── mt_model.py          # model loading, prompting, decoding, scoring shared by SFT + inference
+│   ├── mt_model.py          # model loading, prompting (CHAT_TEMPLATE_KWARGS), decoding, scoring shared by SFT + inference
 │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore): types only, no defaults
 │   ├── grid.py              # login-node checks + job folders for egs/launch.sh (sft grid, inf, merge)
 │   └── decode_summarization.py  # zero/few-shot summarization
@@ -53,7 +53,9 @@ hfmt/
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
 │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
-│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate)
+│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate, prompt overhead),
+│                            #   run_status.py <outputs dir> (training + inference states and scores, fix commands,
+│                            #     failed checks: known-bad log warnings, model/ dev-score mismatch; prints only)
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
@@ -85,7 +87,10 @@ hfmt/
   Hydra run of its saved config) and returns. `LOCAL=1` runs the jobs locally, `DRYRUN=1` prints the
   sbatch command. Run folders: `<output_root>/<run_name>` (1 job) or `<run_name>-<idx>` (grid);
   `output_root` defaults to `<experiment folder>/outputs`. No timestamps: an existing folder
-  only warns. W&B run name = run folder name, group = `run_name`.
+  only warns. W&B run name = run folder name, group = `run_name`. Tasks starting together can race
+  for GPUs (exclusive-process mode), so `job.sh` waits for its GPU before starting;
+  every sbatch has `--requeue --open-mode=append`, and a requeued `sft` task resumes from its last
+  checkpoint (Slurm requeues only after a node failure or preemption, never after a failed exit).
 - **Resume (feature 12)** — `bash egs/launch.sh sft <run folder>/run_config.yaml [slurm.* overrides]`
   continues a run cancelled midway from its last checkpoint, in the same folder with the same
   config. It never re-runs or renames a run: change a run via its experiment yaml + a new
@@ -106,7 +111,8 @@ hfmt/
   overrides (e.g. `decode.num_beams=5`, `'data.test.src=[...]'`, `inf_name=beam5`) and saves
   `inf_config.yaml` there; `egs/job.sh inf` runs `inf_translation.py`. `run_config.yaml` is never
   changed; no W&B. Each `data.test.src` file is decoded on its own into `test<i>.pred.trg` (i from 1);
-  `scores.json` has each set's paths and BLEU/chrF/TER when `data.test.trg` gives a reference
+  `scores.json` has each set's paths and BLEU (`bleu`: flores200; `bleu_13a_lowercase`: 13a,
+  lowercased, exp smoothing)/chrF/TER when `data.test.trg` gives a reference
   (`null` entry = none). Training writes the same files at its end (`mt_model.decode_test_sets`) and
   inference reproduces them exactly: training unwraps Accelerate's autocast wrapper before its test
   decoding (and qlora bases get the same fp32 preparation).
@@ -118,7 +124,19 @@ hfmt/
 - **Dev decoding during training** — the MT callback decodes dev + BLEU every
   `train.inference_callback_interval` evaluations and at the last step (0 = never); early stopping
   runs at every evaluation. With a BLEU-type `metric_for_best_model`, skipped evaluations get a
-  never-best placeholder so the Trainer's best-checkpoint check still works.
+  never-best placeholder so the Trainer's best-checkpoint check still works. The callback also adds the
+  dev scores to the Trainer's `log_history` entry. At the end, training saves the Trainer state as
+  `<run folder>/trainer_state.json` and writes `model/training_info.yaml` (the step `model/` holds, the
+  best metric and its step, early stop), so both survive `tools/delete_checkpoints.sh`. For a full
+  fine-tune, the best checkpoint (and the last one on resume) is loaded by
+  `mt_model.load_checkpoint_weights` (`from_pretrained`, then a strict `load_state_dict`): the Trainer's
+  own in-place reload matches the saved weight names against the module names, and for Qwen3.5
+  (`model.language_model.*` vs `model.*`) it loads nothing and only warns, so `model/` and `scores.json`
+  held the last step in every full run before 2026-11-05 (see `decisions.md`). Training then decodes dev
+  once more with the saved model (`dev.model.pred`) and records in `training_info.yaml` its scores
+  (`model_dev_scores`) and `model_dev_check` (`ok` | `MISMATCH: ...` | `unchecked: ...`) against the
+  callback's dev BLEU at the step `model/` holds (`DEV_SCORE_TOLERANCE`); a mismatch is logged, not fatal.
+  `tools/run_status.py` reports mismatches and known-bad library warnings found in the logs (`BAD_WARNINGS`).
 - **Saved configs aren't backward compatible** — a run saved before a new required key was added
   fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`).
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a
@@ -130,14 +148,20 @@ hfmt/
 - **Recipe-driven** (`egs/<task>/<lang-pair>/`) — the *other* (unmigrated) entry points are
   still plain shell scripts that source `install/path.sh`, set shell vars, and call an
   `hfmt/*.py` script. `HFMT_ROOT` keeps paths portable. Those calling `sft_translation.py` or
-  `inf_translation.py` (`egs/mmtc/zh-en/`, `egs/synth_lrl/*/inf*.sh`) use the old argparse CLIs
-  and are stale.
+  `inf_translation.py` (`egs/synth_lrl/*/inf*.sh`) use the old argparse CLIs and are stale.
 - **Pinned Transformers submodule** for reproducibility — the HF training APIs change often.
 - **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed per split (SFT: in the
   experiment's `dataset.yaml`; other recipes: a YAML manifest) and loaded via
   `datasets.load_dataset("text", ...)`. Summarization uses JSONL (`text`/`summary`).
-- **Prompting**: seq2seq uses an instruction prefix; causal LM uses `apply_chat_template`
-  (with a plain-concat fallback).
+- **Prompting**: seq2seq uses an instruction prefix. Causal-LM prompts are one user turn,
+  `mt_model.format_input_prompt` (`instruction`, a newline, the source), rendered with the checkpoint's
+  `apply_chat_template`. Every render (training via TRL's per-example `chat_template_kwargs` column, dev
+  and test decoding, inference, `tools/inspect_model.py`) passes `mt_model.CHAT_TEMPLATE_KWARGS`
+  (`enable_thinking=False`): Qwen3.5-4B's template thinks by default (0.8B/2B don't), and templates
+  without the variable (Gemma) ignore it. The generation prompt must be a token prefix of prompt + reply:
+  TRL's "Mismatch between tokenized prompt" warning in a training log means a checkpoint's template
+  breaks that (`tools/run_status.py` flags it). The `SFTTrainer` gets `processing_class=tokenizer` so
+  TRL doesn't load the VL processor Qwen3.5/Gemma 3 ship and switch to its multimodal path.
 - **Tracking/metrics**: W&B (`WANDB_PROJECT="hfmt"`); `sacrebleu` (BLEU/CHRF/TER), ROUGE.
 - Known friction points (duplication, no shared package, module-level globals, magic numbers,
   no CI) are catalogued in `overview.md` §4–5.

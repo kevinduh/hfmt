@@ -1,0 +1,12 @@
+# LoRA on every linear layer of a Qwen3.5 decoder (bf16 base, no quantization).
+# Qwen3.5 is hybrid: 3 of every 4 layers are Gated DeltaNet linear attention (in_proj_qkv, in_proj_z,
+# out_proj), which has no q_proj/v_proj, so lora_default's [q_proj, v_proj] wraps only the
+# full-attention layers (6 of 24 at 0.8B/2B, 8 of 32 at 4B/9B) and no MLP: ~5% of the linear weights.
+# in_proj_b/in_proj_a (one output per head: the gates) are left out. Names from
+# transformers/src/transformers/models/qwen3_5/modeling_qwen3_5.py; check with tools/inspect_model.py.
+mode: lora
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules: [q_proj, k_proj, v_proj, o_proj, in_proj_qkv, in_proj_z, out_proj, gate_proj, up_proj, down_proj]

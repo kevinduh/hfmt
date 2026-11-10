@@ -1,0 +1,1210 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index b15d0c6..ff2546e 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -38,8 +38,7 @@ hfmt/
+ │   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
+ │   ├── inf_translation.py   # decoder-only MT inference (trained run or downloaded checkpoint) — Hydra-driven
+ │   ├── merge_model.py       # merge a run's lora/qlora adapter into model_merged/ (launch.sh merge)
+-│   ├── mt_model.py          # model loading, decoding, scoring, NON_LANGUAGE_MODULES — shared by SFT + inference
+-│   ├── prompt_formats.py    # prompt-format registry (chat | translategemma): build the user turn from cfg
++│   ├── mt_model.py          # model loading, prompting (CHAT_TEMPLATE_KWARGS), decoding, scoring shared by SFT + inference
+ │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore): types only, no defaults
+ │   ├── grid.py              # login-node checks + job folders for egs/launch.sh (sft grid, inf, merge)
+ │   └── decode_summarization.py  # zero/few-shot summarization
+@@ -54,7 +53,7 @@ hfmt/
+ │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
+ │   ├── translation/  summarization/  synth_lrl/<lang>-eng/
+ ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
+-│                            #   inspect_model.py <checkpoint> [prompt_format] (module names, LoRA candidates, memory, not-trained modules),
++│                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate, prompt overhead),
+ │                            #   run_status.py <outputs dir> (training + inference states and scores, fix commands,
+ │                            #     failed checks: known-bad log warnings, model/ dev-score mismatch; prints only)
+ ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
+@@ -75,7 +74,7 @@ hfmt/
+   must be read by code (or, for the optional `data.data_root/src/trg`, by `dataset.yaml`).
+   An experiment is a yaml in `egs/<dataset>/<src>-<trg>/` whose defaults start with `- config`
+   and `- dataset` (the `dataset.yaml` next to it: `data_root`, `src`, `trg`, split file lists),
+-  then `override <group>: <option>` lines; it sets `run_name`, `checkpoint`, `prompt_format` and `instruction`.
++  then `override <group>: <option>` lines; it sets `run_name`, `checkpoint` and `instruction`.
+   `data_root` comes from `$HFMT_DATA_ROOT`, set in the folder's untracked `local_setting.sh`
+   (copy `local_setting.sh.example`); a dataset yaml may instead list absolute paths. Launch with
+   `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
+@@ -154,25 +153,15 @@ hfmt/
+ - **Data** = sentence-aligned parallel text (`.src`/`.trg`), listed per split (SFT: in the
+   experiment's `dataset.yaml`; other recipes: a YAML manifest) and loaded via
+   `datasets.load_dataset("text", ...)`. Summarization uses JSONL (`text`/`summary`).
+-- **Prompting**: seq2seq uses an instruction prefix. Causal-LM prompts are built by
+-  `hfmt/prompt_formats.py`: each experiment sets `prompt_format` (`chat` | `translategemma`), the
+-  user turn is built from the config and rendered with `apply_chat_template`. `chat` prefixes
+-  `instruction` to the source; `translategemma` sets `instruction: null` and builds the instruction
+-  from `data.src`/`data.trg` (the language codes). The key is explicit, never guessed from the
+-  checkpoint's template; adding a model with special requirements is one more `PROMPT_FORMATS` entry.
+-  A format's `template_kwargs` go to every `apply_chat_template` call (training via TRL's
+-  `chat_template_kwargs` column, decoding): `chat` sets `enable_thinking=False`, because Qwen3.5-4B's
+-  template thinks by default (0.8B/2B don't). A format's `fix_template` patches a defect in the shipped
+-  template, applied in `mt_model.load_tokenizer` (every path loads its tokenizer there):
+-  `translategemma` removes whitespace TranslateGemma's template leaks into assistant turns, which
+-  made the prompt not a token prefix of prompt + reply. A new format must keep that prefix property:
+-  TRL's "Mismatch between tokenized prompt" warning in a training log means it doesn't.
+-- **Only the language model is trained**: a module named in `NON_LANGUAGE_MODULES` (`hfmt/mt_model.py`:
+-  `vision_tower`, `multi_modal_projector`) is frozen (full) or kept out of the LoRA adapter
+-  (lora/qlora), so logs and `tools/inspect_model.py` count language-model params only. This is
+-  architecture-based, not per `prompt_format` (Gemma 3 4B uses `chat` but has a vision tower). For a
+-  new multimodal model with other module names (`visual`, `audio_tower`, …), check the model print in
+-  `tools/inspect_model.py` and add them to the list.
++- **Prompting**: seq2seq uses an instruction prefix. Causal-LM prompts are one user turn,
++  `mt_model.format_input_prompt` (`instruction`, a newline, the source), rendered with the checkpoint's
++  `apply_chat_template`. Every render (training via TRL's per-example `chat_template_kwargs` column, dev
++  and test decoding, inference, `tools/inspect_model.py`) passes `mt_model.CHAT_TEMPLATE_KWARGS`
++  (`enable_thinking=False`): Qwen3.5-4B's template thinks by default (0.8B/2B don't), and templates
++  without the variable (Gemma) ignore it. The generation prompt must be a token prefix of prompt + reply:
++  TRL's "Mismatch between tokenized prompt" warning in a training log means a checkpoint's template
++  breaks that (`tools/run_status.py` flags it). The `SFTTrainer` gets `processing_class=tokenizer` so
++  TRL doesn't load the VL processor Qwen3.5/Gemma 3 ship and switch to its multimodal path.
+ - **Tracking/metrics**: W&B (`WANDB_PROJECT="hfmt"`); `sacrebleu` (BLEU/CHRF/TER), ROUGE.
+ - Known friction points (duplication, no shared package, module-level globals, magic numbers,
+   no CI) are catalogued in `overview.md` §4–5.
+diff --git a/README.md b/README.md
+index 3ddb094..c438c42 100644
+--- a/README.md
++++ b/README.md
+@@ -41,22 +41,15 @@ type but holds no default values; each default lives in exactly one yaml:
+     left out). A dataset yaml may also list absolute paths instead.
+   * `local_setting.sh` (untracked, one per machine): `export HFMT_DATA_ROOT=...`, where this
+     machine keeps the data. Copy `local_setting.sh.example` to create it.
+-  * `sft_lora.yaml`: a **single-run** experiment (one job). It sets `run_name`, `checkpoint`,
+-    `prompt_format` and `instruction`, and picks options with `override <group>: <option>` lines.
++  * `sft_lora.yaml`: a **single-run** experiment (one job). It sets `run_name`, `checkpoint` and
++    `instruction`, and picks options with `override <group>: <option>` lines.
+   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
+     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
+ 
+-**Prompt format.** Each experiment sets `prompt_format` next to `checkpoint`:
+-
+-* `prompt_format: chat` (every model so far) — `instruction` is prefixed to each source sentence.
+-* `prompt_format: translategemma` — for `google/translategemma-4b-it`, whose chat template builds
+-  the instruction from the language codes: set `instruction: null`, and `data.src`/`data.trg` (e.g.
+-  `fr`/`en`) must be the BCP-47 codes its template expects.
+-
+-The key is explicit (there is no default; it's checked at launch), so a `run_config.yaml` saved
+-before this feature has none: pass `prompt_format=chat` on a `launch.sh inf` command, and for
+-`merge` or resume (which accept only `slurm.*`) add `prompt_format: chat` to the saved config by
+-hand first.
++**Prompt.** `instruction` is prefixed to each source sentence as the user turn and rendered with the
++checkpoint's chat template; every render passes `enable_thinking=False` (`hfmt/mt_model.py`
++`CHAT_TEMPLATE_KWARGS`), which turns off Qwen3.5-4B's default thinking and is ignored by templates
++without it.
+ 
+ ### Training
+ 
+diff --git a/conf/peft/lora_gemma3_all_linear.yaml b/conf/peft/lora_gemma3_all_linear.yaml
+index e321b6c..54e46f7 100644
+--- a/conf/peft/lora_gemma3_all_linear.yaml
++++ b/conf/peft/lora_gemma3_all_linear.yaml
+@@ -1,9 +1,10 @@
+-# LoRA on every linear layer of a Gemma 3 decoder (bf16 base, no quantization), e.g. TranslateGemma.
++# LoRA on every linear layer of a Gemma 3 decoder (bf16 base, no quantization), e.g. google/gemma-3-4b-it.
+ # Gemma 3 has regular attention in every layer (sliding-window and global differ only in window), so
+ # lora_default's [q_proj, v_proj] already reaches each layer's attention; this adds k_proj, o_proj and
+-# the MLP: 14.9M adapter parameters at r=8 for translategemma-4b-it (vs 2.2M for [q_proj, v_proj]).
+-# lm_head is left out (tied to the input embedding). The vision tower's q/k/v/out_proj and fc1/fc2 are
+-# kept out by NON_LANGUAGE_MODULES. Names from tools/inspect_model.py google/translategemma-4b-it.
++# the MLP: 14.9M language-model adapter parameters at r=8 for gemma-3-4b-it (vs 2.2M for [q_proj, v_proj]).
++# lm_head is left out (tied to the input embedding). A multimodal Gemma 3 checkpoint's vision tower also has
++# q/k/v_proj, so the adapter wraps those too; with no images the tower never runs and they get no gradient.
++# Names from tools/inspect_model.py google/gemma-3-4b-it.
+ mode: lora
+ lora:
+   r: 8
+diff --git a/conf/train/full_finetune_short.yaml b/conf/train/full_finetune_short.yaml
+index 23c454b..4aecba9 100644
+--- a/conf/train/full_finetune_short.yaml
++++ b/conf/train/full_finetune_short.yaml
+@@ -1,5 +1,5 @@
+ # Short schedule for full fine-tunes on the small mmtc sets (fr-en ~2.5k pairs: one epoch = ~39 steps
+-# at batch 64; zh-en ~1.6k pairs: ~25 steps). Every full run so far (0.8B/2B/4B/TranslateGemma, lr
++# at batch 64; zh-en ~1.6k pairs: ~25 steps). Every full run so far (Qwen3.5 0.8B/2B/4B, lr
+ # 5e-6 to 2e-5) peaked on dev at step 50 or 100 and then fell, so the 400/1000-step cosine never
+ # decayed before the best checkpoint. 150 steps (~4 epochs fr-en, ~6 zh-en) lets the lr anneal around
+ # the peak; evaluating every 25 steps resolves it. Not finer: each 4B checkpoint is ~50 GB.
+diff --git a/decisions.md b/decisions.md
+index 9007fd4..7628918 100644
+--- a/decisions.md
++++ b/decisions.md
+@@ -475,36 +475,34 @@ in the same folder with the same config.
+   A GPU check against an uninterrupted run matched in steps and LR, and was within noise in losses
+   and test BLEU (61.08 vs 61.02).
+ 
+-## TranslateGemma and the prompt-format key (feature 13_translategemma_prompt)
+-
+-**Decision:** how a source sentence becomes a chat prompt is chosen by an explicit `prompt_format`
+-key in the experiment yaml (a key in `hfmt/prompt_formats.py`: `chat` | `translategemma`), not
+-derived from the checkpoint. This lets `google/translategemma-4b-it` be fine-tuned (full/lora/qlora),
+-decoded and merged like any other model.
+-
+-- **Explicit key, not guessed from the chat template.** A model's required prompt format can live
+-  only in its model card, and an explicit key is visible in `run_config.yaml`/W&B and validated at
+-  launch. We deliberately do **not** inspect the checkpoint's chat template to pick or verify the
+-  format: the key is the single source of truth. A mismatch surfaces when the template is applied —
+-  a format the template rejects (e.g. `chat` on TranslateGemma) crashes there; one it renders anyway
+-  (e.g. `translategemma` content stringified by a plain-chat template) is the user's responsibility.
+-  The launch-time checks are config-value only: unknown format; `chat` needs an instruction;
+-  `translategemma` needs `instruction: null` and `data.src`/`data.trg`. (Earlier drafts added a
+-  job-start template "marker" check and a `detect_prompt_format` helper; both were dropped as not
+-  worth the complexity once the key is explicit.)
+-- **`processing_class=tokenizer` for the `SFTTrainer`.** TranslateGemma and Qwen3.5 ship a VL
++## Prompt rendering: one builder, hardcoded `enable_thinking=False` (port of 2026-11-07)
++
++**Decision:** causal-LM prompts are built by the single `mt_model.format_input_prompt` (instruction,
++newline, source) and every `apply_chat_template` call passes `mt_model.CHAT_TEMPLATE_KWARGS`
++(`enable_thinking=False`). The `hydra3-translategemma` branch had a `prompt_format` registry
++(`chat` | `translategemma`), a chat-template patch for TranslateGemma and a vision-tower freeze
++(`NON_LANGUAGE_MODULES`); this branch ports that work without TranslateGemma support
++(`features/13_port_without_translategemma/porting.md`), so none of that exists here.
++
++- **Why hardcode.** The only model family kept, Qwen3.5, needs one thing from a prompt format:
++  Qwen3.5-4B's template thinks by default (generation prompt `<think>\n`, so the model writes its
++  reasoning as the translation; 0.8B/2B default to off). Off, the generation prompt ends with the empty
++  `<think>\n\n</think>\n\n` the training targets start with. Templates without the variable (Gemma)
++  ignore it. One constant used by training (TRL's per-example `chat_template_kwargs` column), dev/test
++  decoding, inference and `tools/inspect_model.py` keeps every render identical; a schema key that
++  every experiment must set bought nothing once there is one format.
++- **`processing_class=tokenizer` for the `SFTTrainer`** (kept). Qwen3.5 and Gemma 3 ship a VL
+   processor, so without this TRL loads `AutoProcessor`, switches to its multimodal path and rewrites
+   the assistant turn until the template rejects it. Passing the tokenizer keeps TRL on the text path
+   and reuses one tokenizer object for training and our decoding.
+-- **Only the language model is trained**, via one list `NON_LANGUAGE_MODULES` (`hfmt/mt_model.py`:
+-  `vision_tower`, `multi_modal_projector`) applied to every model — the architecture decides, not the
+-  prompt format (Gemma 3 4B uses `chat` but has the same vision tower). Full fine-tune freezes those
+-  subtrees; lora/qlora pass their leaf names as PEFT `exclude_modules`. With no `pixel_values` the
+-  vision tower never runs, so this fixes reported/trained counts and adapter size rather than the
+-  result; a new multimodal model with other module names needs them added to the list.
+-- **Sweep batch size (Q4).** The two TranslateGemma sweeps use `train_batch_size: 16` /
+-  `gradient_accumulation_steps: 4` (effective batch 64) to fit the 40 GB A100 pool; a job that still
+-  OOMs is resumed on a bigger GPU (feature 12).
++- **No vision-tower freeze.** Qwen3.5 under `AutoModelForCausalLM` has no vision modules. Gemma 3 4B
++  (a kept LoRA experiment) does: its tower's `q/k/v_proj` are wrapped by the all-linear adapter too,
++  but with no `pixel_values` the tower never runs, so those adapters get no gradient and the result is
++  unchanged; only the trainable-parameter count and adapter size grow. Bring back `3743e17` + `9c66f6a`
++  from `hydra3-translategemma` if that matters.
++- **Saved configs.** `run_config.yaml`s written on `hydra3-translategemma` carry `prompt_format:`,
++  which this schema has no key for: delete that line by hand before `launch.sh inf|merge|sft` on
++  such a folder.
+ 
+ ## GPU startup race and requeue (2026-11-03)
+ 
+@@ -528,29 +526,6 @@ decoded and merged like any other model.
+ - **Hard-coded, not `slurm:` keys:** a new required key would break resume/inf/merge for every
+   saved `run_config.yaml`. `tools/run_status.py`'s rerun command adds the same two flags.
+ 
+-## TranslateGemma chat-template whitespace fix (2026-11-04)
+-
+-**Decision:** the `translategemma` prompt format patches TranslateGemma's shipped chat template
+-(`fix_template` in `hfmt/prompt_formats.py`, applied by `mt_model.load_tokenizer`) instead of
+-carrying a corrected copy of the template.
+-
+-- **Why.** The shipped template writes an assistant turn as `<start_of_turn>model\n` plus a
+-  leaked line break and 8 spaces of template indentation before the reply. The generation prompt
+-  ends at `<start_of_turn>model\n`, so the two newlines merged into one token, the prompt was not a
+-  token prefix of prompt + reply, and TRL warned on every example (4485 in
+-  `sft_full_translategemma-4b-it`; 0 in the Qwen `chat` runs). The mask still fell after the
+-  header, so every target token was trained, but the model trained on a reply start it never sees
+-  when decoding. Decoded outputs are stripped, so no score carried whitespace artifacts. Every
+-  TranslateGemma result before this fix was trained this way. Feature 13's login-node prefix check
+-  (todo B) would have caught it; it was never run.
+-- **Patch, not copy.** Adding the whitespace-control dash to the one content tag keeps the rest
+-  of Google's template (including its `languages` table) as shipped. List-form assistant content
+-  is not an option: the template rejects it.
+-- **Fails loudly.** A template without the expected tag (upstream change) raises instead of
+-  training on an unchecked format; an already-fixed template (hfmt-saved `model/`,
+-  `model_merged/`) passes unchanged. Prompts render exactly as before, so decoding old runs is
+-  unaffected; only training targets change.
+-
+ ## Full fine-tunes: the best checkpoint is reloaded through `from_pretrained` (2026-11-05)
+ 
+ **Decision:** for `peft.mode=full`, `sft_translation.py` loads the checkpoint the Trainer is
+@@ -568,8 +543,8 @@ with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a st
+   `metric_for_best_model` 24.74 instead of 34.33 for `sft_full_qwen-3.5-2b_zh-en`, 62.63 instead
+   of 65.01 for `sft_full_qwen-3.5-4b_sweep-1`. A resumed full run would have continued from the
+   base weights with the checkpoint's optimizer state. LoRA/QLoRA runs reload through PEFT's
+-  `load_adapter` and were correct. TranslateGemma: Gemma 3 has a rename too
+-  (`language_model.model.*`); a run is affected iff its Slurm log has the warning.
++  `load_adapter` and were correct. Gemma 3 has a rename too (`language_model.model.*`); a run is
++  affected iff its Slurm log has the warning.
+ - **Why this fix.** `from_pretrained` is the public path that applies the conversion (it is how
+   `inf_translation.py` loads `model/` already); `strict=True` turns the next silent mismatch into
+   a failed run. Saving checkpoints under module names instead would need Transformers' private
+@@ -583,8 +558,8 @@ with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a st
+   Trainer should have done. A mismatch is logged as an error, not fatal: the weights and scores are
+   still written, and the check is what makes them suspect. (2) `tools/run_status.py` searches whole
+   training logs for known-bad library warnings (`BAD_WARNINGS`: this reload warning, TRL's prompt-prefix
+-  mismatch) and prints "Checks failed" with any `MISMATCH`. Both this bug and the template bug would have
+-  been visible the day they first ran.
++  mismatch) and prints "Checks failed" with any `MISMATCH`. This bug would have been visible the day it
++  first ran.
+ - **Correction (2026-11-06).** The Trainer's reload is still there, so it still warns in every Qwen3.5
+   full run after the fix too: the warning marks an affected run only when `training_info.yaml` has no
+   `model_dev_check` (runs from before this fix). The first `_short` runs were flagged by the log scan
+diff --git a/egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml b/egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+index 30c1afa..2d4bc90 100644
+--- a/egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml
++++ b/egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+@@ -1,27 +1,24 @@
+ # Single-run experiment: LoRA (every linear layer) fine-tune of google/gemma-3-4b-it
+-# TranslateGemma (translategemma-4b-it) is this model fine-tuned for translation. After SFT on this data
+-# TranslateGemma ties Qwen3.5-4B (67.76 vs 68.20 test BLEU-lc) although it starts 8.5 lower zero-shot
+-# (analysis/2026-11-06_mmtc_results_review). This runs TranslateGemma's all-linear recipe on its base
+-# model: if Gemma 3 lands at the same score, the MT specialisation buys nothing on in-domain data; its
+-# zero-shot score says whether TranslateGemma's zero-shot deficit against Qwen comes from the base.
+-# Same architecture as TranslateGemma, so the same peft option (lora_gemma3_all_linear, 7 module names),
+-# the same vision tower kept out by NON_LANGUAGE_MODULES (hfmt/mt_model.py), and the same memory: the
+-# logits dominate (262k vocabulary), hence batch 16 x accumulation 4 (effective 64, as shortrun's 32 x 2).
+-# A job that OOMs is resumed on an 80 GB A100 (bash egs/launch.sh sft <run folder>/run_config.yaml
+-# slurm.constraint=80gb).
+-# Inspected (tools/inspect_model.py google/gemma-3-4b-it, 2026-11-06): same language model as TranslateGemma
+-# (34 layers, 7 all-linear names, 14.9M adapter parameters at r=8, lm_head tied), vision tower (417M) and
+-# projector (3M) reported as not trained; bf16 weights 8.0 GiB + 3.78 MiB per token. The `chat` format adds
+-# 14 tokens around the source (TranslateGemma's adds ~75), so batch 16 fits with more headroom than there.
++# Gemma 3 4B is the base of Google's TranslateGemma. After SFT on this data TranslateGemma tied Qwen3.5-4B
++# (67.76 vs 68.20 test BLEU-lc) although it starts 8.5 lower zero-shot (analysis/2026-11-06_mmtc_results_review).
++# This runs the same all-linear recipe on the plain Gemma 3: if it lands at the same score, the MT
++# specialisation buys nothing on in-domain data; its zero-shot score says whether the zero-shot deficit
++# against Qwen comes from the base.
++# Peft option lora_gemma3_all_linear (7 module names; Gemma 3 has regular attention in every layer). The
++# checkpoint also carries a vision tower whose q/k/v_proj match these names; with no images it never runs,
++# so adapters placed there get no gradient. Memory: the logits dominate (262k vocabulary), hence batch 16 x
++# accumulation 4 (effective 64, as shortrun's 32 x 2). A job that OOMs is resumed on an 80 GB A100
++# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
++# Inspected (tools/inspect_model.py google/gemma-3-4b-it, 2026-11-06): 34 layers, 7 all-linear names, 14.9M
++# language-model adapter parameters at r=8, lm_head tied, vision tower 417M + projector 3M; bf16 weights
++# 8.0 GiB + 3.78 MiB per token. The prompt adds 14 tokens around the source, so batch 16 fits with headroom.
+ # Template checked (login node, 2026-11-06): the generation prompt is a token prefix of prompt + reply
+-# (15 of 18 tokens), so Gemma 3's shipped template does not have TranslateGemma's whitespace defect and
+-# needs no fix_template. TRL's mismatch warning should not appear; if it does, something else changed.
+-# Prompt: the plain `chat` format (instruction + source in the user turn, Gemma 3's own chat template;
+-# enable_thinking is ignored by templates without it). TranslateGemma's fix_template does not apply here:
+-# check the training log for TRL's "Mismatch between tokenized prompt" warning (tools/run_status.py
+-# flags it); a hit means Gemma 3's shipped template has the same whitespace defect and needs a format entry.
+-# Recipe: as sft_lora_translategemma-4b-it_all-linear.sweep.yaml at lr 1e-4 (the all-linear lr axis is
+-# flat within noise): shortrun, 400-step cosine, eval every 50, early stopping after 3, BLEU-lc selection.
++# (15 of 18 tokens), so TRL's "Mismatch between tokenized prompt" warning should not appear in the training
++# log (tools/run_status.py flags it); a hit means the shipped template changed.
++# Prompt: instruction + source in the user turn, Gemma 3's own chat template (enable_thinking is ignored by
++# templates without it).
++# Recipe: the 4B all-linear recipe at lr 1e-4 (the all-linear lr axis is flat within noise): shortrun,
++# 400-step cosine, eval every 50, early stopping after 3, BLEU-lc selection.
+ # A comma list on the command line adds an lr axis (train.learning_rate=1e-4,2e-4; change run_name).
+ # Launch:    bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+ # Zero-shot: bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+@@ -36,7 +33,6 @@ defaults:
+ 
+ run_name: sft_lora_gemma-3-4b-it_all-linear
+ checkpoint: google/gemma-3-4b-it
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-0.8b.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-0.8b.sweep.yaml
+index 3f4576d..c4ee14a 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-0.8b.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-0.8b.sweep.yaml
+@@ -11,7 +11,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-0.8b_sweep
+ checkpoint: Qwen/Qwen3.5-0.8B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b.sweep.yaml
+index 33bf15f..f69ce71 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b.sweep.yaml
+@@ -11,7 +11,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-2b_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
+index 5de6664..42264d1 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
+@@ -17,7 +17,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-2b_all-linear_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
+index d28486a..8b98bb3 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
+@@ -15,7 +15,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-2b_q-v-proj_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
+index f1b717b..cc4327e 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
+@@ -19,7 +19,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_all-linear_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
+index ee06fcb..ec58746 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
+@@ -21,7 +21,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_all-linear_anneal_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seeds.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seeds.sweep.yaml
+index bdd4b49..db1c5b2 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seeds.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seeds.sweep.yaml
+@@ -22,7 +22,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_all-linear_seeds_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml
+index 55deee6..c19e6fd 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml
+@@ -15,7 +15,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_q-v-proj_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml b/egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+index 5d848c5..764735d 100644
+--- a/egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
++++ b/egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+@@ -3,11 +3,11 @@
+ # had not flattened at 4B (analysis/2026-11-06_mmtc_results_review). The 4B all-linear recipe unchanged
+ # (sft_lora_qwen-3.5-4b_all-linear.sweep.yaml at lr 1e-4; the all-linear lr axis is flat within noise), so
+ # the result slots straight into the series: shortrun, 400-step cosine, eval every 50, early stopping after
+-# 3, BLEU-lc selection, r 8, alpha 32. Zero-shot first: Qwen3.5-4B leads TranslateGemma by 8.5 zero-shot
+-# and the two tie after SFT; the 9B zero-shot score says how much more pretraining knows about this domain.
++# 3, BLEU-lc selection, r 8, alpha 32. Zero-shot first: the 9B zero-shot score says how much more
++# pretraining knows about this domain.
+ # Same hybrid architecture as 4B (8 of 32 layers full attention), so the same all-linear module names
+ # (lora_qwen3_5_all_linear; confirmed with tools/inspect_model.py: all 10 names present, in_proj_b/a
+-# left out as at 4B). The `chat` format adds 17 tokens around the source, with enable_thinking=False
++# left out as at 4B). The prompt adds 17 tokens around the source, with enable_thinking=False
+ # (the 4B template thinks by default; the 9B prompt renders with the flag).
+ # Memory (tools/inspect_model.py Qwen/Qwen3.5-9B, 2026-11-06): 8.95B parameters, bf16 weights 16.7 GiB
+ # (lm_head is not tied: 2 x 1.0B in embeddings), + 3.71 MiB per token in a micro-batch (logits: 248k
+@@ -35,7 +35,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-9b_all-linear
+ checkpoint: Qwen/Qwen3.5-9B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_qlora_qwen-3.5-0.8b.sweep.yaml b/egs/mmtc/fr-en/sft_qlora_qwen-3.5-0.8b.sweep.yaml
+index 1bf877a..6db74a8 100644
+--- a/egs/mmtc/fr-en/sft_qlora_qwen-3.5-0.8b.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_qlora_qwen-3.5-0.8b.sweep.yaml
+@@ -11,7 +11,6 @@ defaults:
+ 
+ run_name: sft_qlora_qwen-3.5-0.8b_sweep
+ checkpoint: Qwen/Qwen3.5-0.8B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/fr-en/sft_qlora_qwen-3.5-2b.sweep.yaml b/egs/mmtc/fr-en/sft_qlora_qwen-3.5-2b.sweep.yaml
+index 2217b6b..42380f5 100644
+--- a/egs/mmtc/fr-en/sft_qlora_qwen-3.5-2b.sweep.yaml
++++ b/egs/mmtc/fr-en/sft_qlora_qwen-3.5-2b.sweep.yaml
+@@ -11,7 +11,6 @@ defaults:
+ 
+ run_name: sft_qlora_qwen-3.5-2b_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/fr-en/sft_qwen-3.5-0.8b.yaml b/egs/mmtc/fr-en/sft_qwen-3.5-0.8b.yaml
+index d7798f7..a7c06a8 100644
+--- a/egs/mmtc/fr-en/sft_qwen-3.5-0.8b.yaml
++++ b/egs/mmtc/fr-en/sft_qwen-3.5-0.8b.yaml
+@@ -13,7 +13,6 @@ defaults:
+ 
+ run_name: sft_full_qwen-3.5-0.8b_short
+ checkpoint: Qwen/Qwen3.5-0.8B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_qwen-3.5-2b.yaml b/egs/mmtc/fr-en/sft_qwen-3.5-2b.yaml
+index bb36108..75963f0 100644
+--- a/egs/mmtc/fr-en/sft_qwen-3.5-2b.yaml
++++ b/egs/mmtc/fr-en/sft_qwen-3.5-2b.yaml
+@@ -14,7 +14,6 @@ defaults:
+ 
+ run_name: sft_full_qwen-3.5-2b_short
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml b/egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml
+index 8786cb9..331a812 100644
+--- a/egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml
++++ b/egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml
+@@ -4,8 +4,7 @@
+ # within noise of it at step 50 (65.01) and fell 2.4 by step 150. The same held on zh-en.
+ # Memory (tools/inspect_model.py): fp32 weights + grads + AdamW state = 16 bytes/param, 62.7 GiB for
+ # 4.21B parameters, + 3.6 MiB per token in a batch: needs an 80 GB A100 (not a 40 GB A100 or a 48 GB
+-# L40S). Per-device batch 4 x accumulation 16 keeps the effective batch at 64, as in
+-# sft_translategemma-4b-it.yaml.
++# L40S). Per-device batch 4 x accumulation 16 keeps the effective batch at 64 (the sweeps' 32 x 2).
+ # Disk: each checkpoint holds fp32 weights + AdamW state, ~50 GB; save_total_limit 2 keeps ~100 GB per
+ # job: clear checkpoints when done (tools/delete_checkpoints.sh).
+ # Decodes at the default batch size (16), like the earlier runs: batch size can shift greedy outputs.
+@@ -22,7 +21,6 @@ defaults:
+ 
+ run_name: sft_full_qwen-3.5-4b_short
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate French to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml b/egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+index 19dac58..920cda5 100644
+--- a/egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
++++ b/egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+@@ -1,27 +1,23 @@
+ # Single-run experiment: LoRA (every linear layer) fine-tune of google/gemma-3-4b-it
+ # zh-en counterpart of egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml: same recipe; run_name carries
+ # the pair so the two pairs' W&B groups don't merge.
+-# TranslateGemma (translategemma-4b-it) is this model fine-tuned for translation; on zh-en it only ties
+-# Qwen3.5-2B after SFT (32.97 vs 32.77 test BLEU-lc) and its zero-shot score is still missing
+-# (analysis/2026-11-06_mmtc_results_review). This runs TranslateGemma's all-linear recipe on its base model,
+-# through the fixed-template code path, so it is also a clean comparison point for the zh-en TranslateGemma
+-# runs whose template status is unknown.
+-# Same architecture as TranslateGemma: same peft option (lora_gemma3_all_linear), vision tower kept out by
+-# NON_LANGUAGE_MODULES, and the same memory: the logits dominate (262k vocabulary), hence batch 16 x
+-# accumulation 4 (effective 64, as shortrun's 32 x 2). A job that OOMs is resumed on an 80 GB A100
++# Gemma 3 4B is the base of Google's TranslateGemma, which on zh-en only tied Qwen3.5-2B after SFT (32.97 vs
++# 32.77 test BLEU-lc; analysis/2026-11-06_mmtc_results_review). This runs the same all-linear recipe on the
++# plain Gemma 3 as the comparison point.
++# Peft option lora_gemma3_all_linear (7 module names). The checkpoint also carries a vision tower whose
++# q/k/v_proj match these names; with no images it never runs, so adapters placed there get no gradient.
++# Memory: the logits dominate (262k vocabulary), hence batch 16 x accumulation 4 (effective 64, as
++# shortrun's 32 x 2). A job that OOMs is resumed on an 80 GB A100
+ # (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
+-# Inspected (tools/inspect_model.py google/gemma-3-4b-it, 2026-11-06): same language model as TranslateGemma
+-# (34 layers, 7 all-linear names, 14.9M adapter parameters at r=8, lm_head tied), vision tower (417M) and
+-# projector (3M) reported as not trained; bf16 weights 8.0 GiB + 3.78 MiB per token. The `chat` format adds
+-# 14 tokens around the source (TranslateGemma's adds ~75), so batch 16 fits with more headroom than there.
++# Inspected (tools/inspect_model.py google/gemma-3-4b-it, 2026-11-06): 34 layers, 7 all-linear names, 14.9M
++# language-model adapter parameters at r=8, lm_head tied, vision tower 417M + projector 3M; bf16 weights
++# 8.0 GiB + 3.78 MiB per token. The prompt adds 14 tokens around the source, so batch 16 fits with headroom.
+ # Template checked (login node, 2026-11-06): the generation prompt is a token prefix of prompt + reply
+-# (15 of 18 tokens), so Gemma 3's shipped template does not have TranslateGemma's whitespace defect and
+-# needs no fix_template. TRL's mismatch warning should not appear; if it does, something else changed.
+-# Prompt: the plain `chat` format (instruction + source in the user turn, Gemma 3's own chat template).
+-# Check the training log for TRL's "Mismatch between tokenized prompt" warning (tools/run_status.py flags
+-# it); a hit means Gemma 3's shipped template has TranslateGemma's whitespace defect and needs a format entry.
+-# Recipe: as sft_lora_translategemma-4b-it_all-linear.sweep.yaml at lr 1e-4 (the lr axis was within 0.36
+-# here): shortrun, 400-step cosine, eval every 50, early stopping after 3, BLEU-lc selection.
++# (15 of 18 tokens), so TRL's "Mismatch between tokenized prompt" warning should not appear in the training
++# log (tools/run_status.py flags it); a hit means the shipped template changed.
++# Prompt: instruction + source in the user turn, Gemma 3's own chat template.
++# Recipe: the 4B all-linear recipe at lr 1e-4 (the lr axis was within 0.36 here): shortrun, 400-step cosine,
++# eval every 50, early stopping after 3, BLEU-lc selection.
+ # Launch:    bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+ # Zero-shot: bash egs/launch.sh inf egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml
+ #            -> outputs/sft_lora_gemma-3-4b-it_zh-en_all-linear/base_ckpt_inf/test/scores.json
+@@ -35,7 +31,6 @@ defaults:
+ 
+ run_name: sft_lora_gemma-3-4b-it_zh-en_all-linear
+ checkpoint: google/gemma-3-4b-it
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml b/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
+index ed76367..5b0066a 100644
+--- a/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
++++ b/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
+@@ -18,7 +18,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-2b_zh-en_all-linear_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml b/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
+index a9186cb..74b9d9a 100644
+--- a/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
++++ b/egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_q-v-proj.sweep.yaml
+@@ -18,7 +18,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-2b_zh-en_q-v-proj_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml b/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
+index bdc38c5..924433c 100644
+--- a/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
++++ b/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
+@@ -21,7 +21,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_zh-en_all-linear_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml b/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
+index 4bc44ec..963f8f5 100644
+--- a/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
++++ b/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear_anneal.sweep.yaml
+@@ -22,7 +22,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_zh-en_all-linear_anneal_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml b/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml
+index 22c747f..9805ae3 100644
+--- a/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml
++++ b/egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_q-v-proj.sweep.yaml
+@@ -19,7 +19,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-4b_zh-en_q-v-proj_sweep
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml b/egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+index 0491dc1..54988d5 100644
+--- a/egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
++++ b/egs/mmtc/zh-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+@@ -24,7 +24,6 @@ defaults:
+ 
+ run_name: sft_lora_qwen-3.5-9b_zh-en_all-linear
+ checkpoint: Qwen/Qwen3.5-9B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_qlora_qwen-3.5-2b.sweep.yaml b/egs/mmtc/zh-en/sft_qlora_qwen-3.5-2b.sweep.yaml
+index 0b7f757..e7a155d 100644
+--- a/egs/mmtc/zh-en/sft_qlora_qwen-3.5-2b.sweep.yaml
++++ b/egs/mmtc/zh-en/sft_qlora_qwen-3.5-2b.sweep.yaml
+@@ -14,7 +14,6 @@ defaults:
+ 
+ run_name: sft_qlora_qwen-3.5-2b_zh-en_sweep
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ wandb:
+diff --git a/egs/mmtc/zh-en/sft_qwen-3.5-0.8b.yaml b/egs/mmtc/zh-en/sft_qwen-3.5-0.8b.yaml
+index c93206d..57234f2 100644
+--- a/egs/mmtc/zh-en/sft_qwen-3.5-0.8b.yaml
++++ b/egs/mmtc/zh-en/sft_qwen-3.5-0.8b.yaml
+@@ -16,7 +16,6 @@ defaults:
+ 
+ run_name: sft_full_qwen-3.5-0.8b_zh-en_short
+ checkpoint: Qwen/Qwen3.5-0.8B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_qwen-3.5-2b.yaml b/egs/mmtc/zh-en/sft_qwen-3.5-2b.yaml
+index 7a1114a..fca3638 100644
+--- a/egs/mmtc/zh-en/sft_qwen-3.5-2b.yaml
++++ b/egs/mmtc/zh-en/sft_qwen-3.5-2b.yaml
+@@ -16,7 +16,6 @@ defaults:
+ 
+ run_name: sft_full_qwen-3.5-2b_zh-en_short
+ checkpoint: Qwen/Qwen3.5-2B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/egs/mmtc/zh-en/sft_qwen-3.5-4b.yaml b/egs/mmtc/zh-en/sft_qwen-3.5-4b.yaml
+index b322896..371e97d 100644
+--- a/egs/mmtc/zh-en/sft_qwen-3.5-4b.yaml
++++ b/egs/mmtc/zh-en/sft_qwen-3.5-4b.yaml
+@@ -6,8 +6,7 @@
+ # (32.23-32.47 BLEU-lc); 1e-5 peaked within noise of it at step 50 (32.41) and fell 3.7 by step 150.
+ # Memory (tools/inspect_model.py): fp32 weights + grads + AdamW state = 16 bytes/param, 62.7 GiB for
+ # 4.21B parameters, + 3.6 MiB per token in a batch: needs an 80 GB A100 (not a 40 GB A100 or a 48 GB
+-# L40S). Per-device batch 4 x accumulation 16 keeps the effective batch at 64, as in
+-# sft_translategemma-4b-it.yaml.
++# L40S). Per-device batch 4 x accumulation 16 keeps the effective batch at 64 (the sweeps' 32 x 2).
+ # Disk: each checkpoint holds fp32 weights + AdamW state, ~50 GB; save_total_limit 2 keeps ~100 GB per
+ # job: clear checkpoints when done (tools/delete_checkpoints.sh).
+ # Decodes at the default batch size (16), like the fr-en runs: batch size can shift greedy outputs.
+@@ -24,7 +23,6 @@ defaults:
+ 
+ run_name: sft_full_qwen-3.5-4b_zh-en_short
+ checkpoint: Qwen/Qwen3.5-4B
+-prompt_format: chat
+ instruction: "Translate Chinese to English"
+ 
+ train:
+diff --git a/hfmt/mt_model.py b/hfmt/mt_model.py
+index 01f58e8..eeb91ce 100644
+--- a/hfmt/mt_model.py
++++ b/hfmt/mt_model.py
+@@ -2,8 +2,7 @@
+ 
+ Training (``sft_translation.py``) and inference (``inf_translation.py``) load the base model the
+ same way for each ``peft.mode``, so a trained adapter is always decoded on the base it was
+-trained on (e.g. 4-bit only for ``qlora``). Prompts are built by ``hfmt/prompt_formats.py``
+-(feature 13).
++trained on (e.g. 4-bit only for ``qlora``).
+ 
+ Heavy imports (torch, transformers, ...) live inside functions so config-only use stays fast.
+ """
+@@ -11,48 +10,26 @@ Heavy imports (torch, transformers, ...) live inside functions so config-only us
+ import time
+ import logging
+ 
+-from hfmt.prompt_formats import chat_template_kwargs, fix_chat_template, make_prompt_formatter
+-
+-
+-# Only the language model is trained (feature 13): a module whose last name component is one of these
+-# is frozen (full fine-tune) or kept out of the LoRA adapter (lora/qlora). Applied to every model
+-# whatever its prompt_format -- the architecture decides (e.g. Gemma 3 4B uses the `chat` format but
+-# has a vision tower). A model with none of them (Qwen, text-only Gemma 3) is unaffected; a future
+-# multimodal model with other names (`visual`, `audio_tower`, ...) needs its names added here.
+-NON_LANGUAGE_MODULES = ["vision_tower", "multi_modal_projector"]
+-
+-
+-def resolve_excluded_modules(model, target_modules):
+-    """Modules outside the language model that must not be trained. Returns ``(subtrees,
+-    leaf_full_names)``:
+-
+-    - ``subtrees`` -- ``{full_name: module}`` for the outermost modules whose last name component is
+-      in ``NON_LANGUAGE_MODULES`` (matched by name, so nesting depth doesn't matter). Used to freeze
+-      the vision modules (full) and to report what isn't trained.
+-    - ``leaf_full_names`` -- full names of the modules inside those subtrees whose last name
+-      component is in ``target_modules``, for ``LoraConfig(exclude_modules=...)`` (lora/qlora). Exact
+-      full names, so PEFT's matching rule doesn't matter.
+-
+-    ``({}, [])`` for a model with none of these modules. No heavy imports, so
+-    ``tools/inspect_model.py`` can call it on a meta-device model."""
+-    excluded, targets = set(NON_LANGUAGE_MODULES), set(target_modules or [])
+-    subtrees = {}
+-    for name, module in model.named_modules():
+-        if name and name.rsplit(".", 1)[-1] in excluded \
+-                and not any(name == s or name.startswith(s + ".") for s in subtrees):
+-            subtrees[name] = module      # outermost: skip anything under an already-found subtree
+-    leaf_full_names = [name for name, _ in model.named_modules()
+-                       if name.rsplit(".", 1)[-1] in targets
+-                       and any(name == s or name.startswith(s + ".") for s in subtrees)]
+-    return subtrees, leaf_full_names
+-
+-
+-def load_tokenizer(checkpoint, prompt_format):
+-    """``checkpoint``'s tokenizer with ``prompt_format``'s chat-template fix applied
+-    (``prompt_formats.fix_chat_template``). Every hfmt path loads its tokenizer here."""
++
++# Extra arguments for every ``apply_chat_template`` call that renders a prompt (training via TRL's
++# per-example ``chat_template_kwargs`` column, dev/test decoding, inference), so prompts render the same
++# everywhere. enable_thinking=False: Qwen3.5-4B's template thinks by default (generation prompt
++# `<think>\n`, so the model writes its reasoning as the translation); 0.8B/2B already default to off.
++# Off, the generation prompt ends with the empty `<think>\n\n</think>\n\n` that the training targets
++# start with. Templates without the variable (Gemma) ignore it, so their prompts are unchanged.
++CHAT_TEMPLATE_KWARGS = {"enable_thinking": False}
++
++
++def format_input_prompt(instruction_prefix, content):
++    """The user turn of the chat prompt for one source sentence: the instruction, a newline, the source."""
++    return [{"content": instruction_prefix + "\n" + content, "role": "user"}]
++
++
++def load_tokenizer(checkpoint):
++    """``checkpoint``'s tokenizer, with the eos token as pad token when it has none. Every hfmt path
++    loads its tokenizer here."""
+     from transformers import AutoTokenizer
+     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+-    fix_chat_template(tokenizer, prompt_format)
+     if tokenizer.pad_token is None:
+         tokenizer.pad_token = tokenizer.eos_token
+     return tokenizer
+@@ -157,16 +134,15 @@ def merge_trained_model(cfg, model_dir, out_dir, device):
+         logging.warning(warning)
+     model = PeftModel.from_pretrained(base, model_dir).merge_and_unload()
+     model.save_pretrained(out_dir)
+-    load_tokenizer(cfg.checkpoint, cfg.prompt_format).save_pretrained(out_dir)
++    load_tokenizer(cfg.checkpoint).save_pretrained(out_dir)
+     return warning
+ 
+ 
+-def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, format_prompt, decode, text_field='text',
+-                           template_kwargs=None):
+-    """``template_kwargs``: the prompt format's extra ``apply_chat_template`` arguments
+-    (``prompt_formats.chat_template_kwargs``), the same ones training rendered its prompts with."""
++def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, decode, text_field='text'):
++    """Decode ``eval_data[text_field]`` in batches of ``decode.batch_size``, write one stripped hypothesis per
++    line to ``predictions_file`` and return them. Prompts are ``format_input_prompt(instruction_prefix, ...)``
++    rendered with ``CHAT_TEMPLATE_KWARGS``, exactly as training rendered them."""
+     from torch.utils.data import DataLoader
+-    template_kwargs = template_kwargs or {}
+     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
+     original_padding_side = tokenizer.padding_side
+     original_truncation_side = tokenizer.truncation_side
+@@ -182,11 +158,11 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
+     with open(predictions_file, "w") as O:
+         for i, eval_batch in enumerate(eval_dataloader):
+ 
+-            prompts = [format_prompt(s) for s in eval_batch[text_field]]
++            prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
+             test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
+                                                         max_length=decode.max_length, truncation=True, padding=True,
+                                                         return_tensors="pt", return_dict=True,
+-                                                        **template_kwargs).to(device)
++                                                        **CHAT_TEMPLATE_KWARGS).to(device)
+ 
+             boundary = test_inputs["input_ids"].shape[1]
+             test_outputs = model.generate(**test_inputs, max_new_tokens=decode.max_new_tokens, num_beams=decode.num_beams, do_sample=decode.do_sample)[:, boundary:]
+@@ -198,7 +174,7 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
+ 
+             # check if prompts get cut off by max_length
+             lengths = [len(ids) for ids in tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, return_dict=True,
+-                                                                         **template_kwargs)["input_ids"]]
++                                                                         **CHAT_TEMPLATE_KWARGS)["input_ids"]]
+             n_cut += sum(n > decode.max_length for n in lengths)
+             longest = max(longest, *lengths)
+ 
+@@ -222,14 +198,13 @@ def decode_test_sets(cfg, tokenizer, model, outdir, device):
+ 
+     test = cfg.data.test
+     trgs = list(test.trg) if test.trg is not None else [None] * len(test.src)
+-    format_prompt = make_prompt_formatter(cfg)
+     results = {}
+     for i, (src, trg) in enumerate(zip(test.src, trgs), start=1):
+         name = f"test{i}"
+         logging.info(f"Decoding {name}: {src}")
+         data = load_dataset("text", data_files=[src], streaming=False, split="train")
+         preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir, f"{name}.pred.trg"), device,
+-                                       format_prompt, cfg.decode, template_kwargs=chat_template_kwargs(cfg))
++                                       cfg.instruction, cfg.decode)
+         results[name] = {"src": src, "trg": trg}
+         if trg is not None:
+             refs = load_dataset("text", data_files=[trg], streaming=False, split="train")["text"]
+diff --git a/hfmt/sft_translation.py b/hfmt/sft_translation.py
+index a1936e7..d0c519e 100644
+--- a/hfmt/sft_translation.py
++++ b/hfmt/sft_translation.py
+@@ -20,12 +20,12 @@ from hydra.core.hydra_config import HydraConfig
+ from omegaconf import OmegaConf
+ 
+ from hfmt.hydra_config import Config, check_config, register_configs
+-from hfmt.mt_model import (decode_test_sets, inference_on_eval_data, load_base_model, load_checkpoint_weights, load_tokenizer,
+-                           resolve_excluded_modules, score)
+-from hfmt.prompt_formats import chat_template_kwargs, make_prompt_formatter
++from hfmt.mt_model import (CHAT_TEMPLATE_KWARGS, decode_test_sets, format_input_prompt, inference_on_eval_data, load_base_model,
++                           load_checkpoint_weights, load_tokenizer, score)
+ 
+ 
+-DECODE_METRICS = ("eval_bleu", "eval_bleu_13a_lowercase", "eval_chrf", "eval_ter")  # added by the MT callback, only on decode steps
++# The metrics score() returns, as the MT callback adds them to the eval metrics (only on decode steps).
++DECODE_METRICS = ("eval_bleu", "eval_bleu_13a_lowercase", "eval_chrf", "eval_ter")
+ # BLEU difference allowed between model/'s dev decode and the MT callback's at the same step: the callback
+ # decodes under Accelerate's autocast wrapper, the final decode with the unwrapped model.
+ DEV_SCORE_TOLERANCE = 1.0
+@@ -33,8 +33,8 @@ DEV_SCORE_TOLERANCE = 1.0
+ 
+ def config_token_ids(config):
+     """(pad, bos, eos) token ids from a model config, for the diagnostic log that checks them
+-    against the tokenizer. Composite multimodal configs (e.g. Gemma3Config for TranslateGemma) keep
+-    these on ``config.text_config``, not the top level, so fall back there when absent or None."""
++    against the tokenizer. Composite multimodal configs (e.g. Gemma 3's Gemma3Config) keep these on
++    ``config.text_config``, not the top level, so fall back there when absent or None."""
+     def get(name):
+         value = getattr(config, name, None)
+         if value is None:
+@@ -106,8 +106,7 @@ def check_model_dev_scores(log_history, model_global_step, scores, tolerance=DEV
+     return {"model_dev_scores": dict(scores), "model_dev_check": check}
+ 
+ 
+-def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, format_prompt, decode, interval,
+-                     template_kwargs):
++def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, model, tokenizer, outdir, device, instruction_prefix, decode, interval):
+     """Early stopping that also decodes the dev set and adds the ``score`` metrics (BLEU,
+     lowercased 13a BLEU, chrF, TER) to the eval metrics.
+     Dev decoding is expensive, so it runs only every ``interval`` evaluations and at the last step
+@@ -144,8 +143,7 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
+ 
+         def _decode_dev(self, args, state, control, **kwargs):
+             logging.info(f"Tokenizer setting in TrainerCallback on_evaluate {tokenizer.padding_side = } {tokenizer.truncation_side = }")
+-            preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, format_prompt, decode, 'src',
+-                                           template_kwargs=template_kwargs)
++            preds = inference_on_eval_data(tokenizer, model, data, os.path.join(outdir,f"dev.step_{state.global_step}.pred"), device, instruction_prefix, decode, 'src')
+             scores = score(preds, self.refs)
+ 
+             # Local log only (examples never go to W&B, CLAUDE.md).
+@@ -213,10 +211,11 @@ def main(cfg: Config) -> None:
+ 
+     ###################################
+     ## User settings
+-    tokenizer = load_tokenizer(cfg.checkpoint, cfg.prompt_format)
+-    format_prompt = make_prompt_formatter(cfg)   # builder for cfg.prompt_format (validated at launch)
+-    template_kwargs = chat_template_kwargs(cfg)  # e.g. enable_thinking=False; same for training and decoding
+-    logging.info(f"prompt_format={cfg.prompt_format}: apply_chat_template kwargs {template_kwargs}")
++    instruction_prefix = cfg.instruction
++    logging.info(f"instruction: '{instruction_prefix}'")
++    logging.info(f"apply_chat_template kwargs (training and decoding): {CHAT_TEMPLATE_KWARGS}")
++
++    tokenizer = load_tokenizer(cfg.checkpoint)
+     os.environ["TOKENIZERS_PARALLELISM"] = "false"
+     device = "cuda" if torch.cuda.is_available() else "cpu"
+     logging.info(f"Using device: {device}")
+@@ -229,14 +228,12 @@ def main(cfg: Config) -> None:
+ 
+ 
+     def preprocess_fn(samples):
+-        prompt = [format_prompt(s) for s in samples["src"]]
++        prompt = [format_input_prompt(instruction_prefix, s) for s in samples["src"]]
+         completion = [[{"content":t, "role":"assistant"}] for t in samples["trg"]]
+-        out = {"prompt": prompt, "completion": completion}
+-        # TRL passes an example's chat_template_kwargs to both renders (prompt, prompt + completion).
+-        # Only added when non-empty: Arrow can't store an empty struct.
+-        if template_kwargs:
+-            out["chat_template_kwargs"] = [dict(template_kwargs) for _ in prompt]
+-        return out
++        # TRL passes an example's chat_template_kwargs to both of its renders (prompt, prompt + completion),
++        # so training prompts render as our decoding does (CHAT_TEMPLATE_KWARGS: enable_thinking=False).
++        return {"prompt": prompt, "completion": completion,
++                "chat_template_kwargs": [dict(CHAT_TEMPLATE_KWARGS) for _ in prompt]}
+ 
+ 
+     def get_data():
+@@ -270,20 +267,6 @@ def main(cfg: Config) -> None:
+     finetune_mode = cfg.peft.mode  # one of: full | lora | qlora
+     model, use_bf16 = load_base_model(cfg, device)
+ 
+-    ### Only the language model is trained (feature 13): freeze (full) or keep the adapter out of
+-    ### (lora/qlora) the modules outside it (vision tower, multimodal projector). Empty for Qwen /
+-    ### text-only models. The saved weights still include the unchanged vision tower, and
+-    ### PeftModel.from_pretrained rebuilds the adapter wrapping (incl. exclude_modules) from
+-    ### adapter_config.json, so load_trained_model / merge_trained_model need no change.
+-    target_modules = list(cfg.peft.lora.target_modules) if finetune_mode in ("lora", "qlora") else []
+-    excluded_subtrees, excluded_leaves = resolve_excluded_modules(model, target_modules)
+-    if excluded_subtrees:
+-        logging.info("Not trained (outside the language model): "
+-                     + ", ".join(f"{name} {sum(p.numel() for p in m.parameters()):,}"
+-                                 for name, m in excluded_subtrees.items()))
+-    else:
+-        logging.info("Not trained (outside the language model): none")
+-
+     ### Apply LoRA/QLoRA if needed
+     lora_config = None
+     if finetune_mode in ("lora", "qlora"):
+@@ -294,7 +277,6 @@ def main(cfg: Config) -> None:
+             lora_alpha=cfg.peft.lora.alpha, # scaling factor
+             lora_dropout=cfg.peft.lora.dropout, # dropout of LoRA layers
+             target_modules=list(cfg.peft.lora.target_modules), # exact names, matched at the end of module names
+-            exclude_modules=excluded_leaves or None, # keep the adapter out of the vision tower (None = nothing to exclude)
+         )
+ 
+         if finetune_mode == "qlora":
+@@ -308,14 +290,11 @@ def main(cfg: Config) -> None:
+         logging.info("LoRA wraps: " + ", ".join(f"{k} x{v}" for k, v in sorted(wrapped.items())))
+         trainable, total = model.get_nb_trainable_parameters()
+         logging.info(f"LoRA/QLoRA adapter enabled: trainable params {trainable:,} of {total:,} ({100 * trainable / total:.4f}%)")
+-    else: # full fine-tune of the language model (vision modules frozen just above)
+-        for module in excluded_subtrees.values():
+-            module.requires_grad_(False)
++    else: # full fine-tune of all parameters
+         model.config.use_cache = False
+         trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+         total = sum(p.numel() for p in model.parameters())
+-        logging.info(f"Full fine-tuning of the language model: trainable params {trainable:,} of "
+-                     f"{total:,} ({100 * trainable / total:.4f}%)")
++        logging.info(f"Full fine-tuning of the base model: trainable params {trainable:,} of {total:,} ({100 * trainable / total:.4f}%)")
+ 
+     logging.info(f"tokenizer pad/bos/eos: {tokenizer.pad_token_id} {tokenizer.bos_token_id} {tokenizer.eos_token_id}")
+     config_pad, config_bos, config_eos = config_token_ids(model.config)
+@@ -364,9 +343,9 @@ def main(cfg: Config) -> None:
+         args=training_args,
+         train_dataset=D["train"],
+         eval_dataset=D["dev"],
+-        # Pass the tokenizer so TRL doesn't load AutoProcessor (TranslateGemma and Qwen3.5 ship VL
+-        # processors, which put TRL on its multimodal path and rewrite the assistant turn); this also
+-        # uses one tokenizer object for training and our decoding.
++        # Pass the tokenizer so TRL doesn't load AutoProcessor (Qwen3.5 and Gemma 3 ship VL processors,
++        # which put TRL on its multimodal path and rewrite the assistant turn); this also uses one
++        # tokenizer object for training and our decoding.
+         processing_class=tokenizer,
+     )
+ 
+@@ -400,10 +379,9 @@ def main(cfg: Config) -> None:
+                                           tokenizer=tokenizer,
+                                           outdir=outdir,
+                                           device=device,
+-                                          format_prompt=format_prompt,
++                                          instruction_prefix=instruction_prefix,
+                                           decode=cfg.decode,
+                                           interval=cfg.train.inference_callback_interval,
+-                                          template_kwargs=template_kwargs,
+                                           ))
+ 
+     ###################################
+@@ -449,7 +427,7 @@ def main(cfg: Config) -> None:
+     # callback got at the step model/ claims to hold. A mismatch is logged and recorded, not fatal.
+     logging.info(f"======== Dev decoding of model/ ========")
+     dev_preds = inference_on_eval_data(tokenizer, model, D["dev"], os.path.join(outdir, "dev.model.pred"), device,
+-                                       format_prompt, cfg.decode, 'src', template_kwargs=template_kwargs)
++                                       instruction_prefix, cfg.decode, 'src')
+     info.update(check_model_dev_scores(trainer.state.log_history, info["model_global_step"], score(dev_preds, D["dev"]["trg"])))
+     log = logging.error if info["model_dev_check"].startswith("MISMATCH") else logging.info
+     log(f"model/ dev check: {info['model_dev_check']} (dev scores {info['model_dev_scores']})")
+@@ -467,7 +445,7 @@ def main(cfg: Config) -> None:
+         results = decode_test_sets(cfg, tokenizer, model, outdir, device)   # test<i>.pred.trg + scores.json
+         if wandb.run is not None:                                          # numbers only, no paths (CLAUDE.md)
+             for name, r in results.items():
+-                for k in ("bleu", "bleu_13a_lowercase", "chrf", "ter"):
++                for k in (m.removeprefix("eval_") for m in DECODE_METRICS):
+                     if k in r:
+                         wandb.run.summary[f"test/{name}/{k}"] = r[k]
+     else:
+diff --git a/hfmt/test_grid.py b/hfmt/test_grid.py
+index ad522f9..4a23408 100644
+--- a/hfmt/test_grid.py
++++ b/hfmt/test_grid.py
+@@ -1,4 +1,4 @@
+-"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options, 12_resume_sft, 13_translategemma_prompt). No GPU or training deps needed.
++"""Tests for hfmt/grid.py (features 08_hydra_redo, 09_hydra_detailed_reorg, 10_inference_more_options, 12_resume_sft). No GPU or training deps needed.
+ 
+ Runs grid.main() in-process on the real fr-en experiments, with output_root pointed at a temp
+ dir, and checks the job folders and saved configs it writes. HFMT_DATA_ROOT is a dummy path
+@@ -194,46 +194,6 @@ def test_lora_target_modules():
+     assert fails(SINGLE, "peft.lora.lora_r=8")                              # old key name
+ 
+ 
+-def test_prompt_format():
+-    # Unknown name fails before writing; the message lists the known formats.
+-    try:
+-        run(SINGLE, "prompt_format=nope")
+-        assert False
+-    except SystemExit as e:
+-        assert "chat" in str(e.code) and "translategemma" in str(e.code)
+-    # chat needs a non-null instruction; translategemma needs instruction: null.
+-    assert fails(SINGLE, "prompt_format=chat", "instruction=null")
+-    assert fails(SINGLE, "prompt_format=translategemma")                    # instruction still set
+-    out, _, _ = run(SINGLE, "prompt_format=translategemma", "instruction=null")
+-    assert saved(out, "sft_lora").prompt_format == "translategemma"
+-    # No default: an experiment without prompt_format fails (like test_missing_value_fails).
+-    tmp = tempfile.mkdtemp()
+-    shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)
+-    exp = os.path.join(tmp, "no_fmt.yaml")
+-    open(exp, "w").write("".join(l for l in open(SINGLE) if not l.startswith("prompt_format:")))
+-    assert fails(exp)
+-    # translategemma also needs data.src/data.trg; a dataset without them fails.
+-    nosrc = tempfile.mkdtemp()
+-    open(os.path.join(nosrc, "dataset.yaml"), "w").write(
+-        "# @package data\n" + "".join(f"{s}: {{src: [/abs/{s}.fr], trg: [/abs/{s}.en]}}\n" for s in ("train", "dev")))
+-    shutil.copy(SINGLE, nosrc)
+-    saved_root = os.environ.pop("HFMT_DATA_ROOT")
+-    try:
+-        assert fails(os.path.join(nosrc, "sft_lora.yaml"), "prompt_format=translategemma", "instruction=null")
+-    finally:
+-        os.environ["HFMT_DATA_ROOT"] = saved_root
+-    # The three TranslateGemma experiments compose: translategemma + null instruction; the two sweeps
+-    # use batch 16 x accumulation 4.
+-    egs = os.path.join(ROOT, "egs/mmtc/fr-en")
+-    for name in ("sft_translategemma-4b-it", "sft_lora_translategemma-4b-it.sweep",
+-                 "sft_qlora_translategemma-4b-it.sweep"):
+-        out, dirs, _ = run(os.path.join(egs, name + ".yaml"))
+-        cfg = saved(out, dirs[0])
+-        assert cfg.prompt_format == "translategemma" and cfg.instruction is None
+-        if name.endswith(".sweep"):
+-            assert (cfg.train.train_batch_size, cfg.train.gradient_accumulation_steps) == (16, 4)
+-
+-
+ def test_missing_value_fails():
+     tmp = tempfile.mkdtemp()                           # experiment that sets no checkpoint
+     shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)
+diff --git a/tools/inspect_model.py b/tools/inspect_model.py
+index 66bd031..25be918 100644
+--- a/tools/inspect_model.py
++++ b/tools/inspect_model.py
+@@ -1,32 +1,25 @@
+-"""Inspect a causal-LM checkpoint before fine-tuning it (features 11, 13).
++"""Inspect a causal-LM checkpoint before fine-tuning it (feature 11).
+ 
+-    python tools/inspect_model.py <checkpoint> [prompt_format]   # HF model id or local folder
+-
+-``prompt_format`` (a key in hfmt/prompt_formats.py: chat | translategemma; default chat) picks how
+-section 7 builds the example prompt; pass ``translategemma`` for a TranslateGemma-style checkpoint.
++    python tools/inspect_model.py <checkpoint>      # a Hugging Face model id or a local folder
+ 
+ Builds the model from its config on the meta device: no weights are downloaded and no GPU is
+ used, so it runs on a login node in seconds (in the hfmt env: source install/path.sh). Prints:
+   1. the model                       5. a training memory estimate (equations + numbers)
+   2. module types with counts        6. config highlights
+-  3. LoRA candidates (language-model Linear names)   7. tokenizer + prompt overhead
+-  4. parameter counts (+ modules not trained)
+-Sections 3-5 and the "not trained" line treat the modules outside the language model
+-(``NON_LANGUAGE_MODULES``: vision tower, multimodal projector) as frozen, matching training
+-(feature 13). Remote-code models and pre-quantized checkpoints are not supported.
++  3. LoRA candidates (Linear names)  7. tokenizer and prompt overhead (hfmt's prompt, as training renders it)
++  4. parameter counts
++Remote-code models and pre-quantized checkpoints are not supported.
+ """
+ 
+ import os
+ import sys
+-import types
+ from collections import Counter, defaultdict
+ 
+ import torch
+ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+ 
+ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root, for hfmt
+-from hfmt.mt_model import NON_LANGUAGE_MODULES, resolve_excluded_modules  # noqa: E402
+-from hfmt.prompt_formats import PROMPT_FORMATS  # noqa: E402
++from hfmt.mt_model import CHAT_TEMPLATE_KWARGS, format_input_prompt  # noqa: E402  (no heavy imports at module level)
+ 
+ GIB = 1024 ** 3
+ SETTINGS = [(16, 128), (16, 512), (32, 512), (8, 2048)]    # (batch, sequence length) table columns
+@@ -43,18 +36,11 @@ def gib(n_bytes):
+     return f"{n_bytes / GIB:.2f} GiB"
+ 
+ 
+-def _under(name, subtrees):
+-    """True if ``name`` is one of ``subtrees`` or sits inside one."""
+-    return any(name == s or name.startswith(s + ".") for s in subtrees)
+-
+-
+-def linear_groups(model, lm_head_name, excluded_subtrees=()):
+-    """Linear modules grouped by the last component of their name (what LoRA target_modules match).
+-    Modules inside ``excluded_subtrees`` (the vision tower etc., never trained) are left out, so the
+-    table and the adapter-parameter counts reflect the language model only."""
++def linear_groups(model, lm_head_name):
++    """Linear modules grouped by the last component of their name (what LoRA target_modules match)."""
+     groups = defaultdict(list)    # name -> [(in, out, parent type), ...]
+     for name, module in model.named_modules():
+-        if isinstance(module, torch.nn.Linear) and not _under(name, excluded_subtrees):
++        if isinstance(module, torch.nn.Linear):
+             parent = type(model.get_submodule(name.rsplit(".", 1)[0])).__name__ if "." in name else ""
+             groups[name.rsplit(".", 1)[-1]].append((module.in_features, module.out_features, parent))
+     return groups
+@@ -65,9 +51,7 @@ def adapter_params(groups, names, r):
+     return sum(r * (i + o) for n in names for i, o, _ in groups.get(n, []))
+ 
+ 
+-def main(checkpoint, prompt_format="chat"):
+-    if prompt_format not in PROMPT_FORMATS:
+-        sys.exit(f"inspect_model: unknown prompt_format {prompt_format!r}; choose one of {sorted(PROMPT_FORMATS)}")
++def main(checkpoint):
+     # Build on the meta device: real shapes, no memory, no download of weights.
+     try:
+         config = AutoConfig.from_pretrained(checkpoint)
+@@ -78,10 +62,7 @@ def main(checkpoint, prompt_format="chat"):
+     tc = config.get_text_config()
+     out_emb, in_emb = model.get_output_embeddings(), model.get_input_embeddings()
+     lm_head_name = next(n for n, m in model.named_modules() if m is out_emb)
+-    # Modules outside the language model are frozen in training (feature 13); keep them out here too,
+-    # so the candidate table and the lora/qlora adapter counts reflect the language model only.
+-    excluded_subtrees, _ = resolve_excluded_modules(model, [])
+-    groups = linear_groups(model, lm_head_name, excluded_subtrees)
++    groups = linear_groups(model, lm_head_name)
+     lm_head_short = lm_head_name.rsplit(".", 1)[-1]
+ 
+     # ------------------------------------------------------------------------------------------
+@@ -94,7 +75,7 @@ def main(checkpoint, prompt_format="chat"):
+         print(f"  {name:40s} {n:6d}")
+ 
+     # ------------------------------------------------------------------------------------------
+-    header("3. LoRA candidates: language-model Linear modules by name (what peft.lora.target_modules matches)")
++    header("3. LoRA candidates: Linear modules by name (what peft.lora.target_modules matches)")
+     r = 8
+     print(f"  {'name':16s} {'count':>5s}  {'in -> out':18s} {'parent':24s} {f'adapter params at r={r}':>24s}")
+     for name, items in groups.items():
+@@ -128,12 +109,6 @@ def main(checkpoint, prompt_format="chat"):
+     print(f"  {lm_head_name:30s}{P_head:>16,d}  ({'tied to the input embedding' if tied else 'separate'})")
+     print(f"  rest (layers, norms)          {P - P_emb - P_head:>16,d}")
+     print(f"  of which Linear weights (P_lin, quantized by qlora): {P_lin:,d}")
+-    if excluded_subtrees:
+-        print("  not trained (outside the language model; frozen/excluded, see NON_LANGUAGE_MODULES):")
+-        for name, m in excluded_subtrees.items():
+-            print(f"    {name:38s}{sum(p.numel() for p in m.parameters()):>16,d}")
+-    else:
+-        print(f"  not trained (outside the language model): none ({', '.join(NON_LANGUAGE_MODULES)} absent)")
+ 
+     # ------------------------------------------------------------------------------------------
+     header("5. Training memory estimate (peak *allocated* GPU memory for one training step)")
+@@ -221,27 +196,19 @@ def main(checkpoint, prompt_format="chat"):
+     if not tok.chat_template:
+         print("  no chat template")
+         return
++    # hfmt's prompt as training and decoding render it: format_input_prompt + CHAT_TEMPLATE_KWARGS
++    # (enable_thinking=False, so a Qwen3.5 count includes the empty think block; Gemma ignores it).
+     word = "Hello"
+-    stub = types.SimpleNamespace(instruction="Translate French to English",
+-                                 data=types.SimpleNamespace(src="fr", trg="en"))
+-    try:
+-        messages = PROMPT_FORMATS[prompt_format].build(stub, word)
+-        templated = tok.apply_chat_template(messages, add_generation_prompt=True,
+-                                            tokenize=True, return_dict=True,
+-                                            **PROMPT_FORMATS[prompt_format].template_kwargs)["input_ids"]
+-    except Exception as e:
+-        print(f"  prompt_format={prompt_format!r} does not render with this checkpoint's chat template: {e}")
+-        print(f"  (for a TranslateGemma-style model rerun with: python tools/inspect_model.py {checkpoint} translategemma)")
+-        return
++    messages = format_input_prompt("Translate French to English", word)
++    templated = tok.apply_chat_template(messages, add_generation_prompt=True, tokenize=True, return_dict=True,
++                                        **CHAT_TEMPLATE_KWARGS)["input_ids"]
+     plain = tok(word, add_special_tokens=False)["input_ids"]
+-    print(f"  chat template: yes. With prompt_format={prompt_format!r} it adds {len(templated) - len(plain)} "
+-          f"tokens around the source (includes the instruction / language header).")
+-    print("  Set this prompt_format in the experiment yaml; these tokens count toward decode.max_length")
+-    print("  and the sequence length in the memory estimate above.")
++    print(f"  chat template: yes; hfmt's prompt adds {len(templated) - len(plain)} tokens around a one-word source")
++    print(f"  (the example instruction, the template's turn markers and any default system prompt; apply_chat_template")
++    print(f"  kwargs {CHAT_TEMPLATE_KWARGS}). They count toward decode.max_length and the sequence length above.")
+ 
+ 
+ if __name__ == "__main__":
+-    if not 2 <= len(sys.argv) <= 3:
+-        sys.exit("usage: python tools/inspect_model.py <checkpoint> [prompt_format]   "
+-                 "(HF model id or local folder; prompt_format from hfmt/prompt_formats.py, default chat)")
+-    main(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else "chat")
++    if len(sys.argv) != 2:
++        sys.exit("usage: python tools/inspect_model.py <checkpoint>   (Hugging Face model id or local folder)")
++    main(sys.argv[1])

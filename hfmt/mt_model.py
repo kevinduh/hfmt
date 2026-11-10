@@ -11,11 +11,23 @@ import time
 import logging
 
 
+# Extra arguments for every ``apply_chat_template`` call that renders a prompt (training via TRL's
+# per-example ``chat_template_kwargs`` column, dev/test decoding, inference), so prompts render the same
+# everywhere. enable_thinking=False: Qwen3.5-4B's template thinks by default (generation prompt
+# `<think>\n`, so the model writes its reasoning as the translation); 0.8B/2B already default to off.
+# Off, the generation prompt ends with the empty `<think>\n\n</think>\n\n` that the training targets
+# start with. Templates without the variable (Gemma) ignore it, so their prompts are unchanged.
+CHAT_TEMPLATE_KWARGS = {"enable_thinking": False}
+
+
 def format_input_prompt(instruction_prefix, content):
-    return [{"content":instruction_prefix + "\n" + content, "role":"user"}]
+    """The user turn of the chat prompt for one source sentence: the instruction, a newline, the source."""
+    return [{"content": instruction_prefix + "\n" + content, "role": "user"}]
 
 
 def load_tokenizer(checkpoint):
+    """``checkpoint``'s tokenizer, with the eos token as pad token when it has none. Every hfmt path
+    loads its tokenizer here."""
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     if tokenizer.pad_token is None:
@@ -56,6 +68,25 @@ def load_base_model(cfg, device):
     else:
         raise ValueError(f"Unknown mode: {finetune_mode}")
     return model, use_bf16
+
+
+def load_checkpoint_weights(model, checkpoint_dir):
+    """Copy the full weights saved in ``checkpoint_dir`` (a Trainer ``checkpoint-N/``) into ``model``
+    in place, through ``from_pretrained``.
+
+    The Trainer reloads a full model's checkpoint (the best one at the end of training, the last one
+    on resume) with a plain non-strict ``load_state_dict``, but ``save_pretrained`` writes the
+    checkpoint's original (Hub) weight names, which ``from_pretrained`` converts to the module names
+    on load: for Qwen3.5, ``model.language_model.*`` in the files vs ``model.*`` in the model. So
+    nothing matches, nothing loads, and the Trainer only warns ("There were missing keys in the
+    checkpoint model loaded"), leaving the weights as they were. Loading the checkpoint as a model
+    applies the conversion; copying its weights with ``strict=True`` makes any mismatch fail the run.
+    Needs CPU RAM for one copy of the weights, as the Trainer's own reload does."""
+    dtype = next(model.parameters()).dtype
+    logging.info(f"Loading the weights of {checkpoint_dir} into the model (dtype {dtype})")
+    saved = type(model).from_pretrained(checkpoint_dir, dtype=dtype)   # on the CPU
+    model.load_state_dict(saved.state_dict(), strict=True)
+    del saved
 
 
 def load_trained_model(cfg, model_dir, device):
@@ -108,6 +139,9 @@ def merge_trained_model(cfg, model_dir, out_dir, device):
 
 
 def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device, instruction_prefix, decode, text_field='text'):
+    """Decode ``eval_data[text_field]`` in batches of ``decode.batch_size``, write one stripped hypothesis per
+    line to ``predictions_file`` and return them. Prompts are ``format_input_prompt(instruction_prefix, ...)``
+    rendered with ``CHAT_TEMPLATE_KWARGS``, exactly as training rendered them."""
     from torch.utils.data import DataLoader
     logging.info(f"inference_on_eval_data: Tokenizer setting originally {tokenizer.padding_side = } {tokenizer.truncation_side = }")
     original_padding_side = tokenizer.padding_side
@@ -127,7 +161,8 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
             prompts = [format_input_prompt(instruction_prefix, s) for s in eval_batch[text_field]]
             test_inputs = tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True,
                                                         max_length=decode.max_length, truncation=True, padding=True,
-                                                        return_tensors="pt", return_dict=True).to(device)
+                                                        return_tensors="pt", return_dict=True,
+                                                        **CHAT_TEMPLATE_KWARGS).to(device)
 
             boundary = test_inputs["input_ids"].shape[1]
             test_outputs = model.generate(**test_inputs, max_new_tokens=decode.max_new_tokens, num_beams=decode.num_beams, do_sample=decode.do_sample)[:, boundary:]
@@ -138,7 +173,8 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
                 all_testout.append(testout)
 
             # check if prompts get cut off by max_length
-            lengths = [len(ids) for ids in tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, return_dict=True)["input_ids"]]
+            lengths = [len(ids) for ids in tokenizer.apply_chat_template(prompts, tokenize=True, add_generation_prompt=True, return_dict=True,
+                                                                         **CHAT_TEMPLATE_KWARGS)["input_ids"]]
             n_cut += sum(n > decode.max_length for n in lengths)
             longest = max(longest, *lengths)
 
@@ -153,7 +189,8 @@ def inference_on_eval_data(tokenizer, model, eval_data, predictions_file, device
 def decode_test_sets(cfg, tokenizer, model, outdir, device):
     """Decode each ``cfg.data.test.src`` file on its own into ``<outdir>/test<i>.pred.trg`` (i from 1)
     and score it when it has a reference. Writes ``<outdir>/scores.json``
-    (``{"test<i>": {"src", "trg", "bleu", "chrf", "ter"}}``; no scores for a set without reference)
+    (``{"test<i>": {"src", "trg", "bleu", "bleu_13a_lowercase", "chrf", "ter"}}``; no scores for a
+    set without reference)
     and returns it. Used by both training and inference, so their outputs match."""
     import json
     import os
@@ -179,10 +216,12 @@ def decode_test_sets(cfg, tokenizer, model, outdir, device):
 
 
 def score(preds, refs):
-    """Corpus BLEU (flores200 tokenization), chrF and TER, rounded to 2 decimals.
-    Aggregate numbers only: safe to log anywhere (CLAUDE.md)."""
+    """Corpus BLEU (flores200 tokenization), lowercased BLEU (13a tokenization, exp smoothing:
+    sacreBLEU 1.x signature ``BLEU+case.lc+numrefs.1+smooth.exp+tok.13a``), chrF and TER,
+    rounded to 2 decimals. Aggregate numbers only: safe to log anywhere (CLAUDE.md)."""
     from sacrebleu.metrics import BLEU, TER, CHRF
     refs = [[r.strip() for r in refs]]
     return {"bleu": round(BLEU(smooth_method="none", max_ngram_order=4, tokenize='flores200').corpus_score(preds, refs).score, 2),
+            "bleu_13a_lowercase": round(BLEU(lowercase=True, tokenize='13a', smooth_method="exp").corpus_score(preds, refs).score, 2),
             "chrf": round(CHRF().corpus_score(preds, refs).score, 2),
             "ter": round(TER().corpus_score(preds, refs).score, 2)}

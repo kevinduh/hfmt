@@ -46,6 +46,11 @@ type but holds no default values; each default lives in exactly one yaml:
   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
 
+**Prompt.** `instruction` is prefixed to each source sentence as the user turn and rendered with the
+checkpoint's chat template; every render passes `enable_thinking=False` (`hfmt/mt_model.py`
+`CHAT_TEMPLATE_KWARGS`), which turns off Qwen3.5-4B's default thinking and is ignored by templates
+without it.
+
 ### Training
 
 Launch from a login node; jobs go to Slurm as one array, and the command returns right away:
@@ -72,11 +77,21 @@ job's **run folder**:
   index's values. Change `run_name` when you change a grid's shape.
 
 A run folder holds `run_config.yaml`, `git_rev`, the Slurm log, the training log,
-`dev.step_*.pred`, `model/` (adapter or full weights, plus the tokenizer), and for the test sets
+`dev.step_*.pred`, `trainer_state.json` (the Trainer's final state: every evaluation's loss and
+dev BLEU/chrF/TER in `log_history`, `best_metric`, `best_global_step`), `model/` (adapter or full
+weights, the tokenizer, and `training_info.yaml`: the step whose weights it holds, the best
+`metric_for_best_model` value and step, whether training stopped early, and the dev scores of the saved
+weights — `dev.model.pred` — with `model_dev_check`, which compares them with that step's dev BLEU), and for the test sets
 `test1.pred.trg`, `test2.pred.trg`, ... (in `data.test.src` order) with `scores.json`. Test
 scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run has the same name as the
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
 into an existing folder prints a warning and reuses it (training restarts from scratch).
+
+Full fine-tunes trained before 2026-11-05 (Qwen3.5 for sure; any run whose Slurm log has
+"There were missing keys in the checkpoint model loaded"): `model/`, both `scores.json` and
+`training_info.yaml`'s `model_global_step` are the *last* step, not the best checkpoint — the
+Trainer's reload loaded nothing (see `decisions.md`). `checkpoint-<best_global_step>/` is kept, so
+decode it instead (an experiment yaml with `checkpoint:` set to that folder, `peft=full_finetune`).
 
 **Resume** a job that was cancelled midway (time limit, OOM, node failure, `scancel`) from its
 last `checkpoint-N/`, by passing its run folder's `run_config.yaml`:
@@ -110,6 +125,25 @@ Check `squeue` first: never resume a job that is still running.
 **To change a run, don't resume it.** Launch the experiment yaml again with overrides and a new
 `run_name`, e.g. `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=1 run_name=sft_lora-seed1`.
 
+**Checking many runs at once.** `tools/run_status.py` lists every run folder with its training and
+test-inference state and prints the command that fixes each unfinished one. It only prints; you
+review and run the commands. States:
+- finished: trained, and `launch.sh inf` has scored the test sets; or queued/running (from `squeue`);
+- trained, inference not run, failed or queued (it prints `launch.sh inf` when nothing is queued);
+- interrupted (it prints the resume command above);
+- failed before its first checkpoint (it prints an `sbatch egs/job.sh sft <run folder>` that reruns
+  just that folder from its saved config; resume refuses these);
+- a `checkpoint-N/` or `model/` cut off while saving (it says which folder to delete).
+
+Each row shows the test scores of training's own end-of-run decoding and of `launch.sh inf`, and
+whether inference reproduced training (same scores, identical `test<i>.pred.trg`). For failed jobs it
+also shows the error line and the node, and points out nodes where several jobs failed:
+
+```bash
+python tools/run_status.py egs/mmtc/fr-en/outputs                         # every run + fix commands
+python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node>  # fix commands avoid that node
+```
+
 To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass
 `hydra.run.dir=...`; add `--cfg job` to only print the config):
 
@@ -142,7 +176,7 @@ bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml                     # decodi
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml decode.num_beams=5 inf_name=beam5
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml \
     'data.test.src=[/path/a.fr,/path/b.fr]' 'data.test.trg=[/path/a.en,null]' inf_name=ab
-for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; done
+for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; sleep 3; done
 ```
 
 Output goes to `<run folder>/inf/<inf_name>/` for a trained run, and to

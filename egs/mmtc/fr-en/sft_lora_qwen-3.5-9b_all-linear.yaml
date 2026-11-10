@@ -1,0 +1,51 @@
+# Single-run experiment: LoRA (every linear layer) fine-tune of Qwen3.5-9B
+# The next size up in the series 0.8B 60.66 -> 2B 65.55 -> 4B 68.20 test BLEU-lc (best run per model), which
+# had not flattened at 4B (analysis/2026-11-06_mmtc_results_review). The 4B all-linear recipe unchanged
+# (sft_lora_qwen-3.5-4b_all-linear.sweep.yaml at lr 1e-4; the all-linear lr axis is flat within noise), so
+# the result slots straight into the series: shortrun, 400-step cosine, eval every 50, early stopping after
+# 3, BLEU-lc selection, r 8, alpha 32. Zero-shot first: the 9B zero-shot score says how much more
+# pretraining knows about this domain.
+# Same hybrid architecture as 4B (8 of 32 layers full attention), so the same all-linear module names
+# (lora_qwen3_5_all_linear; confirmed with tools/inspect_model.py: all 10 names present, in_proj_b/a
+# left out as at 4B). The prompt adds 17 tokens around the source, with enable_thinking=False
+# (the 4B template thinks by default; the 9B prompt renders with the flag).
+# Memory (tools/inspect_model.py Qwen/Qwen3.5-9B, 2026-11-06): 8.95B parameters, bf16 weights 16.7 GiB
+# (lm_head is not tied: 2 x 1.0B in embeddings), + 3.71 MiB per token in a micro-batch (logits: 248k
+# vocabulary), + ~1.5 GiB CUDA context. All-linear r=8 adds ~0.3 GiB of adapters, gradients and AdamW.
+# Budget: 17.2 GiB fixed + 3.71 MiB x batch x padded length. Batch 16 needs padded length under ~360
+# tokens on a 40 GB A100 (~500 on a 48 GB L40S); batch 8 under ~730. The 4B runs fit batch 32 on an L40S,
+# so padded lengths here stay under ~340, but the estimate is +-30%: hence batch 8 x accumulation 8
+# (effective 64, as shortrun's 32 x 2), which fits any 40 GB+ GPU with a wide margin, and eval batch 16
+# (no stored activations, but the same logits). The config builds as Qwen3_5ForCausalLM (text only, as
+# training loads it), so nothing sits outside the language model.
+# Not measured on a GPU yet. If it still OOMs, resume on an 80 GB A100
+# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
+# Decoding at the default batch size (16) fits easily (no gradients, short generations).
+# A comma list on the command line adds an lr axis (train.learning_rate=1e-4,2e-4; change run_name).
+# Launch:    bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+# Zero-shot: bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora_qwen-3.5-9b_all-linear.yaml
+#            -> outputs/sft_lora_qwen-3.5-9b_all-linear/base_ckpt_inf/test/scores.json
+# Test:      bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora_qwen-3.5-9b_all-linear/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-9b_all-linear
+checkpoint: Qwen/Qwen3.5-9B
+instruction: "Translate French to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 8               # memory only (see above): effective batch 8 x 8 = 64
+  gradient_accumulation_steps: 8
+  eval_batch_size: 16               # memory only: the eval loss still materialises the logits
+
+slurm:
+  mem_gb: 40                        # the bf16 model (~18 GB) passes through CPU memory at load
+
+wandb:
+  tags: [sft, fr-en, lora]

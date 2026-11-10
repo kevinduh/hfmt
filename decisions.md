@@ -474,3 +474,94 @@ in the same folder with the same config.
 
   A GPU check against an uninterrupted run matched in steps and LR, and was within noise in losses
   and test BLEU (61.08 vs 61.02).
+
+## Prompt rendering: one builder, hardcoded `enable_thinking=False` (port of 2026-11-07)
+
+**Decision:** causal-LM prompts are built by the single `mt_model.format_input_prompt` (instruction,
+newline, source) and every `apply_chat_template` call passes `mt_model.CHAT_TEMPLATE_KWARGS`
+(`enable_thinking=False`). The `hydra3-translategemma` branch had a `prompt_format` registry
+(`chat` | `translategemma`), a chat-template patch for TranslateGemma and a vision-tower freeze
+(`NON_LANGUAGE_MODULES`); this branch ports that work without TranslateGemma support
+(`features/13_port_without_translategemma/porting.md`), so none of that exists here.
+
+- **Why hardcode.** The only model family kept, Qwen3.5, needs one thing from a prompt format:
+  Qwen3.5-4B's template thinks by default (generation prompt `<think>\n`, so the model writes its
+  reasoning as the translation; 0.8B/2B default to off). Off, the generation prompt ends with the empty
+  `<think>\n\n</think>\n\n` the training targets start with. Templates without the variable (Gemma)
+  ignore it. One constant used by training (TRL's per-example `chat_template_kwargs` column), dev/test
+  decoding, inference and `tools/inspect_model.py` keeps every render identical; a schema key that
+  every experiment must set bought nothing once there is one format.
+- **`processing_class=tokenizer` for the `SFTTrainer`** (kept). Qwen3.5 and Gemma 3 ship a VL
+  processor, so without this TRL loads `AutoProcessor`, switches to its multimodal path and rewrites
+  the assistant turn until the template rejects it. Passing the tokenizer keeps TRL on the text path
+  and reuses one tokenizer object for training and our decoding.
+- **No vision-tower freeze.** Qwen3.5 under `AutoModelForCausalLM` has no vision modules. Gemma 3 4B
+  (a kept LoRA experiment) does: its tower's `q/k/v_proj` are wrapped by the all-linear adapter too,
+  but with no `pixel_values` the tower never runs, so those adapters get no gradient and the result is
+  unchanged; only the trainable-parameter count and adapter size grow. Bring back `3743e17` + `9c66f6a`
+  from `hydra3-translategemma` if that matters.
+- **Saved configs.** `run_config.yaml`s written on `hydra3-translategemma` carry `prompt_format:`,
+  which this schema has no key for: delete that line by hand before `launch.sh inf|merge|sft` on
+  such a folder.
+
+## GPU startup race and requeue (2026-11-03)
+
+**Decision:** `egs/job.sh` waits for its GPU before starting, every sbatch gets `--requeue
+--open-mode=append`, and a requeued training task resumes from its last checkpoint.
+
+- **Why.** GPUs in exclusive-process mode (one process per GPU) make tasks that start in the same
+  second race for GPUs, and the losers exit at once with "CUDA-capable device(s) is/are busy or
+  unavailable", so some tasks of a submission fail and others run. The recommended practice is `%N`
+  throttling (already `slurm.array_parallelism`), arrays instead of sbatch loops (already one
+  array per launch), and `--requeue`.
+- **`--requeue` doesn't retry a failed exit here.** Slurm requeues a task only after a node
+  failure, preemption or `scontrol requeue`, never because it exited with an error (it is not
+  configured to requeue on exit codes). So the retry is in `job.sh`: up to 6 tries to create a CUDA
+  context, 30 s apart, before Python (and the W&B run) starts. `%N` only caps the burst: the first
+  N tasks still start together.
+- **Requeue resumes training.** A requeued task runs `job.sh` from the top; for `sft` with
+  `SLURM_RESTART_COUNT > 0` and a `checkpoint-*` it switches to `sft_resume` (feature 12) instead
+  of overwriting its folder from step 0 with a second W&B run. `--open-mode=append` keeps the
+  first attempt's log (same job id, same `slurm-*.out`).
+- **Hard-coded, not `slurm:` keys:** a new required key would break resume/inf/merge for every
+  saved `run_config.yaml`. `tools/run_status.py`'s rerun command adds the same two flags.
+
+## Full fine-tunes: the best checkpoint is reloaded through `from_pretrained` (2026-11-05)
+
+**Decision:** for `peft.mode=full`, `sft_translation.py` loads the checkpoint the Trainer is
+supposed to reload in place — the best one at the end of training, the last one on resume —
+with `mt_model.load_checkpoint_weights`: `from_pretrained` on the CPU, then a strict
+`load_state_dict` into the training model. The Trainer's own reload is left in place (harmless).
+
+- **Why.** The Trainer reloads full-model checkpoints with a plain non-strict `load_state_dict`
+  (`_load_best_model`, `_load_from_checkpoint`), but `save_pretrained` writes the Hub's weight
+  names, which `from_pretrained` converts to the module names on load. For Qwen3.5 they differ
+  (`model.language_model.*` vs `model.*`), so no key matched, nothing loaded, and the Trainer only
+  warned ("There were missing keys in the checkpoint model loaded"). Every Qwen3.5 full run's
+  `model/`, `scores.json` (training's and `launch.sh inf`'s) and `training_info.yaml`
+  (`model_global_step`) are therefore the last step, not the best checkpoint: dev
+  `metric_for_best_model` 24.74 instead of 34.33 for `sft_full_qwen-3.5-2b_zh-en`, 62.63 instead
+  of 65.01 for `sft_full_qwen-3.5-4b_sweep-1`. A resumed full run would have continued from the
+  base weights with the checkpoint's optimizer state. LoRA/QLoRA runs reload through PEFT's
+  `load_adapter` and were correct. Gemma 3 has a rename too (`language_model.model.*`); a run is
+  affected iff its Slurm log has the warning.
+- **Why this fix.** `from_pretrained` is the public path that applies the conversion (it is how
+  `inf_translation.py` loads `model/` already); `strict=True` turns the next silent mismatch into
+  a failed run. Saving checkpoints under module names instead would need Transformers' private
+  `_weight_conversions`. Cost: one CPU copy of the weights, as the Trainer's reload already needs.
+- **Old runs:** `checkpoint-<best_global_step>/` is kept by `save_total_limit`, so an affected run
+  can be decoded without retraining (`checkpoint:` set to that folder, `peft=full_finetune`).
+- **Guards added the same day.** (1) Training decodes dev once more with the saved `model/` and
+  records `model_dev_scores` and `model_dev_check` in `training_info.yaml`: the measured dev BLEU
+  against the MT callback's at `model_global_step` (`DEV_SCORE_TOLERANCE` 1 BLEU: the callback decodes
+  under Accelerate's autocast wrapper, the final decode unwrapped). Before, the file asserted what the
+  Trainer should have done. A mismatch is logged as an error, not fatal: the weights and scores are
+  still written, and the check is what makes them suspect. (2) `tools/run_status.py` searches whole
+  training logs for known-bad library warnings (`BAD_WARNINGS`: this reload warning, TRL's prompt-prefix
+  mismatch) and prints "Checks failed" with any `MISMATCH`. This bug would have been visible the day it
+  first ran.
+- **Correction (2026-11-06).** The Trainer's reload is still there, so it still warns in every Qwen3.5
+  full run after the fix too: the warning marks an affected run only when `training_info.yaml` has no
+  `model_dev_check` (runs from before this fix). The first `_short` runs were flagged by the log scan
+  although their dev check was `ok`. `run_status.py` now reports the reload warning only for runs
+  without a dev check; for the others, the measured check decides.

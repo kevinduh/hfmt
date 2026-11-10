@@ -1,0 +1,38 @@
+# Single-run experiment: full fine-tune of all Qwen3.5-4B parameters
+# zh-en counterpart of egs/mmtc/fr-en/sft_qwen-3.5-4b.yaml: same recipe; run_name carries the pair so
+# the two pairs' W&B groups don't merge.
+# The 4B reference for the zh-en LoRA sweeps. lr 5e-6, from the earlier 2-job sweep
+# (sft_full_qwen-3.5-4b_zh-en_sweep, shortrun, 400 steps): 5e-6 held its dev peak from step 50 to 150
+# (32.23-32.47 BLEU-lc); 1e-5 peaked within noise of it at step 50 (32.41) and fell 3.7 by step 150.
+# Memory (tools/inspect_model.py): fp32 weights + grads + AdamW state = 16 bytes/param, 62.7 GiB for
+# 4.21B parameters, + 3.6 MiB per token in a batch: needs an 80 GB A100 (not a 40 GB A100 or a 48 GB
+# L40S). Per-device batch 4 x accumulation 16 keeps the effective batch at 64 (the sweeps' 32 x 2).
+# Disk: each checkpoint holds fp32 weights + AdamW state, ~50 GB; save_total_limit 2 keeps ~100 GB per
+# job: clear checkpoints when done (tools/delete_checkpoints.sh).
+# Decodes at the default batch size (16), like the fr-en runs: batch size can shift greedy outputs.
+# Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_qwen-3.5-4b.yaml [overrides]
+#          (not tools/run_on_free_gpu.sh: it may pick an L40S)
+# Debug:   source egs/mmtc/zh-en/local_setting.sh &&
+#          python -m hfmt.sft_translation --config-dir egs/mmtc/zh-en --config-name sft_qwen-3.5-4b
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_qwen-3.5-4b_zh-en_short
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate Chinese to English"
+
+train:
+  learning_rate: 5e-6
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64, as full_finetune_short's 32 x 2
+  gradient_accumulation_steps: 16
+
+slurm:
+  constraint: 80gb                  # 80 GB A100 (see Memory above)
+  mem_gb: 48                        # the fp32 model (~16 GB) is loaded in CPU memory, and again to reload the best checkpoint
+
+wandb:
+  tags: [sft, zh-en, full]

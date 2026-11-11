@@ -41,7 +41,7 @@ type but holds no default values; defaults live in yaml only:
     `lora_anneal_short` are the others.
   * `peft/`: the fine-tuning method. `qlora_default` (4-bit base + LoRA), `lora_default` (bf16 base +
     LoRA), `full_finetune`, and per-model all-linear LoRA options (`lora_qwen3_5_all_linear`,
-    `lora_gemma3_all_linear`).
+    `lora_gemma3_all_linear`, `lora_tiny_aya_all_linear`).
   * `decode/`: generation settings (`default`).
 * the experiment folder, e.g. `egs/mmtc/fr-en/`:
   * `dataset.yaml`: `data_root`, `src`, `trg` and the train/dev/test file lists. Several train or
@@ -55,7 +55,7 @@ type but holds no default values; defaults live in yaml only:
     `override <group>: <option>` lines.
   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
-  * the other yamls in the folder are the experiments run so far (Qwen3.5 0.8B to 9B and Gemma 3 4B;
+  * the other yamls in the folder are the experiments run so far (Qwen3.5 0.8B to 9B, Gemma 3 4B and Tiny Aya;
     LoRA, QLoRA and full fine-tunes); each header says what it tests and why.
 
 **Prompt.** `instruction` is prefixed to each source sentence as the user turn and rendered with the

@@ -153,7 +153,9 @@ def test_errors_fail_before_writing():
 
 
 def test_each_peft_option_composes():
-    for opt, mode in [("full_finetune", "full"), ("lora_default", "lora"), ("qlora_default", "qlora")]:
+    for opt, mode in [("full_finetune", "full"), ("lora_default", "lora"), ("qlora_default", "qlora"),
+                      ("lora_qwen3_5_all_linear", "lora"), ("lora_gemma3_all_linear", "lora"),
+                      ("lora_tiny_aya_all_linear", "lora")]:
         out, _, _ = run(SINGLE, f"peft={opt}")
         peft = saved(out, "sft_lora").peft
         assert peft.mode == mode

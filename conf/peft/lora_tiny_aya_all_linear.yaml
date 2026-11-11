@@ -1,0 +1,12 @@
+# LoRA on every linear layer of a Tiny Aya decoder (Cohere2, bf16 base, no quantization), e.g.
+# CohereLabs/tiny-aya-global. Every one of its 36 layers has standard attention and a SwiGLU MLP, so the seven
+# names reach all of them: 15.1M adapter parameters at r=8. lm_head is left out (tied to the input embedding).
+# PEFT has no built-in target list for model_type cohere2, so the names must be listed.
+# Same list as lora_gemma3_all_linear; kept separate to record which model it was inspected for.
+# Names from tools/inspect_model.py CohereLabs/tiny-aya-global (features/14_tiny_aya/request.md).
+mode: lora
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

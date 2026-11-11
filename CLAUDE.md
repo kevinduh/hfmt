@@ -182,6 +182,28 @@ Keep these the same data-confidentiality rules as everywhere else — summaries 
 aggregate metrics and config (hyperparameters, data *paths*, instruction string), never dataset
 content or model hypotheses.
 
+## Suspected bugs: quick tests before conclusions
+
+A problem found by reading code, configs or model files is **suspected** until a run shows it. Before a
+write-up, a plan change or a fix:
+
+- **Say what the evidence shows and what it doesn't**, and which observation would confirm or refute it.
+  Call it "suspected" or "untested" until then.
+- **Write the smallest test that would show it** and give the developer the command to run it. This
+  sandbox has no GPU or torch, so GPU tests run on the cluster.
+  - A standalone script in the feature folder plus an sbatch wrapper that sources `install/path.sh` and
+    waits for its GPU as `egs/job.sh` does.
+    Call hfmt's own functions (`mt_model.load_base_model`, `inference_on_eval_data`) so the test runs the
+    real code path, and include a control: a model or setting expected to behave.
+  - Or a short throwaway training run: an existing experiment yaml with overrides (`checkpoint=`,
+    `run_name=<topic>test_<model>`, `train.max_steps=50`, `train.eval_steps=25`, `wandb.enabled=false`).
+    Check it composes (`DRYRUN=1`) and delete its run folder afterwards: it is not a result.
+- **Inputs are made-up sentences, never dataset content**, and quick tests send nothing to W&B.
+- **Read the output before concluding**: scores (TER far above 100 means run-on or chatty output),
+  hypothesis lengths against the references, decode times, raw tokens.
+- A cheap change that does nothing when the problem is absent may be proposed before a test, labelled
+  as a safeguard, not a bug fix.
+
 ## Development workflow
 
 Feature work lives under a `features/` directory. Each feature gets its own subdirectory

@@ -1,0 +1,27 @@
+# Single-run experiment: LoRA (every linear layer) fine-tune of Qwen3.5-4B with seed 1
+# Noise check (features/14_tiny_aya): every result so far is one seed (42), and the noise band (~0.5
+# test BLEU-lc) is inferred indirectly. This repeats sft_lora_qwen-3.5-4b_all-linear.sweep.yaml at lr 1e-4
+# UNCHANGED except train.seed, so its seed-42 job (67.90 test / 65.09 dev BLEU-lc) is the second sample.
+# Read the seed-to-seed difference on dev and on test: well above ~0.5 means the <=1-point comparisons
+# elsewhere can't be called. train.seed sets the data order and the LoRA init.
+# Memory as the 400-step sweep: batch 32 on a 40 GB A100 or an L40S (slurm.gres=gpu:l40s:1).
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seed1.yaml
+# Test:    bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora_qwen-3.5-4b_all-linear_seed1/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_all-linear_seed1
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate French to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  seed: 1
+
+wandb:
+  tags: [sft, fr-en, lora, seeds]

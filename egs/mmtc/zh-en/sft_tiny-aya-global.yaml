@@ -1,0 +1,43 @@
+# Single-run experiment: full fine-tune of all CohereLabs/tiny-aya-global parameters
+# The full-vs-LoRA check for Tiny Aya (features/14_tiny_aya) and its cost reference; compare with
+# sft_lora_tiny-aya-global_all-linear.yaml. full_finetune_short as is: 150-step cosine, lr 1e-5 (the lr
+# that held a flat dev plateau at 0.8B and 2B), eval + dev BLEU every 25 steps, early stopping after 3.
+# If dev peaks at step 25 and falls, rerun at train.learning_rate=5e-6 (what 4B needed), with a new run_name.
+# Memory (tools/inspect_model.py): fp32 weights + gradients + AdamW = 50 GiB for 3.35B parameters, plus
+# 3.75 MiB per token of logits; prompts are ~385 tokens (fixed system preamble), so per-device batch 4 x
+# accumulation 16 (effective 64): ~57 GiB, an 80 GB A100; eval batch 8 (full_finetune_short's 32 is for
+# short Qwen prompts). Not measured yet.
+# Disk: ~40 GB per checkpoint (fp32 weights + AdamW); save_total_limit 2 + model/ is ~95 GB per job: run
+# tools/delete_checkpoints.sh when done.
+# Gated model: accept the license on the Hub and run `hf auth login` first.
+# Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_tiny-aya-global.yaml
+#          (not tools/run_on_free_gpu.sh: it may pick an L40S)
+# Test:    bash egs/launch.sh inf egs/mmtc/zh-en/outputs/sft_full_tiny-aya-global_zh-en_short/run_config.yaml
+# Zero-shot of the checkpoint (bf16, as the LoRA runs load it; any A100):
+#          bash egs/launch.sh inf egs/mmtc/zh-en/sft_tiny-aya-global.yaml peft=lora_tiny_aya_all_linear \
+#              slurm.constraint=null slurm.time=1:00:00
+#          -> outputs/sft_full_tiny-aya-global_zh-en_short/base_ckpt_inf/test/scores.json (read with the output lengths: it can be chatty)
+defaults:
+  - config
+  - dataset
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_tiny-aya-global_zh-en_short
+checkpoint: CohereLabs/tiny-aya-global
+instruction: "Translate Chinese to English"
+
+train:
+  learning_rate: 1e-5
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64
+  gradient_accumulation_steps: 16
+  eval_batch_size: 8                # memory only: at 32 the eval logits (~430 tokens x 262k) would not fit next to the optimizer state
+
+slurm:
+  constraint: 80gb                  # 80 GB A100 (see Memory above)
+  mem_gb: 48                        # the fp32 model (~13 GB) passes through CPU memory at load and at the best-checkpoint reload
+  time: "8:00:00"                   # ~3x the tokens per step of the Qwen runs
+
+wandb:
+  tags: [sft, zh-en, full]

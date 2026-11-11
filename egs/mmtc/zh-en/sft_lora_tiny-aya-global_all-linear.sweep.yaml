@@ -1,0 +1,41 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of CohereLabs/tiny-aya-global, learning rate (2 jobs)
+# Tiny Aya (Cohere, 3.35B, 70+ languages, instruction-tuned) against the Qwen3.5 size series and Gemma 3 4B
+# (features/14_tiny_aya). The recipe every other model got: all-linear LoRA r 8, shortrun (400-step cosine,
+# eval every 50, early stopping after 3, BLEU-lc selection) at lr 1e-4 and 2e-4, the two ends of the band
+# where the lr axis was flat for every other model.
+# The chat template always adds a fixed system preamble, so prompts are ~385 tokens (Qwen3.5: ~20) and the
+# logits of the 262k vocabulary dominate memory: batch 8 x accumulation 8 (effective 64) and eval batch 8.
+# Measured on a 50-step fr-en test (A100 40 GB): ~9 s per step, ~6 min per dev decode, no OOM.
+# zh-en: Slurm time 8 h (the zh-en Qwen3.5-4B LoRA runs took ~100 min at a fraction of these tokens).
+# Gated model: accept the license on the Hub and run `hf auth login` first.
+# Launch:    bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_tiny-aya-global_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_tiny-aya-global_zh-en_all-linear_sweep-<idx>/ (0: lr 1e-4, 1: lr 2e-4); the .grid.txt maps idx -> values.
+# Test:      bash egs/launch.sh inf egs/mmtc/zh-en/outputs/sft_lora_tiny-aya-global_zh-en_all-linear_sweep-<idx>/run_config.yaml
+# Zero-shot: launch.sh inf refuses a sweep; use sft_tiny-aya-global.yaml (its header has the command).
+defaults:
+  - config
+  - dataset
+  - override peft: lora_tiny_aya_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_tiny-aya-global_zh-en_all-linear_sweep
+checkpoint: CohereLabs/tiny-aya-global
+instruction: "Translate Chinese to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 8               # memory only (logits, see above): effective batch 8 x 8 = 64
+  gradient_accumulation_steps: 8
+  eval_batch_size: 8
+
+slurm:
+  time: "8:00:00"                   # see the zh-en note above
+
+wandb:
+  tags: [sft, zh-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,2e-4

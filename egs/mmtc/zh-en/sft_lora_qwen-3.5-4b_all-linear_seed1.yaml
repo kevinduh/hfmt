@@ -1,0 +1,28 @@
+# Single-run experiment: LoRA (every linear layer) fine-tune of Qwen3.5-4B with seed 1
+# zh-en counterpart of egs/mmtc/fr-en/sft_lora_qwen-3.5-4b_all-linear_seed1.yaml: same recipe; run_name
+# carries the pair so the two pairs' W&B groups don't merge.
+# Noise check (features/14_tiny_aya): repeats sft_lora_qwen-3.5-4b_all-linear.sweep.yaml at lr 1e-4
+# UNCHANGED except train.seed, so its seed-42 job (34.53 test BLEU-lc) is the second sample. On this pair
+# every 4B all-linear lr landed within 0.23 of each other on test, so the seed difference says whether
+# those gaps mean anything.
+# Memory as the 400-step sweep: batch 32 on a 40 GB A100 or an L40S (slurm.gres=gpu:l40s:1).
+# Launch:  bash egs/launch.sh sft egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear_seed1.yaml
+# Test:    bash egs/launch.sh inf egs/mmtc/zh-en/outputs/sft_lora_qwen-3.5-4b_zh-en_all-linear_seed1/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_zh-en_all-linear_seed1
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate Chinese to English"
+
+train:
+  learning_rate: 1e-4
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  seed: 1
+
+wandb:
+  tags: [sft, zh-en, lora, seeds]

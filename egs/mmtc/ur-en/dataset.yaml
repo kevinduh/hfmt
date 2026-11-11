@@ -1,0 +1,26 @@
+# @package data
+# MMTC Urdu-English data (features 08, 09). Loaded by Hydra through an experiment's
+# `- dataset` default. data_root is machine-specific: it comes from $HFMT_DATA_ROOT, set in the
+# untracked local_setting.sh next to this file (see local_setting.sh.example). Each split may list
+# several files per side (src[i] aligned with trg[i]). train and dev files are concatenated; each
+# test file is decoded and scored on its own (test<i>.pred.trg, scores.json; a test trg entry may be
+# null = no reference, or omit test.trg). Remove `test` to skip the final test decoding.
+# Paths only, never data content (CLAUDE.md).
+data_root: ${oc.env:HFMT_DATA_ROOT}
+src: ur
+trg: en
+train:
+  src:
+    - ${data.data_root}/train.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/train.${data.src}-${data.trg}.${data.trg}
+dev:
+  src:
+    - ${data.data_root}/valid.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/valid.${data.src}-${data.trg}.${data.trg}
+test:
+  src:
+    - ${data.data_root}/test.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/test.${data.src}-${data.trg}.${data.trg}

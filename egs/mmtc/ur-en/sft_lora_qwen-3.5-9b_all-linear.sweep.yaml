@@ -1,0 +1,45 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of Qwen3.5-9B, learning rate (3 jobs)
+# The ur-en 9B point of the size series; on fr-en and zh-en the 9B single run at lr 1e-4 is the best model
+# (69.02 and 35.55 test BLEU-lc, +0.8 and +1.0 over 4B). Here as a sweep: 9B's lr was never checked, and
+# a larger model may prefer a lower one, so 5e-5 brackets 1e-4 from below and 2e-4 (test's choice for every
+# all-linear model on fr-en) from above.
+# Recipe: the 4B all-linear recipe otherwise unchanged: shortrun, 400-step cosine, eval every 50, early
+# stopping after 3, BLEU-lc selection, r 8, alpha 32.
+# Memory (tools/inspect_model.py: 16.7 GiB bf16 weights + 3.71 MiB per token): batch 8 x accumulation 8
+# (effective 64) and eval batch 16, as the fr-en/zh-en 9B runs, which fit a 40 GB A100. If a job OOMs, resume
+# it on an 80 GB A100 (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
+# Launch:    bash egs/launch.sh sft egs/mmtc/ur-en/sft_lora_qwen-3.5-9b_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-9b_ur-en_all-linear_sweep-<idx>/; the .grid.txt maps idx -> values.
+# Test:      bash egs/launch.sh inf egs/mmtc/ur-en/outputs/sft_lora_qwen-3.5-9b_ur-en_all-linear_sweep-<idx>/run_config.yaml
+# Zero-shot: launch.sh inf refuses a sweep; decode the checkpoint through the 4B single-run file:
+#            bash egs/launch.sh inf egs/mmtc/ur-en/sft_qwen-3.5-4b.yaml checkpoint=Qwen/Qwen3.5-9B \
+#                run_name=sft_lora_qwen-3.5-9b_ur-en_all-linear_sweep peft=lora_qwen3_5_all_linear \
+#                slurm.constraint=null slurm.time=1:00:00
+#            -> outputs/sft_lora_qwen-3.5-9b_ur-en_all-linear_sweep/base_ckpt_inf/test/scores.json
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-9b_ur-en_all-linear_sweep
+checkpoint: Qwen/Qwen3.5-9B
+instruction: "Translate Urdu to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 8               # memory only (see above): effective batch 8 x 8 = 64
+  gradient_accumulation_steps: 8
+  eval_batch_size: 16               # memory only: the eval loss still materialises the logits
+
+slurm:
+  mem_gb: 40                        # the bf16 model (~18 GB) passes through CPU memory at load
+
+wandb:
+  tags: [sft, ur-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 5e-5,1e-4,2e-4

@@ -1,0 +1,48 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of google/gemma-3-4b-it, learning rate (3 jobs)
+# ur-en counterpart of egs/mmtc/zh-en/sft_lora_gemma-3-4b-it_all-linear.yaml (a single run at lr 1e-4 there);
+# run_name carries the pair so the pairs' W&B groups don't merge.
+# Gemma 3 4B after all-linear LoRA: fr-en 66.09, zh-en 32.91 test BLEU-lc, ~2 below Qwen3.5-4B on fr-en and
+# ~1.6 on zh-en, from one lr each. Here as a sweep, since Gemma's lr was never checked: 5e-5,1e-4,2e-4 (its
+# fine-tuned sibling TranslateGemma preferred 3e-5 on dev and 2e-4 on test on fr-en, within ~1.4).
+# Peft option lora_gemma3_all_linear (7 module names). The checkpoint also carries a vision tower whose
+# q/k/v_proj match these names; with no images it never runs, so adapters placed there get no gradient.
+# Memory: the logits dominate (262k vocabulary), hence batch 16 x accumulation 4 (effective 64, as
+# shortrun's 32 x 2). A job that OOMs is resumed on an 80 GB A100
+# (bash egs/launch.sh sft <run folder>/run_config.yaml slurm.constraint=80gb).
+# Inspected (tools/inspect_model.py google/gemma-3-4b-it, 2026-11-06): bf16 weights 8.0 GiB + 3.78 MiB per
+# token; the prompt adds 14 tokens around the source. The template keeps the generation prompt a token prefix
+# of prompt + reply, so TRL's "Mismatch between tokenized prompt" warning should not appear
+# (tools/run_status.py flags it).
+# Zero-shot: on fr-en/zh-en it was chatty (6.0 and 6.8 BLEU-lc, TER 463 and 242); expect the same here and
+# read it with the output lengths.
+# Launch:    bash egs/launch.sh sft egs/mmtc/ur-en/sft_lora_gemma-3-4b-it_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_gemma-3-4b-it_ur-en_all-linear_sweep-<idx>/; the .grid.txt maps idx -> values.
+# Test:      bash egs/launch.sh inf egs/mmtc/ur-en/outputs/sft_lora_gemma-3-4b-it_ur-en_all-linear_sweep-<idx>/run_config.yaml
+# Zero-shot: launch.sh inf refuses a sweep; decode the checkpoint through the 4B single-run file:
+#            bash egs/launch.sh inf egs/mmtc/ur-en/sft_qwen-3.5-4b.yaml checkpoint=google/gemma-3-4b-it \
+#                run_name=sft_lora_gemma-3-4b-it_ur-en_all-linear_sweep peft=lora_gemma3_all_linear \
+#                slurm.constraint=null slurm.time=1:00:00
+#            -> outputs/sft_lora_gemma-3-4b-it_ur-en_all-linear_sweep/base_ckpt_inf/test/scores.json
+defaults:
+  - config
+  - dataset
+  - override peft: lora_gemma3_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_gemma-3-4b-it_ur-en_all-linear_sweep
+checkpoint: google/gemma-3-4b-it
+instruction: "Translate Urdu to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  train_batch_size: 16              # memory only (logits, see above): effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+
+wandb:
+  tags: [sft, ur-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 5e-5,1e-4,2e-4

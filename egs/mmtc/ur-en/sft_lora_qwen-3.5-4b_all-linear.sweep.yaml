@@ -1,0 +1,37 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of Qwen3.5-4B, learning rate (4 jobs)
+# ur-en counterpart of egs/mmtc/zh-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml: same recipe and lr axis, so
+# the three pairs' 4B curves line up; run_name carries the pair so the pairs' W&B groups don't merge.
+# Compare with the 4B full fine-tune (sft_qwen-3.5-4b.yaml). On fr-en and zh-en this was the best or tied-best
+# 4B recipe, and the lr axis was flat (test spread 1.2 and 0.23 BLEU-lc). Kept at 4 values on a new pair
+# because nothing says yet that ur-en is flat too. Not repeated here: [q_proj, v_proj] (lost by 0.4-2.6),
+# QLoRA (lost), rank 16 (tied rank 8), the annealed schedule (tied).
+# Schedule: shortrun as is (400 steps, eval every 50, early stopping after 3), BLEU-lc selection.
+# Memory (tools/inspect_model.py): bf16 weights 7.8 GiB + 3.6 MiB per token in a batch (mostly logits):
+# batch 32 fits a 40 GB A100 while padded sequences stay under ~250 tokens. Urdu sources run longer than
+# French ones; if a job OOMs, relaunch with train.train_batch_size=16 train.gradient_accumulation_steps=4
+# and a new run_name.
+# Launch:    bash egs/launch.sh sft egs/mmtc/ur-en/sft_lora_qwen-3.5-4b_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-4b_ur-en_all-linear_sweep-<idx>/; the .grid.txt maps idx -> values.
+# Test:      bash egs/launch.sh inf egs/mmtc/ur-en/outputs/sft_lora_qwen-3.5-4b_ur-en_all-linear_sweep-<idx>/run_config.yaml
+# Zero-shot: launch.sh inf refuses a sweep; use sft_qwen-3.5-4b.yaml (its header has the command).
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_ur-en_all-linear_sweep
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate Urdu to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+
+wandb:
+  tags: [sft, ur-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 3e-5,5e-5,1e-4,2e-4

@@ -1,0 +1,42 @@
+# Single-run experiment: full fine-tune of all Qwen3.5-4B parameters
+# ur-en counterpart of egs/mmtc/zh-en/sft_qwen-3.5-4b.yaml: same recipe; run_name carries the pair so the
+# pairs' W&B groups don't merge.
+# The 4B full-vs-LoRA reference for ur-en (compare with sft_lora_qwen-3.5-4b_all-linear.sweep.yaml). On fr-en
+# and zh-en the 4B full fine-tune tied all-linear LoRA (67.22 vs 67.90; 34.79 vs 34.53 test BLEU-lc).
+# lr 5e-6: on zh-en 1e-5 peaked within noise of 5e-6 at step 50 and fell 3.7 by step 150; 5e-6 held its peak.
+# Schedule: full_finetune_short (150-step cosine, warmup 10, eval + dev BLEU every 25 steps, early stopping
+# after 3, BLEU-lc selection), sized for the ~1.6k-2.5k pairs of the other mmtc pairs; if ur-en is much
+# larger, one epoch is more than 25-39 steps and the eval grid is coarser in epochs.
+# Memory (tools/inspect_model.py): fp32 weights + grads + AdamW = 62.7 GiB + 3.6 MiB per token: an 80 GB
+# A100, per-device batch 4 x accumulation 16 (effective 64). Urdu tokenises longer than French; a job that
+# OOMs is relaunched at batch 2 x 32 with a new run_name (a resume may change only slurm.*).
+# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/delete_checkpoints.sh).
+# Launch:    bash egs/launch.sh sft egs/mmtc/ur-en/sft_qwen-3.5-4b.yaml
+#            (not tools/run_on_free_gpu.sh: it may pick an L40S)
+# Zero-shot of the checkpoint (bf16, as the LoRA runs load it; any A100):
+#            bash egs/launch.sh inf egs/mmtc/ur-en/sft_qwen-3.5-4b.yaml peft=lora_qwen3_5_all_linear \
+#                slurm.constraint=null slurm.time=1:00:00
+#            -> outputs/sft_full_qwen-3.5-4b_ur-en_short/base_ckpt_inf/test/scores.json
+# Test:      bash egs/launch.sh inf egs/mmtc/ur-en/outputs/sft_full_qwen-3.5-4b_ur-en_short/run_config.yaml
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_qwen-3.5-4b_ur-en_short
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate Urdu to English"
+
+train:
+  learning_rate: 5e-6
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64, as full_finetune_short's 32 x 2
+  gradient_accumulation_steps: 16
+
+slurm:
+  constraint: 80gb                  # 80 GB A100 (see Memory above)
+  mem_gb: 48                        # the fp32 model (~16 GB) is loaded in CPU memory, and again to reload the best checkpoint
+
+wandb:
+  tags: [sft, ur-en, full]

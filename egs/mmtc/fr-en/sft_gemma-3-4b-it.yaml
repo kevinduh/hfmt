@@ -1,0 +1,41 @@
+# Single-run experiment: full fine-tune of all google/gemma-3-4b-it parameters
+# The full-fine-tune half of the Gemma 3 base vs TranslateGemma comparison on fr-en: TranslateGemma (Gemma 3 4B
+# fine-tuned for MT, same architecture and size) has a full fine-tune here (67.46 test BLEU-lc, vs 67.76 for its
+# best all-linear LoRA), Gemma 3 only a LoRA (66.09, sft_lora_gemma-3-4b-it_all-linear.yaml). Expect a tie with
+# that LoRA: full tied LoRA for every model so far (Qwen3.5-2B, 4B, TranslateGemma).
+# Recipe: TranslateGemma's full run (sft_full_translategemma-4b-it*_short, removed from egs/ in feature 13)
+# unchanged: full_finetune_short (150-step cosine, warmup 10, eval + dev BLEU every 25 steps, early stopping
+# after 3, BLEU-lc selection) at lr 5e-6, as for Qwen3.5-4B. TranslateGemma's dev BLEU-lc at steps 25-125:
+# 64.38, 64.99 (selected), 63.93, 63.13, 63.13.
+# Memory: as TranslateGemma (4.3B parameters, of which the vision tower's 417M get no gradient and so no AdamW
+# state): fp32 weights + grads + AdamW ~64 GiB + 3.78 MiB per token; it ran at batch 4 x 16 (effective 64) and
+# eval batch 32 on an 80 GB A100. If it OOMs, relaunch at batch 2 x 32 with a new run_name.
+# Reload: the best checkpoint is copied in by mt_model.load_checkpoint_weights (strict); training_info.yaml's
+# model_dev_check says whether model/ holds it.
+# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/delete_checkpoints.sh).
+# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_gemma-3-4b-it.yaml
+#          (not tools/run_on_free_gpu.sh: it may pick an L40S)
+# Test:    bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_full_gemma-3-4b-it_short/run_config.yaml
+# Zero-shot: done (_results/fr-en/gemma3-4b/scores.json; chatty).
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_gemma-3-4b-it_short
+checkpoint: google/gemma-3-4b-it
+instruction: "Translate French to English"
+
+train:
+  learning_rate: 5e-6
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64, as full_finetune_short's 32 x 2
+  gradient_accumulation_steps: 16
+
+slurm:
+  constraint: 80gb                  # 80 GB A100 (see Memory above)
+  mem_gb: 48                        # the fp32 model (~17 GB) is loaded in CPU memory, and again to reload the best checkpoint
+
+wandb:
+  tags: [sft, fr-en, full]

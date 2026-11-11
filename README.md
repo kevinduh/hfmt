@@ -168,9 +168,12 @@ python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node>  # fix 
 
 **Housekeeping.** Runs you are done with can be moved into `egs/mmtc/fr-en/outputs/complete/`;
 `run_status.py` skips that folder unless you pass it itself. Checkpoints are the bulk of the disk use
-(a 4B full fine-tune checkpoint is ~50 GB); `bash tools/delete_checkpoints.sh egs/mmtc/fr-en/outputs`
-lists and, after you confirm, deletes the `checkpoint-*` folders of finished runs only (those with
-`model/`), so unfinished runs stay resumable. `trainer_state.json` and `model/training_info.yaml` keep
+(a 4B full fine-tune checkpoint is ~50 GB). `run_status.py` lists, with their sizes, the runs whose
+`checkpoint-*` folders can go: test scores written (for a run without test sets, a complete `model/`) and
+no training job in squeue (`model/` alone isn't enough: it is saved before the dev check and test
+decoding). `python tools/run_status.py egs/mmtc/fr-en/outputs --delete-checkpoints` deletes them after you
+confirm, so unfinished runs stay resumable; both include the runs moved into `complete/`.
+Run it on a login node, where squeue is available. `trainer_state.json` and `model/training_info.yaml` keep
 the per-evaluation scores and the best step.
 
 To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass

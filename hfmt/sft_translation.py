@@ -418,7 +418,7 @@ def main(cfg: Config) -> None:
     model = trainer.accelerator.unwrap_model(model, keep_fp32_wrapper=False)   # as inference decodes it
     model.save_pretrained(os.path.join(outdir, "model"))
     tokenizer.save_pretrained(os.path.join(outdir, "model"))   # so a full fine-tune's model/ works as a checkpoint
-    # Which step model/ is and how it scored, kept after tools/delete_checkpoints.sh removes the
+    # Which step model/ is and how it scored, kept after run_status.py --delete-checkpoints removes the
     # checkpoint-*/ folders: the Trainer's full state (log_history has every evaluation's loss and
     # dev scores) in the run folder, and a short summary next to the weights.
     trainer.save_state()                                         # <outdir>/trainer_state.json

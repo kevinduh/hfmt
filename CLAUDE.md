@@ -56,8 +56,8 @@ hfmt/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
 │                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate, prompt overhead),
 │                            #   run_status.py <outputs dir> (training + inference states and scores, fix commands,
-│                            #     failed checks: known-bad log warnings, model/ dev-score mismatch; prints only) + its test,
-│                            #   delete_checkpoints.sh <outputs dir> (checkpoint-* of finished runs only)
+│                            #     failed checks: known-bad log warnings, model/ dev-score mismatch, deletable checkpoints;
+│                            #     prints only, unless --delete-checkpoints) + its test
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)
@@ -96,8 +96,9 @@ hfmt/
   every sbatch has `--requeue --open-mode=append`, and a requeued `sft` task resumes from its last
   checkpoint (Slurm requeues only after a node failure or preemption, never after a failed exit).
 - **Run folder housekeeping** — finished runs may be moved into `<outputs>/complete/`
-  (`tools/run_status.py` skips that folder unless it is passed itself); `tools/delete_checkpoints.sh
-  <outputs dir>` deletes the `checkpoint-*` folders of finished runs only (those with `model/`), so
+  (`tools/run_status.py` skips that folder unless it is passed itself). `run_status.py` lists the runs whose
+  `checkpoint-*` folders may go (test scores written, training job not in squeue; `model/` alone is saved
+  before test decoding; `complete/` included) and `--delete-checkpoints` deletes them after asking, so
   unfinished runs stay resumable. `trainer_state.json` and `model/training_info.yaml` hold what the
   checkpoints knew.
 - **Resume (feature 12)** — `bash egs/launch.sh sft <run folder>/run_config.yaml [slurm.* overrides]`

@@ -10,7 +10,7 @@
 # Memory (tools/inspect_model.py): fp32 weights + grads + AdamW = 62.7 GiB + 3.6 MiB per token: an 80 GB
 # A100, per-device batch 4 x accumulation 16 (effective 64). Urdu tokenises longer than French; a job that
 # OOMs is relaunched at batch 2 x 32 with a new run_name (a resume may change only slurm.*).
-# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/delete_checkpoints.sh).
+# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/run_status.py --delete-checkpoints).
 # Launch:    bash egs/launch.sh sft egs/mmtc/ur-en/sft_qwen-3.5-4b.yaml
 #            (not tools/run_on_free_gpu.sh: it may pick an L40S)
 # Zero-shot of the checkpoint (bf16, as the LoRA runs load it; any A100):

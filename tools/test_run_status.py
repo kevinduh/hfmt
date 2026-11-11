@@ -284,6 +284,52 @@ def test_inf_queue_row_matching():
     assert R.inf_queue_row(idle, queue) is None
 
 
+# --- deletable checkpoints (--delete-checkpoints) ------------------------------
+
+def test_checkpoints_deletable():
+    root = tempfile.mkdtemp()
+    ck = [(50, True), (100, True)]
+    info = lambda *a, **kw: R.inspect_folder(make_run(root, *a, checkpoints=ck, **kw))
+    running = {"job": "101_1", "name": "sweep", "state": "RUNNING", "node": "c07", "task": "1"}
+    assert R.checkpoints_deletable(info("sweep-0", model=True, scores=bleu(66.3)))              # training decoded
+    assert R.checkpoints_deletable(info("sweep-1", model=True, inf_scores=bleu(66.3)))          # launch.sh inf decoded
+    assert R.checkpoints_deletable(info("single", "single", model=True, test=False))            # no test sets
+    assert not R.checkpoints_deletable(info("sweep-2", model=True))           # model/ saved, test decoding not done
+    assert not R.checkpoints_deletable(info("sweep-3", model=True, scores=bleu(66.3)), running)  # job in squeue
+    assert not R.checkpoints_deletable(info("sweep-4"))                       # still training / interrupted
+    assert not R.checkpoints_deletable(info("other", "other", model="partial", test=False))     # cut off saving
+    assert not R.checkpoints_deletable(R.inspect_folder(make_run(root, "sweep-5", model=True, scores=bleu(1))))  # none
+
+
+def test_report_and_delete_checkpoints():
+    root = tempfile.mkdtemp()
+    done = make_run(root, "sweep-0", model=True, scores=bleu(66.3), checkpoints=[(50, True), (100, True)])
+    with open(os.path.join(done, "checkpoint-50", "weights.bin"), "wb") as f:
+        f.write(b"x" * 1000)
+    kept = make_run(root, "sweep-1", model=True, checkpoints=[(100, True)])     # test decoding still running
+    archived = make_run(os.path.join(root, "complete"), "sweep-2", model=True, scores=bleu(66.3),
+                        checkpoints=[(100, True)])                              # moved there when finished
+    out, answers = io.StringIO(), iter(["n", "y"])
+    R.input = lambda prompt: print(prompt, end="") or next(answers)     # shadows the builtin in run_status
+    try:
+        with contextlib.redirect_stdout(out):
+            R.main([root, "--no-slurm"])                                        # report only, nothing asked
+            R.main([root, "--no-slurm", "--delete-checkpoints"])                # n
+            R.main([root, "--no-slurm", "--delete-checkpoints"])                # y
+            R.main([root, "--no-slurm", "--delete-checkpoints"])                # nothing left to ask about
+    finally:
+        del R.input
+    text = out.getvalue()
+    assert text.count("Checkpoints deletable (2 run folder(s)") == 3
+    assert "  sweep-0: 2 checkpoint(s), 0.0 GB" in text and "  complete/sweep-2: 1 checkpoint(s)" in text
+    assert "sweep-1: " not in text and text.count("complete/sweep-2") == 3   # in no report table, only here
+    assert text.count("Delete these 3 checkpoint folders") == 2
+    assert "Nothing deleted." in text and "Deleted 3 checkpoint folders." in text
+    assert text.endswith("No checkpoints to delete.\n")
+    assert not any(n.startswith("checkpoint-") for run in (done, archived) for n in os.listdir(run))
+    assert os.path.isdir(os.path.join(kept, "checkpoint-100")) and os.path.isdir(os.path.join(done, "model"))
+
+
 # --- fix commands ------------------------------------------------------------
 
 def test_fix_commands():

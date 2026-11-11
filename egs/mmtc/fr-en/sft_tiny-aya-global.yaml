@@ -8,7 +8,7 @@
 # accumulation 16 (effective 64): ~57 GiB, an 80 GB A100; eval batch 8 (full_finetune_short's 32 is for
 # short Qwen prompts). Not measured yet.
 # Disk: ~40 GB per checkpoint (fp32 weights + AdamW); save_total_limit 2 + model/ is ~95 GB per job: run
-# tools/delete_checkpoints.sh when done.
+# tools/run_status.py --delete-checkpoints when done.
 # Gated model: accept the license on the Hub and run `hf auth login` first.
 # Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_tiny-aya-global.yaml
 #          (not tools/run_on_free_gpu.sh: it may pick an L40S)

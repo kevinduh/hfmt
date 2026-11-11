@@ -11,7 +11,7 @@
 # 3.75 MiB per token of logits; prompts are ~385 tokens (fixed system preamble), so per-device batch 4 x
 # accumulation 16 (effective 64): ~57 GiB, an 80 GB A100; eval batch 8.
 # Disk: ~40 GB per checkpoint (fp32 weights + AdamW); save_total_limit 2 + model/ is ~95 GB per job: run
-# tools/delete_checkpoints.sh when done.
+# tools/run_status.py --delete-checkpoints when done.
 # Gated model: accept the license on the Hub and run `hf auth login` first.
 # Launch:  bash egs/launch.sh sft egs/mmtc/ur-en/sft_tiny-aya-global.yaml
 #          (not tools/run_on_free_gpu.sh: it may pick an L40S)

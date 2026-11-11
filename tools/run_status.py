@@ -4,8 +4,9 @@ unfinished one.
 
     python tools/run_status.py egs/mmtc/fr-en/outputs                  # every run folder + fix commands
     python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node> --slurm gres=gpu:a100:1
+    python tools/run_status.py egs/mmtc/fr-en/outputs --delete-checkpoints  # + delete finished runs' checkpoints
 
-Read-only: it prints the commands, you review and run them (from the repo root, on a login node). A run
+Read-only unless --delete-checkpoints (which asks first): it prints the commands, you review and run them (from the repo root, on a login node). A run
 folder is any folder with a run_config.yaml (written by hfmt/grid.py); folders under a complete/ folder
 (where finished runs are moved) are skipped, unless complete/ itself is passed. Its state, from its files
 and Slurm:
@@ -28,6 +29,12 @@ test<i>.pred.trg files; "NO: ..." = what differs (counts of differing lines); "d
 used other decode.* or data.test settings, so the two aren't comparable.
 --slurm KEY=VALUE replaces that slurm setting of the saved config in the commands (partition, gres, time,
 mem_gb, cpus, constraint, exclude). Without squeue/sacct (or with --no-slurm), queued jobs aren't detected.
+Checkpoints deletable: folders whose checkpoint-*/ can go (count, size) -- test scores written (training's
+or launch.sh inf's; for a run without test sets, a complete model/) and no training job in squeue. model/
+alone isn't enough: training saves it before its dev check and test decoding. --delete-checkpoints deletes
+them after the report, once you answer y. Both include the runs under complete/, which the rest of the
+report skips.
+trainer_state.json and model/training_info.yaml keep what the checkpoints knew.
 
 Checks failed: runs that finished but not as intended -- a known-bad library warning in a training log
 (BAD_WARNINGS: the Trainer's checkpoint reload loaded nothing, so model/ is the last step; TRL's prompt not
@@ -49,6 +56,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -103,6 +111,9 @@ def parse_args(argv=None):
                    help="slurm setting for the printed commands, replacing the saved one, e.g. "
                         "exclude=<node> or gres=gpu:a100:1 (repeatable)")
     p.add_argument("--no-slurm", action="store_true", help="don't call squeue/sacct")
+    p.add_argument("--delete-checkpoints", action="store_true",
+                   help="after the report, delete the checkpoint-*/ folders it lists as deletable "
+                        "(asks first)")
     args = p.parse_args(argv)
     overrides = []
     for item in args.slurm:
@@ -116,13 +127,14 @@ def parse_args(argv=None):
 
 # --- one run folder --------------------------------------------------------------
 
-def find_run_folders(roots):
+def find_run_folders(roots, include_archived=False):
     """Absolute paths of every folder below `roots` that holds a run_config.yaml, sorted. A `complete/`
-    folder below a root is skipped (a root may itself be one)."""
+    folder below a root is skipped (a root may itself be one), unless `include_archived`."""
+    skip = SKIP_DIRS if include_archived else SKIP_DIRS | ARCHIVE_DIRS
     found = []
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS | ARCHIVE_DIRS and not CHECKPOINT_RE.match(d))
+            dirnames[:] = sorted(d for d in dirnames if d not in skip and not CHECKPOINT_RE.match(d))
             if "run_config.yaml" in filenames:
                 found.append(os.path.abspath(dirpath))
     return sorted(found)
@@ -163,7 +175,7 @@ def inspect_folder(path):
         or scores is not None or inf_scores is not None,
         scores=scores,
         checkpoints=checkpoints,
-        # A finished run's final trainer_state.json, which outlives delete_checkpoints.sh; else the
+        # A finished run's final trainer_state.json, which outlives --delete-checkpoints; else the
         # newest complete checkpoint's.
         best=_best(path) or (_best(os.path.join(path, f"checkpoint-{max(complete)}")) if complete else None),
         job_ids=[_job_id(n) for n in logs if LOG_RE.match(n)],   # oldest -> newest
@@ -427,6 +439,39 @@ def inference_stage(info, state):
     return state.startswith("inf_") or state == "no_inference" or (state == "finished" and bool(info["inf_job_ids"]))
 
 
+def checkpoints_deletable(info, row=None):
+    """Whether a run folder's checkpoint-*/ folders may be deleted (--delete-checkpoints): its test scores
+    are written (training's scores.json, its last step, or launch.sh inf's), or, for a run without test
+    sets, model/ is complete; and no training job of the folder is in squeue (`row`, its queue_row: e.g. a
+    relaunch into the folder). Not earlier: training saves model/ before its dev check and test decoding,
+    and a requeued task that lost its checkpoints would train again from step 0."""
+    if row or not info["checkpoints"]:
+        return False
+    if info["has_test"]:
+        return info["scores"] is not None or info["inf_scores"] is not None
+    return info["model_complete"]
+
+
+def checkpoint_folders(info):
+    return [os.path.join(info["path"], f"checkpoint-{step}") for step, _ in info["checkpoints"]]
+
+
+def folder_bytes(path):
+    """Total size of the files below `path` (symlinks not followed)."""
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for name in filenames:
+            try:
+                total += os.lstat(os.path.join(dirpath, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def _gb(n_bytes):
+    return f"{n_bytes / 1024 ** 3:.1f} GB"
+
+
 def fix_command(state, info, overrides=()):
     """The command for an unfinished folder (None if there's nothing to run)."""
     rc = shlex.quote(os.path.join(info["path"], "run_config.yaml"))
@@ -490,16 +535,17 @@ def _row(info, state, row, job, start=os.curdir):
             info["match"] or "-", slurm, reason or ""]
 
 
-def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note=""):
+def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", deletable=()):
     """The printed report: per run_name counts, every folder (training and inference), failure nodes,
-    inference that doesn't reproduce training, fix commands. `rows`/`jobs`: each folder's squeue row /
-    sacct record of the job its row reports (inference_stage). FOLDER is relative to `base`."""
+    inference that doesn't reproduce training, deletable checkpoints, fix commands. `rows`/`jobs`: each
+    folder's squeue row / sacct record of the job its row reports (inference_stage); `deletable`: (info,
+    bytes) of the folders whose checkpoints may go. FOLDER is relative to `base`."""
     start = base or os.curdir
     lines = [f"{len(infos)} run folder(s)" + (f" under {os.path.relpath(base)}" if base else "") + slurm_note, ""]
     by_name = defaultdict(Counter)
     for info, state in zip(infos, states):
         by_name[info["run_name"]][state] += 1
-    width = max(len(n) for n in by_name)
+    width = max((len(n) for n in by_name), default=0)
     for name in sorted(by_name):
         counts = by_name[name]
         order = sorted(counts, key=lambda s: STATE_ORDER.index(s) if s in STATE_ORDER else len(STATE_ORDER))
@@ -528,6 +574,13 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note=""):
         lines += ["", f"Checks failed ({len(checks)}): the run finished, but not as intended (see decisions.md)"]
         lines += [f"  {folder}: {'; '.join(items)}" for folder, items in checks]
 
+    if deletable:
+        lines += ["", f"Checkpoints deletable ({len(deletable)} run folder(s), {_gb(sum(b for _, b in deletable))}): "
+                  "test scores written, training job not in squeue (complete/ included) -> rerun with "
+                  "--delete-checkpoints"]
+        lines += [f"  {os.path.relpath(info['path'], start)}: {len(info['checkpoints'])} checkpoint(s), {_gb(n)}"
+                  for info, n in deletable]
+
     fixes = defaultdict(list)
     for info, state in zip(infos, states):
         command = fix_command(state, info, overrides)
@@ -544,9 +597,12 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note=""):
 def main(argv=None):
     args = parse_args(argv)
     folders = find_run_folders(args.dirs)
-    if not folders:
+    # complete/ folders aren't in the report, but their checkpoints are listed (and deleted) too.
+    archived = [f for f in find_run_folders(args.dirs, include_archived=True) if f not in set(folders)]
+    if not folders and not archived:
         sys.exit(f"run_status: no run folders (run_config.yaml) under {' '.join(args.dirs)}")
     infos = [inspect_folder(f) for f in folders]
+    archived_infos = [inspect_folder(f) for f in archived]
 
     queue = None if args.no_slurm else queued_jobs()
     train_rows = [queue_row(info, queue) if queue else None for info in infos]
@@ -560,8 +616,33 @@ def main(argv=None):
     sacct = finished_jobs(wanted) if queue is not None and wanted else {}
     jobs = [_sacct_record(sacct, ids[0]) if ids else None for ids in last_ids]
     note = "" if queue is not None else ("  (Slurm not queried)" if args.no_slurm else "  (squeue not available: queued jobs not detected)")
-    base = os.path.commonpath([os.path.dirname(f) for f in folders])
-    print(report(infos, states, rows, jobs, args.slurm, base, note))
+    base = os.path.commonpath([os.path.dirname(f) for f in folders] if folders
+                              else [os.path.abspath(d) for d in args.dirs])   # all under complete/
+    candidates = list(zip(infos, train_rows)) + [(info, queue_row(info, queue) if queue else None)
+                                                 for info in archived_infos]
+    deletable = [(info, sum(folder_bytes(c) for c in checkpoint_folders(info)))
+                 for info, row in candidates if checkpoints_deletable(info, row)]
+    print(report(infos, states, rows, jobs, args.slurm, base, note, deletable))
+    if args.delete_checkpoints:
+        delete_checkpoints(deletable)
+
+
+def delete_checkpoints(deletable):
+    """Delete the checkpoint-*/ folders of `deletable` ((info, bytes) pairs) after a "y" on stdin."""
+    paths = [c for info, _ in deletable for c in checkpoint_folders(info)]
+    if not paths:
+        print("\nNo checkpoints to delete.")
+        return
+    try:
+        answer = input(f"\nDelete these {len(paths)} checkpoint folders ({_gb(sum(b for _, b in deletable))})? [y/N] ")
+    except EOFError:
+        answer = ""
+    if answer.strip() != "y":
+        print("Nothing deleted.")
+        return
+    for path in paths:
+        shutil.rmtree(path)
+    print(f"Deleted {len(paths)} checkpoint folders.")
 
 
 if __name__ == "__main__":

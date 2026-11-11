@@ -12,7 +12,7 @@
 # eval batch 32 on an 80 GB A100. If it OOMs, relaunch at batch 2 x 32 with a new run_name.
 # Reload: the best checkpoint is copied in by mt_model.load_checkpoint_weights (strict); training_info.yaml's
 # model_dev_check says whether model/ holds it.
-# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/delete_checkpoints.sh).
+# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/run_status.py --delete-checkpoints).
 # Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_gemma-3-4b-it.yaml
 #          (not tools/run_on_free_gpu.sh: it may pick an L40S)
 # Test:    bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_full_gemma-3-4b-it_short/run_config.yaml

@@ -36,7 +36,8 @@ them after the report, once you answer y. Both include the runs under complete/,
 report skips.
 trainer_state.json and model/training_info.yaml keep what the checkpoints knew.
 
-Checks failed: runs that finished but not as intended -- a known-bad library warning in a training log
+Checks failed: runs whose training finished (not while it runs, e.g. during the dev check of model/) but not
+as intended -- a known-bad library warning in a training log
 (BAD_WARNINGS: the Trainer's checkpoint reload loaded nothing, so model/ is the last step; TRL's prompt not
 a token prefix of prompt + reply) or model/training_info.yaml's model_dev_check a "MISMATCH" (the saved model's
 dev BLEU differs from the dev BLEU of the step it holds). The reload warning counts only for runs without a
@@ -93,6 +94,10 @@ QUEUE_STATES = {"RUNNING": "running", "COMPLETING": "running", "CONFIGURING": "r
 STATE_ORDER = ["running", "pending", "finished", "inf_running", "inf_pending", "no_inference", "bad_model",
                "interrupted", "bad_checkpoint", "failed", "not_started"]
 ACTIVE_OR_DONE = {"running", "pending", "finished", "inf_running", "inf_pending"}
+# Training is over (complete model/, no training job in squeue): only these get the "Checks failed" section.
+# Earlier, a full run's log already has the Trainer's reload warning while model/ is being dev-checked, and
+# that check (model/training_info.yaml) is what decides it.
+TRAINING_DONE = {"finished", "no_inference", "inf_running", "inf_pending"}
 FIX_TITLES = {
     "no_inference": "decode the test sets of the trained model (written to <run>/inf/<inf_name>/)",
     "bad_model": "model/ was cut off while saving: training didn't finish",
@@ -568,7 +573,7 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", de
 
     checks = [(os.path.relpath(info["path"], start),
                info["warnings"] + ([f"model/ dev check {info['model_check']}"] if info["model_check"] else []))
-              for info in infos]
+              for info, state in zip(infos, states) if state in TRAINING_DONE]
     checks = [(folder, items) for folder, items in checks if items]
     if checks:
         lines += ["", f"Checks failed ({len(checks)}): the run finished, but not as intended (see decisions.md)"]

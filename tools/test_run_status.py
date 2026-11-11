@@ -236,6 +236,16 @@ def test_reload_warning_only_counts_without_a_dev_check():
     assert bad["warnings"] == [] and bad["model_check"].startswith("MISMATCH")
 
 
+def test_checks_wait_for_training_to_finish():
+    # The Trainer's reload warning is in the log while model/ is still being dev-checked: not a failed check yet.
+    path = make_run(tempfile.mkdtemp(), "full", model="partial", logs=[("slurm-10.out", RELOAD_WARNING)])
+    info = R.inspect_folder(path)
+    assert info["warnings"] == [RELOAD_LABEL]
+    for state in ("running", "pending", "bad_model"):
+        assert "Checks failed" not in R.report([info], [state], [None], [None])
+    assert f"full: {RELOAD_LABEL}" in R.report([info], ["finished"], [None], [None])
+
+
 def test_prompt_mismatch_warning_counts_with_a_dev_check():
     info = _full_run("ok", "WARNING: Mismatch between tokenized prompt and the start of tokenized prompt+completion\n")
     assert info["warnings"] == ["prompt not a token prefix of prompt + reply (chat template)"]

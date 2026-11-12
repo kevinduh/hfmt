@@ -1,0 +1,34 @@
+# Sweep experiment: LoRA (every linear layer) fine-tune of Qwen3.5-2B, learning rate (4 jobs)
+# ur-en counterpart of egs/mmtc/zh-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml: same recipe and lr axis, so
+# the three pairs' 2B curves line up; run_name carries the pair so the pairs' W&B groups don't merge.
+# The 2B point of the ur-en all-linear scaling curve (with the 4B and 9B sweeps); compare with the 2B full
+# fine-tune (sft_qwen-3.5-2b.yaml). Its [q_proj, v_proj] baseline isn't repeated for ur-en (see the 4B sweep).
+# Schedule: shortrun as is (400 steps, eval every 50, early stopping after 3), BLEU-lc selection.
+# lr 3e-5 extends the usual 5e-5,1e-4,2e-4 bracket downward, in case every layer wants a lower one.
+# Decodes at the default batch size (16), like the other pairs: batch size can shift bf16 greedy outputs.
+# Urdu sources run longer than French ones; if a job OOMs, relaunch with train.train_batch_size=16
+# train.gradient_accumulation_steps=4 and a new run_name.
+# Launch:  bash tools/run_on_free_gpu.sh sft egs/mmtc/ur-en/sft_lora_qwen-3.5-2b_all-linear.sweep.yaml
+# Jobs land in outputs/sft_lora_qwen-3.5-2b_ur-en_all-linear_sweep-<idx>/; the .grid.txt maps idx -> values.
+# Test:    bash egs/launch.sh inf egs/mmtc/ur-en/outputs/sft_lora_qwen-3.5-2b_ur-en_all-linear_sweep-<idx>/run_config.yaml
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: shortrun        # cosine, 400 steps, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-2b_ur-en_all-linear_sweep
+checkpoint: Qwen/Qwen3.5-2B
+instruction: "Translate Urdu to English"
+
+train:
+  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+
+wandb:
+  tags: [sft, ur-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 3e-5,5e-5,1e-4,2e-4

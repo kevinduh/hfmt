@@ -1,0 +1,41 @@
+# Single-run experiment: full fine-tune of all google/gemma-3-4b-it parameters
+# ur-en counterpart of egs/mmtc/zh-en/sft_gemma-3-4b-it.yaml: same recipe; run_name carries the pair so the
+# pairs' W&B groups don't merge.
+# The Gemma 3 4B full-vs-LoRA reference for ur-en (compare with sft_lora_gemma-3-4b-it_all-linear.sweep.yaml,
+# and with the Qwen3.5-4B full run, sft_qwen-3.5-4b.yaml). Full tied LoRA for every model so far.
+# Recipe: full_finetune_short (150-step cosine, warmup 10, eval + dev BLEU every 25 steps, early stopping
+# after 3, BLEU-lc selection) at lr 5e-6, as for Qwen3.5-4B. Sized for the ~1.6k-2.5k pairs of the other
+# mmtc pairs; if ur-en is much larger, one epoch is more than 25-39 steps and the eval grid is coarser in epochs.
+# Memory: 4.3B parameters, of which the vision tower's 417M get no gradient and so no AdamW state: fp32
+# weights + grads + AdamW ~64 GiB + 3.78 MiB per token; batch 4 x 16 (effective 64) and eval batch 32 on an
+# 80 GB A100 on zh-en. Urdu tokenises longer than French; if it OOMs, relaunch at batch 2 x 32 with a new
+# run_name (a resume may change only slurm.*).
+# Reload: the best checkpoint is copied in by mt_model.load_checkpoint_weights (strict); training_info.yaml's
+# model_dev_check says whether model/ holds it.
+# Disk: ~50 GB per checkpoint, ~118 GB per job: clear checkpoints when done (tools/run_status.py --delete-checkpoints).
+# Launch:  bash egs/launch.sh sft egs/mmtc/ur-en/sft_gemma-3-4b-it.yaml
+#          (not tools/run_on_free_gpu.sh: it may pick an L40S)
+# Test:    bash egs/launch.sh inf egs/mmtc/ur-en/outputs/sft_full_gemma-3-4b-it_ur-en_short/run_config.yaml
+# Zero-shot: the checkpoint's zero-shot decode is shared with the LoRA sweep (its header has the command).
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_gemma-3-4b-it_ur-en_short
+checkpoint: google/gemma-3-4b-it
+instruction: "Translate Urdu to English"
+
+train:
+  learning_rate: 5e-6
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64, as full_finetune_short's 32 x 2
+  gradient_accumulation_steps: 16
+
+slurm:
+  constraint: 80gb                  # 80 GB A100 (see Memory above)
+  mem_gb: 48                        # the fp32 model (~17 GB) is loaded in CPU memory, and again to reload the best checkpoint
+
+wandb:
+  tags: [sft, ur-en, full]

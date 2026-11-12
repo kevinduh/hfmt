@@ -32,7 +32,8 @@ used other decode.* or data.test settings, so the two aren't comparable.
 mem_gb, cpus, constraint, exclude). Without squeue/sacct (or with --no-slurm), queued jobs aren't detected.
 Experiments not launched: the experiment yamls (next to a dataset.yaml, in a folder searched or holding a
 searched outputs/ folder) with fewer run folders of their run_name (outputs/ or complete/) than grid points
-(hydra.sweeper.params; 1 for a single-run file). Never launched ones get a launch.sh command. A run folder
+(hydra.sweeper.params; 1 for a single-run file). Partly launched grids are listed there; never launched
+ones only as their launch.sh command (with the job count) under "To fix". A run folder
 under another output_root counts only if it's below a searched folder.
 Checkpoints deletable: folders whose checkpoint-*/ can go (count, size) -- test scores written (training's
 or launch.sh inf's; for a run without test sets, a complete model/) and no training job in squeue. model/
@@ -643,10 +644,14 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", de
                   for info, n in deletable]
 
     if unlaunched:
+        # Never launched ones are listed once, as their launch.sh command under "To fix"; only partly
+        # launched grids (no command) are listed here.
+        never = sum(1 for _, n in unlaunched if not n)
         lines += ["", f"Experiments not launched ({len(unlaunched)}): fewer run folders with their run_name "
-                  "(outputs/ or complete/) than grid points"]
-        lines += [f"  {os.path.relpath(exp['path'], ROOT)}: " + (f"{n} of {exp['jobs']} job(s)" if n else
-                  f"not launched ({exp['jobs']} job(s))") for exp, n in unlaunched]
+                  "(outputs/ or complete/) than grid points"
+                  + (f"; {never} never launched (launch.sh commands below)" if never else "")]
+        lines += [f"  {os.path.relpath(exp['path'], ROOT)}: {n} of {exp['jobs']} job(s)"
+                  for exp, n in unlaunched if n]
 
     fixes = defaultdict(list)
     for info, state in zip(infos, states):
@@ -655,7 +660,8 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", de
             fixes[state].append(command)
     for exp, n in unlaunched:
         if not n:   # part of a grid: relaunching adds the whole grid again, so it's left to you
-            fixes["not_launched"].append(f"bash egs/launch.sh sft {shlex.quote(os.path.relpath(exp['path'], ROOT))}")
+            fixes["not_launched"].append(f"bash egs/launch.sh sft {shlex.quote(os.path.relpath(exp['path'], ROOT))}"
+                                         f"  # {exp['jobs']} job(s)")
     if fixes:
         lines += ["", "To fix (review first; run on a login node):",
                   f"cd {shlex.quote(ROOT)} && export HFMT_ROOT={shlex.quote(ROOT)}"]

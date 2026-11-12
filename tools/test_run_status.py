@@ -378,10 +378,11 @@ def test_experiments_not_launched():
         R.main([outputs, "--no-slurm"])
     text = out.getvalue()
     rel = lambda path: os.path.relpath(path, R.ROOT)
-    assert "Experiments not launched (2)" in text
-    assert f"  {rel(new)}: not launched (3 job(s))" in text and f"  {rel(partial)}: 2 of 4 job(s)" in text
+    assert "Experiments not launched (2)" in text and "1 never launched (launch.sh commands below)" in text
+    assert f"  {rel(partial)}: 2 of 4 job(s)" in text
     assert "# not_launched (1): experiment yamls with no run folder yet" in text
-    assert f"bash egs/launch.sh sft {rel(new)}" in text and f"egs/launch.sh sft {rel(partial)}" not in text
+    assert f"bash egs/launch.sh sft {rel(new)}  # 3 job(s)" in text and f"egs/launch.sh sft {rel(partial)}" not in text
+    assert text.count(rel(new)) == 1                                       # listed once, as its command
     assert "done.yaml" not in text and "moved.sweep.yaml" not in text
     with contextlib.redirect_stdout(io.StringIO()):
         R.main([pair, "--no-slurm"])                                                     # the experiment folder
@@ -392,7 +393,7 @@ def test_experiments_not_launched():
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         R.main([empty, "--no-slurm"])
-    assert "first.yaml: not launched (1 job(s))" in out.getvalue()
+    assert "first.yaml  # 1 job(s)" in out.getvalue() and out.getvalue().count("first.yaml") == 1
 
 
 def test_read_real_experiments():

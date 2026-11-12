@@ -56,8 +56,8 @@ hfmt/
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
 │                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate, prompt overhead),
 │                            #   run_status.py <outputs dir> (training + inference states and scores, fix commands,
-│                            #     failed checks: known-bad log warnings, model/ dev-score mismatch, deletable checkpoints;
-│                            #     prints only, unless --delete-checkpoints) + its test
+│                            #     failed checks: known-bad log warnings, model/ dev-score mismatch, deletable checkpoints,
+│                            #     experiment yamls not launched yet; prints only, unless --delete-checkpoints) + its test
 ├── outputs/                 # direct (non-launch.sh) Hydra run outputs (gitignored)
 ├── transformers/            # git submodule (pinned HF Transformers)
 └── wandb/                   # local W&B logs (gitignored)

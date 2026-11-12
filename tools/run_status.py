@@ -5,6 +5,7 @@ unfinished one.
     python tools/run_status.py egs/mmtc/fr-en/outputs                  # every run folder + fix commands
     python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node> --slurm gres=gpu:a100:1
     python tools/run_status.py egs/mmtc/fr-en/outputs --delete-checkpoints  # + delete finished runs' checkpoints
+    python tools/run_status.py egs/mmtc                 # every pair's run folders + experiments not launched
 
 Read-only unless --delete-checkpoints (which asks first): it prints the commands, you review and run them (from the repo root, on a login node). A run
 folder is any folder with a run_config.yaml (written by hfmt/grid.py); folders under a complete/ folder
@@ -29,6 +30,10 @@ test<i>.pred.trg files; "NO: ..." = what differs (counts of differing lines); "d
 used other decode.* or data.test settings, so the two aren't comparable.
 --slurm KEY=VALUE replaces that slurm setting of the saved config in the commands (partition, gres, time,
 mem_gb, cpus, constraint, exclude). Without squeue/sacct (or with --no-slurm), queued jobs aren't detected.
+Experiments not launched: the experiment yamls (next to a dataset.yaml, in a folder searched or holding a
+searched outputs/ folder) with fewer run folders of their run_name (outputs/ or complete/) than grid points
+(hydra.sweeper.params; 1 for a single-run file). Never launched ones get a launch.sh command. A run folder
+under another output_root counts only if it's below a searched folder.
 Checkpoints deletable: folders whose checkpoint-*/ can go (count, size) -- test scores written (training's
 or launch.sh inf's; for a run without test sets, a complete model/) and no training job in squeue. model/
 alone isn't enough: training saves it before its dev check and test decoding. --delete-checkpoints deletes
@@ -92,7 +97,7 @@ BAD_WARNINGS = [
 QUEUE_STATES = {"RUNNING": "running", "COMPLETING": "running", "CONFIGURING": "running",
                 "PENDING": "pending", "REQUEUED": "pending"}
 STATE_ORDER = ["running", "pending", "finished", "inf_running", "inf_pending", "no_inference", "bad_model",
-               "interrupted", "bad_checkpoint", "failed", "not_started"]
+               "interrupted", "bad_checkpoint", "failed", "not_started", "not_launched"]
 ACTIVE_OR_DONE = {"running", "pending", "finished", "inf_running", "inf_pending"}
 # Training is over (complete model/, no training job in squeue): only these get the "Checks failed" section.
 # Earlier, a full run's log already has the Trainer's reload warning while model/ is being dev-checked, and
@@ -105,6 +110,7 @@ FIX_TITLES = {
     "failed": "rerun from the saved run_config.yaml, in the same folder",
     "not_started": "run from the saved run_config.yaml, in the same folder",
     "bad_checkpoint": "a checkpoint was cut off while saving (resume refuses it)",
+    "not_launched": "experiment yamls with no run folder yet",
 }
 
 
@@ -143,6 +149,55 @@ def find_run_folders(roots, include_archived=False):
             if "run_config.yaml" in filenames:
                 found.append(os.path.abspath(dirpath))
     return sorted(found)
+
+
+def find_experiments(roots):
+    """Experiment yamls (sorted absolute paths) in the experiment folders (those with a dataset.yaml) below
+    `roots`, or holding a root (an experiment's outputs/ folder): every yaml there but dataset.yaml whose
+    defaults start with config and dataset and that sets a run_name (CLAUDE.md). outputs/ and run folders
+    aren't searched."""
+    folders = set()
+    for root in roots:
+        root = os.path.abspath(root)
+        if os.path.isfile(os.path.join(os.path.dirname(root), "dataset.yaml")):
+            folders.add(os.path.dirname(root))
+        for dirpath, dirnames, filenames in os.walk(root):
+            if "run_config.yaml" in filenames:
+                dirnames[:] = []
+                continue
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS | {"outputs"} and not CHECKPOINT_RE.match(d)]
+            if "dataset.yaml" in filenames:
+                folders.add(dirpath)
+    found = []
+    for folder in folders:
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if name.endswith(".yaml") and name != "dataset.yaml" and read_experiment(path):
+                found.append(path)
+    return sorted(found)
+
+
+def read_experiment(path):
+    """{"path", "run_name", "jobs"} of an experiment yaml (jobs: its grid size, 1 for a single-run file), or
+    None if it isn't one. The grid is hydra.sweeper.params, one axis per key, comma-separated values."""
+    cfg, error = _load_yaml(path)
+    defaults = cfg.get("defaults") if isinstance(cfg, dict) else None
+    if error or not isinstance(defaults, list) or defaults[:2] != ["config", "dataset"] \
+            or not isinstance(cfg.get("run_name"), str):
+        return None
+    params = ((cfg.get("hydra") or {}).get("sweeper") or {}).get("params") or {}
+    jobs = 1
+    for values in params.values():
+        jobs *= len(str(values).split(","))
+    return {"path": path, "run_name": cfg["run_name"], "jobs": jobs}
+
+
+def launch_status(experiments, run_infos):
+    """(experiment, run folders launched) for the experiments with fewer run folders (any folder whose saved
+    run_name is theirs, complete/ included) than grid points: 0 = never launched; fewer = part of a grid
+    (a pinned axis, or folders deleted)."""
+    launched = Counter(info["run_name"] for info in run_infos)
+    return [(exp, launched[exp["run_name"]]) for exp in experiments if launched[exp["run_name"]] < exp["jobs"]]
 
 
 def inspect_folder(path):
@@ -540,11 +595,12 @@ def _row(info, state, row, job, start=os.curdir):
             info["match"] or "-", slurm, reason or ""]
 
 
-def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", deletable=()):
+def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", deletable=(), unlaunched=()):
     """The printed report: per run_name counts, every folder (training and inference), failure nodes,
     inference that doesn't reproduce training, deletable checkpoints, fix commands. `rows`/`jobs`: each
     folder's squeue row / sacct record of the job its row reports (inference_stage); `deletable`: (info,
-    bytes) of the folders whose checkpoints may go. FOLDER is relative to `base`."""
+    bytes) of the folders whose checkpoints may go; `unlaunched`: launch_status's (experiment, run folders).
+    FOLDER is relative to `base`."""
     start = base or os.curdir
     lines = [f"{len(infos)} run folder(s)" + (f" under {os.path.relpath(base)}" if base else "") + slurm_note, ""]
     by_name = defaultdict(Counter)
@@ -586,11 +642,20 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", de
         lines += [f"  {os.path.relpath(info['path'], start)}: {len(info['checkpoints'])} checkpoint(s), {_gb(n)}"
                   for info, n in deletable]
 
+    if unlaunched:
+        lines += ["", f"Experiments not launched ({len(unlaunched)}): fewer run folders with their run_name "
+                  "(outputs/ or complete/) than grid points"]
+        lines += [f"  {os.path.relpath(exp['path'], ROOT)}: " + (f"{n} of {exp['jobs']} job(s)" if n else
+                  f"not launched ({exp['jobs']} job(s))") for exp, n in unlaunched]
+
     fixes = defaultdict(list)
     for info, state in zip(infos, states):
         command = fix_command(state, info, overrides)
         if command:
             fixes[state].append(command)
+    for exp, n in unlaunched:
+        if not n:   # part of a grid: relaunching adds the whole grid again, so it's left to you
+            fixes["not_launched"].append(f"bash egs/launch.sh sft {shlex.quote(os.path.relpath(exp['path'], ROOT))}")
     if fixes:
         lines += ["", "To fix (review first; run on a login node):",
                   f"cd {shlex.quote(ROOT)} && export HFMT_ROOT={shlex.quote(ROOT)}"]
@@ -604,10 +669,12 @@ def main(argv=None):
     folders = find_run_folders(args.dirs)
     # complete/ folders aren't in the report, but their checkpoints are listed (and deleted) too.
     archived = [f for f in find_run_folders(args.dirs, include_archived=True) if f not in set(folders)]
-    if not folders and not archived:
-        sys.exit(f"run_status: no run folders (run_config.yaml) under {' '.join(args.dirs)}")
+    experiments = [read_experiment(path) for path in find_experiments(args.dirs)]
+    if not folders and not archived and not experiments:
+        sys.exit(f"run_status: no run folders (run_config.yaml) or experiments under {' '.join(args.dirs)}")
     infos = [inspect_folder(f) for f in folders]
     archived_infos = [inspect_folder(f) for f in archived]
+    unlaunched = launch_status(experiments, infos + archived_infos)
 
     queue = None if args.no_slurm else queued_jobs()
     train_rows = [queue_row(info, queue) if queue else None for info in infos]
@@ -627,7 +694,7 @@ def main(argv=None):
                                                  for info in archived_infos]
     deletable = [(info, sum(folder_bytes(c) for c in checkpoint_folders(info)))
                  for info, row in candidates if checkpoints_deletable(info, row)]
-    print(report(infos, states, rows, jobs, args.slurm, base, note, deletable))
+    print(report(infos, states, rows, jobs, args.slurm, base, note, deletable, unlaunched))
     if args.delete_checkpoints:
         delete_checkpoints(deletable)
 

@@ -340,6 +340,69 @@ def test_report_and_delete_checkpoints():
     assert os.path.isdir(os.path.join(kept, "checkpoint-100")) and os.path.isdir(os.path.join(done, "model"))
 
 
+# --- experiments not launched ------------------------------------------------------
+
+def write_experiment(folder, name, run_name, grid=None, defaults=("config", "dataset")):
+    """An experiment yaml as egs/ has them; grid: {axis: "v1,v2"} for a .sweep.yaml."""
+    cfg = {"defaults": list(defaults) + [{"override peft": "lora_default"}, "_self_"], "run_name": run_name,
+           "checkpoint": "Qwen/Qwen3.5-2B", "instruction": "Translate French to English"}
+    if grid:
+        cfg["hydra"] = {"sweeper": {"params": grid}}
+    path = os.path.join(folder, name)
+    with open(path, "w") as f:
+        yaml.safe_dump(cfg, f)
+    return path
+
+
+def test_experiments_not_launched():
+    root = tempfile.mkdtemp()
+    pair = os.path.join(root, "fr-en")
+    outputs = os.path.join(pair, "outputs")
+    os.makedirs(outputs)
+    open(os.path.join(pair, "dataset.yaml"), "w").close()
+    done = write_experiment(pair, "done.yaml", "single")
+    write_experiment(pair, "moved.sweep.yaml", "moved", {"train.learning_rate": "1e-4,2e-4"})
+    partial = write_experiment(pair, "partial.sweep.yaml", "sweep", {"train.learning_rate": "1e-4,2e-4", "peft.lora.r": "8,16"})
+    new = write_experiment(pair, "new.sweep.yaml", "new", {"train.learning_rate": "1e-4,2e-4,3e-4"})
+    write_experiment(pair, "base_config_only.yaml", "other", defaults=("config",))       # not an experiment
+    make_run(outputs, "single", "single", model=True)
+    make_run(outputs, "sweep-0", "sweep")
+    make_run(outputs, "sweep-1", "sweep")
+    for i in range(2):
+        make_run(os.path.join(outputs, "complete"), f"moved-{i}", "moved", model=True)   # finished, moved
+    assert R.find_experiments([outputs]) == R.find_experiments([root])                  # outputs/ -> its experiments
+    assert len(R.find_experiments([root])) == 4 and done in R.find_experiments([root])
+    assert R.read_experiment(new)["jobs"] == 3 and R.read_experiment(partial)["jobs"] == 4
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        R.main([outputs, "--no-slurm"])
+    text = out.getvalue()
+    rel = lambda path: os.path.relpath(path, R.ROOT)
+    assert "Experiments not launched (2)" in text
+    assert f"  {rel(new)}: not launched (3 job(s))" in text and f"  {rel(partial)}: 2 of 4 job(s)" in text
+    assert "# not_launched (1): experiment yamls with no run folder yet" in text
+    assert f"bash egs/launch.sh sft {rel(new)}" in text and f"egs/launch.sh sft {rel(partial)}" not in text
+    assert "done.yaml" not in text and "moved.sweep.yaml" not in text
+    with contextlib.redirect_stdout(io.StringIO()):
+        R.main([pair, "--no-slurm"])                                                     # the experiment folder
+    empty = os.path.join(tempfile.mkdtemp(), "zh-en")                                    # nothing launched yet
+    os.makedirs(empty)
+    open(os.path.join(empty, "dataset.yaml"), "w").close()
+    write_experiment(empty, "first.yaml", "first")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        R.main([empty, "--no-slurm"])
+    assert "first.yaml: not launched (1 job(s))" in out.getvalue()
+
+
+def test_read_real_experiments():
+    experiments = [R.read_experiment(p) for p in R.find_experiments([os.path.join(R.ROOT, "egs", "mmtc")])]
+    names = {os.path.basename(e["path"]): e for e in experiments if "/ur-en/" in e["path"]}
+    assert names["sft_qwen-3.5-2b.yaml"]["jobs"] == 1
+    assert names["sft_lora_qwen-3.5-2b_all-linear.sweep.yaml"]["jobs"] == 4
+    assert len({e["run_name"] for e in experiments}) == len(experiments)              # run_names are unique
+
+
 # --- fix commands ------------------------------------------------------------
 
 def test_fix_commands():

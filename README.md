@@ -157,6 +157,11 @@ review and run the commands. States:
   just that folder from its saved config; resume refuses these);
 - a `checkpoint-N/` or `model/` cut off while saving (it says which folder to delete).
 
+It also reads the experiment yamls (next to a `dataset.yaml`, in a folder you pass or the one holding the
+`outputs/` you pass) and lists those with fewer run folders of their `run_name` (in `outputs/` or
+`complete/`) than grid points: never launched ones with their `launch.sh sft` command, part-launched sweeps
+with how many of their jobs exist.
+
 Each row shows the test scores of training's own end-of-run decoding and of `launch.sh inf`, and
 whether inference reproduced training (same scores, identical `test<i>.pred.trg`). For failed jobs it
 also shows the error line and the node, and points out nodes where several jobs failed:
@@ -164,6 +169,7 @@ also shows the error line and the node, and points out nodes where several jobs 
 ```bash
 python tools/run_status.py egs/mmtc/fr-en/outputs                         # every run + fix commands
 python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node>  # fix commands avoid that node
+python tools/run_status.py egs/mmtc                                       # all pairs, + experiments not launched
 ```
 
 **Housekeeping.** Runs you are done with can be moved into `egs/mmtc/fr-en/outputs/complete/`;

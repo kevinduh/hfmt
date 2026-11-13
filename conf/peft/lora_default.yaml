@@ -1,4 +1,4 @@
-# LoRA: adapter on a bf16/fp16 base model (no quantization).
+# LoRA: adapter on a bf16 base model (no quantization).
 mode: lora
 lora:
   r: 8

@@ -36,13 +36,17 @@ def load_tokenizer(checkpoint):
 
 
 def load_base_model(cfg, device):
-    """Load ``cfg.checkpoint`` for ``cfg.peft.mode``: fp32 for ``full``, bf16/fp16 for ``lora``,
-    4-bit for ``qlora``. Returns ``(model, use_bf16)``."""
+    """Load ``cfg.checkpoint`` for ``cfg.peft.mode``: fp32 for ``full``, bf16 for ``lora``, 4-bit
+    with bf16 compute for ``qlora``. bf16 includes PyTorch's emulation, so a V100 (no native bf16)
+    runs the same precision as an A100/L40S; fp16 is used only on a card with no bf16 at all.
+    Returns ``(model, use_bf16)``."""
     import torch
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
     finetune_mode = cfg.peft.mode  # one of: full | lora | qlora
-    use_bf16 = torch.cuda.is_bf16_supported(including_emulation=False)
+    # Emulated bf16 counts: same numerics on every card, at a speed cost on V100s (fp16 breaks
+    # Gemma 3). decisions.md, features/15_running_on_v100.
+    use_bf16 = torch.cuda.is_bf16_supported(including_emulation=True)
     compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
     logging.info(f"finetune_mode: {finetune_mode}, use_bf16: {use_bf16}, compute_dtype: {compute_dtype}")
     if finetune_mode in ("full", "lora"):

@@ -65,9 +65,9 @@ cost really is.
 
 1. Make the one-line change; update the `load_base_model` docstring (no fp16 branch is reachable on our
    cards any more).
-2. Rerun one V100 smoke test through the normal launch path (the bf16 smoke runs forced the dtype with a
-   throwaway script, not this change) and one A100 inference of an existing run (expect 0 differing
-   lines).
+2. Done: the bf16 smoke runs set exactly what this change sets, in a real job's environment. Optional:
+   one A100 inference of an existing run (expect 0 differing lines) to confirm dropping the cuDNN module
+   changed no results.
 3. Full-length replication on a V100 of a few existing experiments; accept within 0.5 BLEU-lc of the
    A100 run. Archive under `analysis/<date>_v100_validation/`, record the decision in `decisions.md`.
 4. README "Running SFT experiments": a short "Which GPU" paragraph (how to select a V100, expect it to
@@ -76,9 +76,9 @@ cost really is.
 
 ## Not tested yet
 
-- `qlora` and `full` on a V100 (the smoke tests were all-linear LoRA).
+- `qlora` on a V100 (decided: it should run there; a smoke test against an A100 control is in `todo.md`).
+  `full` fine-tunes stay on A100s, Qwen3.5-0.8B included (decided), so they are not tested on V100s.
 - Anything beyond 50 steps, one seed, one language pair (step 3).
-- The same model at two precisions on the same V100 card model, to size the bf16 cost properly.
 
 ## Open questions
 

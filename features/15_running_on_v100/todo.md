@@ -3,6 +3,7 @@
 From `plan.md` (v3, 2026-11-13). Groups are ordered by dependency: A before B, B before C; D can follow
 B; E is last. Cluster items are run by the developer (no GPU in the sandbox); results go in `data.md`
 as aggregate numbers only, nothing to W&B for smoke tests.
+All commands run from the hfmt root on the cluster.
 
 ## A. Code change
 
@@ -23,48 +24,87 @@ as aggregate numbers only, nothing to W&B for smoke tests.
 
 ## B. Verify the change through the normal launch path (cluster)
 
-- [ ] B1. Confirm the environment fix is live: a job submitted from a fresh shell no longer has the
-      cluster cuDNN module on its path (`data.md`, T2a: a later check still failed).
-- [ ] B2. `DRYRUN=1` then launch one V100 LoRA smoke run with no forced dtype:
+- [x] B1. Environment fix is live. The cluster's `install/path.sh` had no cuDNN module before the smoke
+      runs, so they ran in a real job's environment. Assumed: the submitting shell loads no cuDNN module
+      (no `module unload` in `path.sh`).
+- [x] B2. V100 LoRA training in bf16. Covered by the `smoke_v100_bf16_*` runs (`data.md`):
+      `force_dtype_training.py bfloat16` sets exactly what the new code sets (bf16 load, Trainer
+      `bf16=True`), and `is_bf16_supported(including_emulation=True)` is True on the V100 (T0). All three
+      families within noise of the A100, no NaN, `model_dev_check: ok`, same peak memory.
+- [ ] B3. Optional. A100 regression: decode an existing Qwen3.5 run again and expect 0 differing lines
+      and identical scores. Checks that dropping the cuDNN module changed no results. Low risk: with the
+      module loaded any cuDNN call failed (T2a #3), so earlier A100 runs never called cuDNN.
       ```
-      bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_gemma-3-4b-it_all-linear.yaml \
-        run_name=smoke_v100_default_gemma4b slurm.gres=gpu:v100:1 slurm.constraint=32gb \
-        slurm.time="04:00:00" train.max_steps=50 train.eval_steps=25 train.train_batch_size=4 \
-        train.gradient_accumulation_steps=16 train.eval_batch_size=4 wandb.enabled=false
+      RUN=egs/mmtc/ur-en/outputs/sft_lora_qwen-3.5-4b_ur-en_all-linear_sweep-0   # or outputs/complete/... if moved
+      bash egs/launch.sh inf $RUN/run_config.yaml inf_name=test_after_v100_change
+      # when the job has finished:
+      diff $RUN/test1.pred.trg $RUN/inf/test_after_v100_change/test1.pred.trg | grep -c '^<'   # expect 0
+      diff $RUN/scores.json $RUN/inf/test_after_v100_change/scores.json && echo "scores identical"
       ```
-      Read: log line `use_bf16: True`, "Accelerate precision: bf16", base parameters bf16, no NaN
-      `eval_loss`, `model_dev_check: ok`, dev BLEU-lc and TER against `smoke_v100_bf16_gemma4b` (the
-      forced-dtype run; expect the same within noise), peak memory equal to the A100 control.
-- [ ] B3. A100 regression: `bash egs/launch.sh inf <existing Qwen3.5 run>/run_config.yaml
-      inf_name=test_after_v100_change`; expect 0 differing lines against the run's own `test1.pred.trg`
-      and identical `scores.json`. (Also closes the pending check that removing the cuDNN module left
-      results unchanged.)
-- [ ] B4. V100 inference of an existing A100-trained run:
-      `bash egs/launch.sh inf <run folder>/run_config.yaml slurm.gres=gpu:v100:1 slurm.constraint=32gb
-      inf_name=test_v100_bf16`; count differing lines and compare scores with the run's own.
-- [ ] B5. `qlora` on a V100 (untested so far): 50-step smoke run of an existing qlora experiment with the
-      B2 overrides; same reads as B2, plus the log's `compute_dtype`.
-- [ ] B6. `full` on a V100 (untested so far): 50-step smoke run of `sft_qwen-3.5-0.8b.yaml` with the B2
-      overrides; same reads as B2.
-- [ ] B7. Merge on a V100: `bash egs/launch.sh merge <B2 run folder>/run_config.yaml
-      slurm.gres=gpu:v100:1 slurm.constraint=32gb`; check `model_merged/config.json` says bfloat16.
-- [ ] B8. Record B2–B7 in `data.md` (one table, "shown / not shown" lines as in the existing sections).
+- [x] B4. V100 bf16 inference of an A100-trained run. Covered by T1b (Gemma 3, forced bf16) and T1
+      (Qwen3.5, whose weights load as bf16 whatever is requested). Differing-line counts not recorded.
+- [ ] B5. `qlora` on a V100 (decided: qlora should run on V100s). Untested: the force scripts skip qlora,
+      and bitsandbytes 4-bit with bf16 compute on Volta is the question. 50-step smoke test of Qwen3.5-2B
+      qlora (sweep axes pinned to one job) on a V100, with an A100 control at the same settings:
+      ```
+      for card in v100 a100; do
+        constraint=""; [ $card = v100 ] && constraint="slurm.constraint=32gb"
+        DRYRUN=1 bash egs/launch.sh sft egs/mmtc/fr-en/sft_qlora_qwen-3.5-2b.sweep.yaml \
+          run_name=smoke_${card}_qlora_qwen2b slurm.gres=gpu:${card}:1 $constraint \
+          train.learning_rate=1e-4 peft.lora.r=8 \
+          train.max_steps=50 train.eval_steps=25 train.train_batch_size=4 \
+          train.gradient_accumulation_steps=16 train.eval_batch_size=4 wandb.enabled=false
+      done
+      # check both compose as one job each, then rerun the loop without DRYRUN=1. When both have finished:
+      bash features/15_running_on_v100/report_smoke_runs.sh egs/mmtc/fr-en/outputs 'smoke_*_qlora_qwen2b*'
+      grep -h "compute_dtype" egs/mmtc/fr-en/outputs/smoke_v100_qlora_qwen2b*/*.log   # expect torch.bfloat16
+      ```
+      Pass: the V100 run starts (no bitsandbytes or CUDA kernel error), no NaN `eval_loss`,
+      `model_dev_check: ok`, "Accelerate precision: bf16", dev BLEU-lc within 0.5 of the A100 control at
+      steps 25 and 50. If it fails, document qlora as A100/L40S only (D1).
+- [x] B6. Dropped (decided): `full` fine-tunes, Qwen3.5-0.8B included, stay on A100s; D1 says so.
+- [ ] B8. Record B3 (if run) and B5 in `data.md`.
 
 ## C. Full-length replication (cluster; after B passes)
 
-- [ ] C1. Decide the replication set with the developer (open question in `plan.md`): which models and
-      language pairs, and the `slurm.time` for each, sized from the smoke runs' step and decode times.
+- [ ] C1. Decide the replication set with the developer (open question in `plan.md`; suggested: one
+      model on one pair, e.g. Tiny Aya, the slowest in bf16, which also sizes `slurm.time` for the worst
+      case), and the `slurm.time` for each, sized from the smoke runs' step and decode times.
+      **Waiting on the developer.**
 - [ ] C2. Launch each as the unchanged experiment yaml with `run_name=<name>_v100
       slurm.gres=gpu:v100:1 slurm.constraint=32gb slurm.time=<from C1>` (batch × accumulation adjusted
-      only where 32 GB requires it, effective batch 64).
+      only where 32 GB requires it, effective batch 64). For the suggested set, Tiny Aya fr-en at lr 1e-4
+      (A100 counterpart: `sft_lora_tiny-aya-global_all-linear_sweep-0`):
+      ```
+      bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora_tiny-aya-global_all-linear.sweep.yaml \
+        run_name=sft_lora_tiny-aya-global_all-linear_sweep_v100 train.learning_rate=1e-4 \
+        slurm.gres=gpu:v100:1 slurm.constraint=32gb slurm.time="24:00:00"
+      ```
+      `slurm.time` estimate from the bf16 smoke run: 400 steps at ~105 s plus 8 dev decodes at ~25 min
+      ≈ 16 h. Check the partition allows 24 h. A time-out is not requeued: resume it with
+      `bash egs/launch.sh sft <run folder>/run_config.yaml slurm.gres=gpu:v100:1 slurm.constraint=32gb`.
 - [ ] C3. When finished: `python tools/run_status.py <outputs dir>`; check no failed checks, no
       known-bad warnings, `model_dev_check: ok`.
 - [ ] C4. Compare test BLEU-lc with the A100 run of the same experiment: accept within 0.5 and inside
-      the spread of the `_seed1` pairs. Note wall-clock against the A100 run.
+      the spread of the `_seed1` pairs. Note wall-clock against the A100 run. For the Tiny Aya pair (if a
+      folder was moved, point at `outputs/complete/...`):
+      ```
+      OUT=egs/mmtc/fr-en/outputs
+      A100=$OUT/sft_lora_tiny-aya-global_all-linear_sweep-0; V100=$OUT/sft_lora_tiny-aya-global_all-linear_sweep_v100
+      python - $A100 $V100 <<'EOF'
+      import json, sys
+      a, v = (json.load(open(f"{run}/scores.json")) for run in sys.argv[1:])
+      for test in a:
+          for metric in ("bleu", "bleu_13a_lowercase", "chrf", "ter"):
+              print(test, metric, a[test][metric], v[test][metric], round(v[test][metric] - a[test][metric], 2))
+      for run in sys.argv[1:]:
+          state = json.load(open(f"{run}/trainer_state.json"))
+          print(run, "train_runtime", [e["train_runtime"] for e in state["log_history"] if "train_runtime" in e])
+      EOF
+      diff $A100/test1.pred.trg $V100/test1.pred.trg | grep -c '^<'   # differing lines, for data.md
+      ```
 - [ ] C5. Archive under `analysis/<date>_v100_validation/`: source export/score files and `summary.md`
       (runs, results table, wall-clock ratios, findings). Aggregate metrics and config only.
-- [ ] C6. Optional, to size the cost: Tiny Aya 50-step smoke run in bf16 on the same V100 card model as
-      its fp16 run (pin the node or check `nvidia-smi` in the log); add to `data.md`.
 
 ## D. Documentation
 
@@ -79,7 +119,7 @@ as aggregate numbers only, nothing to W&B for smoke tests.
 ## E. Clean-up and follow-ups
 
 - [ ] E1. Delete all `smoke_*` and `*test_*` run folders from this feature (they are not results), and
-      the `inf/test_v100*`, `inf/test_after_v100_change` folders if not wanted.
+      the `inf/test_v100*`, `inf/v100test_*`, `inf/test_after_v100_change` folders if not wanted.
 - [ ] E2. Delete `force_dtype_inference.{py,sh}`, `force_dtype_training.{py,sh}` and
       `report_smoke_runs.sh` from the feature folder (confirm with the developer first).
 - [ ] E3. Resolve with the developer: should a run record its card (W&B config,

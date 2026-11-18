@@ -2,3 +2,13 @@ egs/models
 *.sh.o*
 wandb/
 *~
+# Run outputs (prediction dumps are data-derived; never commit). feature 08
+outputs/
+egs/**/outputs/
+__pycache__/
+# Per-machine data locations, sourced by egs/launch.sh (never commit). feature 09
+egs/**/local_setting.sh
+# Local result mirrors and sync scripts: they carry the cluster login host and account name.
+_results/
+sync.sh
+.DS_Store

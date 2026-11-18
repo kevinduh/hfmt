@@ -1,0 +1,19 @@
+# This experiment is for running a LoRA sweep across Qwen3.5-2B on mmtc fr-en (the README example).
+defaults:
+  - config
+  - dataset
+  - override peft: lora_default
+  - _self_
+
+run_name: sft_lora_sweep
+checkpoint: Qwen/Qwen3.5-2B
+instruction: "Translate French to English"
+
+wandb:
+  tags: [sft, fr-en, lora]
+
+hydra:
+  sweeper:
+    params:
+      train.learning_rate: 1e-4,1e-5
+      peft.lora.r: 8,16

@@ -16,6 +16,13 @@ from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2Se
 from torch.utils.data import DataLoader
 
 os.environ["WANDB_PROJECT"]="hfmt"
+# W&B gets metrics only (CLAUDE.md): no console output (the log below has example text), no model,
+# no code, no git. The Trainer creates the run here, so the run metadata (hostname, username) is not
+# suppressed; hfmt/sft_translation.py's explicit wandb.init does that.
+os.environ["WANDB_CONSOLE"] = "off"
+os.environ["WANDB_LOG_MODEL"] = "false"
+os.environ["WANDB_DISABLE_CODE"] = "true"
+os.environ["WANDB_DISABLE_GIT"] = "true"
 experiment_id=""
 
 def main():

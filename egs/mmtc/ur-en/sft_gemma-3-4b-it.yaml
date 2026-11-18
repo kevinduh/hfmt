@@ -1,0 +1,23 @@
+# This experiment is for running a full fine-tune of gemma-3-4b-it on mmtc ur-en.
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_gemma-3-4b-it_ur-en_short
+checkpoint: google/gemma-3-4b-it
+instruction: "Translate Urdu to English"
+
+train:
+  learning_rate: 5e-6
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64, as full_finetune_short's 32 x 2
+  gradient_accumulation_steps: 16
+
+slurm:
+  constraint: 80gb                  # 80 GB A100
+  mem_gb: 48                        # the fp32 model (~17 GB) is loaded in CPU memory, and again to reload the best checkpoint
+
+wandb:
+  tags: [sft, ur-en, full]

@@ -1,0 +1,25 @@
+# This experiment is for running a full fine-tune of tiny-aya-global on mmtc ur-en.
+defaults:
+  - config
+  - dataset
+  - override peft: full_finetune
+  - override train: full_finetune_short   # cosine, 150 steps, eval every 25, early stopping
+  - _self_
+
+run_name: sft_full_tiny-aya-global_ur-en_short
+checkpoint: CohereLabs/tiny-aya-global
+instruction: "Translate Urdu to English"
+
+train:
+  learning_rate: 1e-5
+  train_batch_size: 4               # memory only: effective batch 4 x 16 = 64
+  gradient_accumulation_steps: 16
+  eval_batch_size: 8                # memory only: at 32 the eval logits (~430 tokens x 262k) would not fit next to the optimizer state
+
+slurm:
+  constraint: 80gb                  # 80 GB A100
+  mem_gb: 48                        # the fp32 model (~13 GB) passes through CPU memory at load and at the best-checkpoint reload
+  time: "8:00:00"                   # ~3x the tokens per step of the Qwen runs
+
+wandb:
+  tags: [sft, ur-en, full]

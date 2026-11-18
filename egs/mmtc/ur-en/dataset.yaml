@@ -1,0 +1,20 @@
+# @package data
+# MMTC Urdu-English data paths, loaded through an experiment's `- dataset` default.
+data_root: ${oc.env:HFMT_DATA_ROOT}
+src: ur
+trg: en
+train:
+  src:
+    - ${data.data_root}/train.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/train.${data.src}-${data.trg}.${data.trg}
+dev:
+  src:
+    - ${data.data_root}/valid.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/valid.${data.src}-${data.trg}.${data.trg}
+test:
+  src:
+    - ${data.data_root}/test.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/test.${data.src}-${data.trg}.${data.trg}

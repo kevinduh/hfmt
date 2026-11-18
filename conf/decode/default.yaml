@@ -1,0 +1,6 @@
+# Default decoding settings (greedy).
+max_length: 1024
+max_new_tokens: 128
+num_beams: 1           # 1 = greedy
+do_sample: false
+batch_size: 16

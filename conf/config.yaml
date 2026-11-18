@@ -1,0 +1,28 @@
+# Base config for SFT experiments: the project-wide defaults every experiment pulls in with `- config`.
+defaults:
+  - base_config            # typed schema: validates everything below
+  - train: default         # conf/train/*.yaml
+  - peft: qlora_default    # conf/peft/*.yaml
+  - decode: default
+  - _self_
+
+# sbatch resources, read by hfmt/grid.py (override per experiment or e.g. slurm.gres=gpu:l40s:1).
+slurm:
+  partition: gpu
+  gres: gpu:a100:1
+  time: "4:00:00"
+  mem_gb: 25
+  cpus: 1
+  array_parallelism: 4
+
+# W&B: config and aggregate metrics only, never data (CLAUDE.md). Experiments set tags.
+wandb:
+  enabled: true
+  project: hfmt
+  tags: []                  # entity: unset = your W&B default entity (set it here or per experiment)
+
+inf_name: test              # inference (egs/launch.sh inf) output subfolder: <run folder>/inf/<inf_name>/
+
+hydra:
+  job:
+    chdir: false            # stay in the launch dir; the code writes to the run dir explicitly

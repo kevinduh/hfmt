@@ -1,0 +1,7 @@
+# LoRA: adapter on a bf16 base model (no quantization).
+mode: lora
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules: [q_proj, v_proj]

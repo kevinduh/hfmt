@@ -1,0 +1,13 @@
+# This experiment is for running a single LoRA fine-tune of Qwen3.5-2B on mmtc fr-en (the README example).
+defaults:
+  - config                          # conf/config.yaml: schema + default components
+  - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files
+  - override peft: lora_default
+  - _self_
+
+run_name: sft_lora
+checkpoint: Qwen/Qwen3.5-2B
+instruction: "Translate French to English"
+
+wandb:
+  tags: [sft, fr-en, lora]

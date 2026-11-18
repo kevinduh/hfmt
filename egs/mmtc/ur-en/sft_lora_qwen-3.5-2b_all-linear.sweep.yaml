@@ -23,7 +23,7 @@ checkpoint: Qwen/Qwen3.5-2B
 instruction: "Translate Urdu to English"
 
 train:
-  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  metric_for_best_model: eval_bleu_13a   # the target metric (shortrun: eval_sp_bleu)
 
 wandb:
   tags: [sft, ur-en, lora]

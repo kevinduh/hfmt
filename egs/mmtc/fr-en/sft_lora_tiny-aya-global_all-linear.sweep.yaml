@@ -23,7 +23,7 @@ checkpoint: CohereLabs/tiny-aya-global
 instruction: "Translate French to English"
 
 train:
-  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  metric_for_best_model: eval_bleu_13a   # the target metric (shortrun: eval_sp_bleu)
   train_batch_size: 8               # memory only (logits, see above): effective batch 8 x 8 = 64
   gradient_accumulation_steps: 8
   eval_batch_size: 8

@@ -24,7 +24,7 @@ and Slurm:
   failed               a log but no checkpoint: died before its first save -> sbatch egs/job.sh sft <run>
   not_started          no log, no checkpoint, not queued (e.g. cancelled while pending) -> same as failed
 Columns: TEST (train) is the test decoding at the end of training (<run>/scores.json), TEST (inf) that of
-launch.sh inf (<run>/inf/<inf_name>/scores.json); both in the BEST DEV metric (bleu if that is loss), one
+launch.sh inf (<run>/inf/<inf_name>/scores.json); both in the BEST DEV metric (sp_bleu if that is loss), one
 value per test set. MATCH checks that inference reproduces training: "yes" = equal scores and identical
 test<i>.pred.trg files; "NO: ..." = what differs (counts of differing lines); "decode differs" = inference
 used other decode.* or data.test settings, so the two aren't comparable.
@@ -84,7 +84,7 @@ ERROR_CHARS = 160
 SBATCH_FLAGS = {"partition": "--partition={}", "gres": "--gres={}", "time": "--time={}",
                 "mem_gb": "--mem={}G", "cpus": "--cpus-per-task={}", "constraint": "--constraint={}",
                 "exclude": "--exclude={}"}
-DECODE_METRICS = ("bleu", "bleu_13a_lowercase", "chrf", "ter")   # scores.json keys (hfmt/mt_model.py score)
+DECODE_METRICS = ("sp_bleu", "bleu_13a", "chrf", "ter")   # scores.json keys (hfmt/mt_model.py score)
 # Library warnings that mean a finished run trained or saved something other than intended (decisions.md
 # 2026-11-04, 2026-11-05): (text in the log, label printed, whether model_dev_check supersedes it). Whole
 # training logs are searched. The Trainer's reload still warns in every Qwen3.5 full run after the fix
@@ -575,7 +575,7 @@ def _row(info, state, row, job, start=os.curdir):
     best = info["best"]
     metric = (info["metric"] or "").removeprefix("eval_")
     best_text = f"{metric} {best['value']:.2f}@{best['step']}" if best and best["value"] is not None else "-"
-    test_metric = metric if metric in DECODE_METRICS else "bleu"
+    test_metric = metric if metric in DECODE_METRICS else "sp_bleu"
     inference = inference_stage(info, state)
     ids = info["inf_job_ids"] if inference else info["job_ids"]
     if row:

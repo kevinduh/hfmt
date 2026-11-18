@@ -25,7 +25,7 @@ from hfmt.mt_model import (CHAT_TEMPLATE_KWARGS, decode_test_sets, format_input_
 
 
 # The metrics score() returns, as the MT callback adds them to the eval metrics (only on decode steps).
-DECODE_METRICS = ("eval_bleu", "eval_bleu_13a_lowercase", "eval_chrf", "eval_ter")
+DECODE_METRICS = ("eval_sp_bleu", "eval_bleu_13a", "eval_chrf", "eval_ter")
 # BLEU difference allowed between model/'s dev decode and the MT callback's at the same step: the callback
 # decodes under Accelerate's autocast wrapper, the final decode with the unwrapped model.
 DEV_SCORE_TOLERANCE = 1.0
@@ -63,7 +63,7 @@ def wandb_privacy_settings(wandb_module):
 def add_dev_scores_to_log_history(log_history, step, scores):
     """Put the dev ``scores`` (from ``score``) into the Trainer's ``log_history`` as ``eval_<key>``,
     so ``trainer_state.json`` keeps them. The Trainer adds an evaluation's entry before it calls the
-    callbacks, so the scores join that entry (``eval_bleu`` next to ``eval_loss``); without one, they
+    callbacks, so the scores join that entry (``eval_sp_bleu`` next to ``eval_loss``); without one, they
     get their own entry for ``step``."""
     eval_scores = {f"eval_{k}": v for k, v in scores.items()}
     last = log_history[-1] if log_history else {}
@@ -91,16 +91,16 @@ def training_info(state, args):
 
 def check_model_dev_scores(log_history, model_global_step, scores, tolerance=DEV_SCORE_TOLERANCE):
     """Does ``model/`` decode dev to the score of the step it claims to hold? ``scores`` is ``score()`` of
-    the saved model's dev decode; the expectation is that step's ``eval_bleu`` in ``log_history`` (the MT
+    the saved model's dev decode; the expectation is that step's ``eval_sp_bleu`` in ``log_history`` (the MT
     callback's; missing when that evaluation skipped dev decoding). Returns the ``training_info.yaml``
     fields ``model_dev_scores`` and ``model_dev_check``: "ok", "unchecked: ..." or "MISMATCH: ...". A
     mismatch means the saved weights aren't that step's, as when the Trainer's reload silently loaded
     nothing (decisions.md 2026-11-05): the run goes on, ``tools/run_status.py`` reports it."""
-    expected = next((e["eval_bleu"] for e in log_history if e.get("step") == model_global_step and "eval_bleu" in e), None)
+    expected = next((e["eval_sp_bleu"] for e in log_history if e.get("step") == model_global_step and "eval_sp_bleu" in e), None)
     if expected is None:
         check = f"unchecked: no dev BLEU at step {model_global_step} in log_history"
-    elif abs(scores["bleu"] - expected) > tolerance:
-        check = f"MISMATCH: model/ dev bleu {scores['bleu']} vs {expected} at step {model_global_step} (tolerance {tolerance})"
+    elif abs(scores["sp_bleu"] - expected) > tolerance:
+        check = f"MISMATCH: model/ dev sp_bleu {scores['sp_bleu']} vs {expected} at step {model_global_step} (tolerance {tolerance})"
     else:
         check = "ok"
     return {"model_dev_scores": dict(scores), "model_dev_check": check}
@@ -149,8 +149,8 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
             # Local log only (examples never go to W&B, CLAUDE.md).
             logging.info(f"Decoded predictions at step {state.global_step}: {preds[:2]}")
             logging.info(f"Decoded labels: {self.refs[:2]}")
-            logging.info(f"Metric scores at step {state.global_step}: BLEU={scores['bleu']:.2f}, "
-                         f"BLEU_13a_lowercase={scores['bleu_13a_lowercase']:.2f}, CHRF={scores['chrf']:.2f}, TER={scores['ter']:.2f}")
+            logging.info(f"Metric scores at step {state.global_step}: SP_BLEU={scores['sp_bleu']:.2f}, "
+                         f"BLEU_13a={scores['bleu_13a']:.2f}, CHRF={scores['chrf']:.2f}, TER={scores['ter']:.2f}")
 
             for k, v in scores.items():
                 kwargs["metrics"][f"eval_{k}"] = v
@@ -166,7 +166,7 @@ def make_mt_callback(early_stopping_patience, early_stopping_threshold, data, mo
                 eval_metrics = kwargs.get("metrics", {})
                 logging.info(f"Evaluation metrics at step {state.global_step}: {eval_metrics}")
                 if wandb.run is not None:
-                    wandb.log({**{f"eval/{k}": v for k, v in scores.items()},   # eval/bleu, eval/chrf, ...
+                    wandb.log({**{f"eval/{k}": v for k, v in scores.items()},   # eval/sp_bleu, eval/chrf, ...
                                "train/global_step": state.global_step})
 
     return EarlyStopping_MT_Callback()

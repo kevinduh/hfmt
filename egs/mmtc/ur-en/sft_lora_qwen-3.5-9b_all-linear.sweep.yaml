@@ -28,7 +28,7 @@ checkpoint: Qwen/Qwen3.5-9B
 instruction: "Translate Urdu to English"
 
 train:
-  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  metric_for_best_model: eval_bleu_13a   # the target metric (shortrun: eval_sp_bleu)
   train_batch_size: 8               # memory only (see above): effective batch 8 x 8 = 64
   gradient_accumulation_steps: 8
   eval_batch_size: 16               # memory only: the eval loss still materialises the logits

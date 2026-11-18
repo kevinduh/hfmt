@@ -40,7 +40,7 @@ def write_logs(folder, logs):
 
 def make_run(root, folder, run_name="sweep", *, model=False, scores=None, inf_scores=None, checkpoints=(),
              logs=(), inf_logs=(), preds=None, inf_preds=None, inf_decode=None, test=True, max_steps=400,
-             metric="eval_bleu"):
+             metric="eval_sp_bleu"):
     """A run folder like grid.py + training (+ launch.sh inf) leave it. model: True (saved, with
     training_info.yaml) or "partial" (cut off while saving); checkpoints: (step, complete[, best_step,
     best]); logs: (file name, text); scores/inf_scores: the scores.json content; preds/inf_preds: the
@@ -84,9 +84,9 @@ def make_run(root, folder, run_name="sweep", *, model=False, scores=None, inf_sc
 
 
 def bleu(value, bleu_13a=None):
-    s = {"src": "/data/test.fr", "trg": "/data/test.en", "bleu": value, "chrf": 70.0, "ter": 30.0}
+    s = {"src": "/data/test.fr", "trg": "/data/test.en", "sp_bleu": value, "chrf": 70.0, "ter": 30.0}
     if bleu_13a is not None:
-        s["bleu_13a_lowercase"] = bleu_13a
+        s["bleu_13a"] = bleu_13a
     return {"test1": s}
 
 
@@ -151,16 +151,16 @@ def test_match_training_and_inference():
     assert match(decoded(root, "nopred", inf_preds=None)) == "NO: test1 no pred file"
     assert match(decoded(root, "beam5", inf_decode={**DECODE, "num_beams": 5})) == "decode differs"
     assert match(make_run(root, "inf-only", model=True, inf_scores=bleu(65.0))) is None
-    # Older training scores.json without bleu_13a_lowercase: only the metrics both have are compared.
+    # Older training scores.json without bleu_13a: only the metrics both have are compared.
     assert match(make_run(root, "old", model=True, scores=bleu(66.3), preds=PREDS,
                           inf_scores=bleu(66.3, 64.0), inf_preds=PREDS)) == "yes"
 
 
 def test_test_scores_in_best_dev_metric():
-    scores = {"test1": {"bleu": 66.3, "bleu_13a_lowercase": 63.6}, "test2": {}, "test3": {"bleu": 50.0}}
-    assert R._test_text(scores, "bleu_13a_lowercase") == "63.60/-"   # test2 has no reference
-    assert R._test_text(scores, "bleu") == "66.30/50.00"
-    assert R._test_text(None, "bleu") == "-" and R._test_text({"test1": {}}, "bleu") == "-"
+    scores = {"test1": {"sp_bleu": 66.3, "bleu_13a": 63.6}, "test2": {}, "test3": {"sp_bleu": 50.0}}
+    assert R._test_text(scores, "bleu_13a") == "63.60/-"   # test2 has no reference
+    assert R._test_text(scores, "sp_bleu") == "66.30/50.00"
+    assert R._test_text(None, "sp_bleu") == "-" and R._test_text({"test1": {}}, "sp_bleu") == "-"
 
 
 # --- logs --------------------------------------------------------------------
@@ -232,7 +232,7 @@ def test_reload_warning_only_counts_without_a_dev_check():
     for check in ("ok", "unchecked: no dev BLEU at step 200 in log_history"):
         fixed = _full_run(check, RELOAD_WARNING)
         assert fixed["warnings"] == [] and fixed["model_check"] is None
-    bad = _full_run("MISMATCH: model/ dev bleu 24.74 vs 34.33 at step 200 (tolerance 1.0)", RELOAD_WARNING)
+    bad = _full_run("MISMATCH: model/ dev sp_bleu 24.74 vs 34.33 at step 200 (tolerance 1.0)", RELOAD_WARNING)
     assert bad["warnings"] == [] and bad["model_check"].startswith("MISMATCH")
 
 
@@ -444,7 +444,7 @@ def test_parse_args_slurm_overrides():
 
 def test_report_and_main():
     root = tempfile.mkdtemp()
-    decoded(root, "sweep-0", metric="eval_bleu_13a_lowercase", bleu_13a=63.6)
+    decoded(root, "sweep-0", metric="eval_bleu_13a", bleu_13a=63.6)
     make_run(root, "sweep-1", logs=[("slurm-77_1.out", TRACEBACK)])
     make_run(root, "sweep-2", logs=[("slurm-77_2.out", TRACEBACK)])
     make_run(root, "sweep-3", model=True, scores=bleu(66.31), preds=PREDS)                 # no inference yet

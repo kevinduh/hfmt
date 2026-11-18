@@ -31,7 +31,7 @@ inference_callback_interval: 1   # dev decoding + BLEU every N evaluations (and 
 
 # early stopping
 load_best_model_at_end: true
-metric_for_best_model: eval_bleu
+metric_for_best_model: eval_sp_bleu
 greater_is_better: true
 early_stopping_patience: 3       # evaluations without a BLEU gain > threshold: stops 150 steps after the best
 early_stopping_threshold: 0.05

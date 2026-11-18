@@ -22,7 +22,7 @@ checkpoint: Qwen/Qwen3.5-4B
 instruction: "Translate Chinese to English"
 
 train:
-  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  metric_for_best_model: eval_bleu_13a   # the target metric (shortrun: eval_sp_bleu)
 
 wandb:
   tags: [sft, zh-en, lora]

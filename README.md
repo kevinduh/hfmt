@@ -95,7 +95,7 @@ weights, the tokenizer, and `training_info.yaml`: the step whose weights it hold
 `metric_for_best_model` value and step, whether training stopped early, and the dev scores of the saved
 weights — `dev.model.pred` — with `model_dev_check`, which compares them with that step's dev BLEU), and for the test sets
 `test1.pred.trg`, `test2.pred.trg`, ... (in `data.test.src` order) with `scores.json`. Test
-scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run has the same name as the
+scores also go to the W&B run summary as `test/test<i>/sp_bleu` etc. The W&B run has the same name as the
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
 into an existing folder prints a warning and reuses it (training restarts from scratch).
 
@@ -238,8 +238,8 @@ for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/l
 Output goes to `<run folder>/inf/<inf_name>/` for a trained run, and to
 `<output_root>/<run_name>/base_ckpt_inf/<inf_name>/` for a base model checkpoint (`inf_name`
 defaults to `test`). It holds `inf_config.yaml`, one `test<i>.pred.trg` per test file, and
-`scores.json` with each test set's paths and, when it has a reference, `bleu` (sacrebleu, flores200
-tokenization), `bleu_13a_lowercase` (13a tokenization, lowercased, exp smoothing), `chrf` and `ter`. A
+`scores.json` with each test set's paths and, when it has a reference, `sp_bleu` (sacrebleu, flores200
+tokenization), `bleu_13a` (13a tokenization, lowercased, exp smoothing), `chrf` and `ter`. A
 run folder's `run_config.yaml` is never changed, and nothing is sent to W&B. With the run's own test
 sets, the outputs are identical to those written at the end of training (training unwraps
 Accelerate's autocast wrapper before its test decoding, and a QLoRA base gets the same fp32

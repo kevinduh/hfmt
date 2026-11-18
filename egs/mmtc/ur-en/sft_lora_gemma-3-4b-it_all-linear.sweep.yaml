@@ -35,7 +35,7 @@ checkpoint: google/gemma-3-4b-it
 instruction: "Translate Urdu to English"
 
 train:
-  metric_for_best_model: eval_bleu_13a_lowercase   # the target metric (shortrun: eval_bleu)
+  metric_for_best_model: eval_bleu_13a   # the target metric (shortrun: eval_sp_bleu)
   train_batch_size: 16              # memory only (logits, see above): effective batch 16 x 4 = 64
   gradient_accumulation_steps: 4
 

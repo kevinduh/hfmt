@@ -398,9 +398,9 @@ def test_experiments_not_launched():
 
 def test_read_real_experiments():
     experiments = [R.read_experiment(p) for p in R.find_experiments([os.path.join(R.ROOT, "egs", "mmtc")])]
-    names = {os.path.basename(e["path"]): e for e in experiments if "/ur-en/" in e["path"]}
-    assert names["sft_qwen-3.5-2b.yaml"]["jobs"] == 1
-    assert names["sft_lora_qwen-3.5-2b_all-linear.sweep.yaml"]["jobs"] == 4
+    names = {os.path.basename(e["path"]): e for e in experiments if "/fr-en/" in e["path"]}
+    assert names["sft_qwen-3.5-4b.yaml"]["jobs"] == 1
+    assert names["sft_lora.sweep.yaml"]["jobs"] == 4
     assert len({e["run_name"] for e in experiments}) == len(experiments)              # run_names are unique
 
 

@@ -68,7 +68,7 @@ hfmt/
 - **Configuration (Hydra)** — for the `sft_translation.py`/`inf_translation.py` workflow
   (features 08-11). **The schema (`hfmt/hydra_config.py`) holds types only, no default values;
   defaults live in yaml only:** `conf/config.yaml` (defaults list + project-wide `slurm`, `wandb`,
-  `inf_name`), `conf/<group>/<option>.yaml` for the groups `train` (schedules; `shortrun` is the
+  `inf_name`), `conf/<group>/<option>.yaml` for the groups `train` (schedules; `default` is the
   default), `peft` (`peft.mode` plus `peft.lora.{r,alpha,dropout,target_modules}`
   and `peft.quant`; `target_modules` is a list of exact module names, found with
   `tools/inspect_model.py <checkpoint>`) and `decode`, or the experiment folder. Don't enumerate
@@ -85,6 +85,11 @@ hfmt/
   `peft.lora.r=16`, `peft=lora_default`, `train=midrun`, `slurm.gres=gpu:l40s:1`. Avoid
   `+key`/`~key` overrides: they add or delete keys and so bypass the schema. See README "Running
   SFT experiments" (how to use it) and `decisions.md` (why it is this way).
+- **Experiment file headers stay short** — the comment at the top of an experiment yaml (and of a
+  `conf/` option file) is a simple, high-level description of what it is for, 1 or 2 sentences, e.g.
+  `# This experiment is for running a LoRA sweep across Qwen3.5-2B on mmtc fr-en.` Don't add verbose
+  headers: no rationale, results from earlier runs, memory or disk budgets, or launch commands. That
+  detail belongs in the feature's `plan.md`, an `analysis/` summary, `decisions.md` or the README.
 - **Launch path (no submitit)** — `hfmt/grid.py` expands the grid, composes and checks every
   job's config, and saves it fully resolved as `<run folder>/run_config.yaml` (+ `git_rev`);
   `egs/launch.sh sft` then submits one Slurm array of `egs/job.sh sft` (each job a plain single

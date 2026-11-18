@@ -170,7 +170,7 @@ def test_peft_mode_must_match_blocks():
 
 def test_inference_callback_interval():
     out, _, _ = run(SINGLE)
-    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/shortrun.yaml (the default)
+    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/default.yaml (the default)
     out, _, _ = run(SINGLE, "train=longrun", "train.inference_callback_interval=0")
     assert saved(out, "sft_lora").train.inference_callback_interval == 0   # every train option sets it
     assert fails(SINGLE, "train.inference_callback_interval=-1")

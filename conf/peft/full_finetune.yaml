@@ -1,3 +1,2 @@
 # Full fine-tune of all base-model parameters: no adapter, no quantization.
-# Not a PEFT method, but it is mutually exclusive with LoRA/QLoRA, so it is an option of the same group.
 mode: full

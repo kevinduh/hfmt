@@ -1,8 +1,4 @@
-# Single-run experiment (the README example): LoRA on Qwen3.5-2B with the default schedule
-# (conf/train/shortrun.yaml). Other schedules: `- override train: <name>` (conf/train/*.yaml).
-# Launch:  bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]
-# Debug:   source egs/mmtc/fr-en/local_setting.sh &&
-#          python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lora
+# This experiment is for running a single LoRA fine-tune of Qwen3.5-2B on mmtc fr-en (the README example).
 defaults:
   - config                          # conf/config.yaml: schema + default components
   - dataset                         # ./dataset.yaml: data root, languages, train/dev/test files

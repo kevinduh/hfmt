@@ -37,7 +37,7 @@ type but holds no default values; defaults live in yaml only:
 * `conf/config.yaml`: the defaults list and project-wide settings (`slurm`, `wandb`, `inf_name`).
 * `conf/<group>/<option>.yaml`: swappable bundles, selected with `override <group>: <option>` in an
   experiment or `<group>=<option>` on the command line. Each file's header comment says what it is for.
-  * `train/`: the schedules. `shortrun` is the default; `midrun`, `longrun`, `full_finetune_short` and
+  * `train/`: the schedules. `default` is the default; `shortrun`, `midrun`, `longrun`, `full_finetune_short` and
     `lora_anneal_short` are the others.
   * `peft/`: the fine-tuning method. `qlora_default` (4-bit base + LoRA), `lora_default` (bf16 base +
     LoRA), `full_finetune`, and per-model all-linear LoRA options (`lora_qwen3_5_all_linear`,
@@ -55,8 +55,8 @@ type but holds no default values; defaults live in yaml only:
     `override <group>: <option>` lines.
   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
-  * the other yamls in the folder are the experiments run so far (Qwen3.5 0.8B to 9B, Gemma 3 4B and Tiny Aya;
-    LoRA, QLoRA and full fine-tunes); each header says what it tests and why.
+  * the other yamls in each pair's folder are full fine-tunes of Qwen3.5-4B, Gemma 3 4B and Tiny Aya;
+    each header says what it runs.
 
 **Prompt.** `instruction` is prefixed to each source sentence as the user turn and rendered with the
 checkpoint's chat template; every render passes `enable_thinking=False` (`hfmt/mt_model.py`
@@ -129,6 +129,23 @@ Full fine-tunes trained before 2026-11-05 (Qwen3.5 for sure; any run whose Slurm
 checkpoint — the Trainer's reload loaded nothing (see `decisions.md`). `checkpoint-<best_global_step>/`
 is kept, so decode it instead (an experiment yaml with `checkpoint:` set to that folder,
 `peft=full_finetune`).
+
+**Requeue.** Every job `egs/launch.sh` submits has `--requeue --open-mode=append`, so Slurm puts a
+task back in the queue by itself after a node failure or a preemption; nothing needs to be run by hand.
+When the task starts again:
+
+* a training task that already has a `checkpoint-N/` continues from the last one, in the same run
+  folder and the same W&B run, exactly as a resume (below); one without a checkpoint starts from step 0;
+* an inference or merge task simply runs again from the start;
+* the task keeps its job id and its log: the new attempt is appended to the same `slurm-*.out`, after a
+  line `job.sh: requeued (restart <n>); resuming from the last checkpoint`.
+
+Slurm does **not** requeue a task that exits with an error, runs out of memory, hits its time limit or
+is cancelled with `scancel`: resume those as below. To requeue a running or pending task yourself
+(e.g. to move it off a bad node), use `scontrol requeue <job id>` (`<job id>_<idx>` for one task of a
+sweep); it restarts in the same way. Don't delete a run's `checkpoint-*` folders while its job is still
+in `squeue`: a requeued task without them trains again from step 0 (`tools/run_status.py
+--delete-checkpoints` skips such runs).
 
 **Resume** a job that was cancelled midway (time limit, OOM, node failure, `scancel`) from its
 last `checkpoint-N/`, by passing its run folder's `run_config.yaml`:

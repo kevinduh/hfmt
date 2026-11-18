@@ -337,6 +337,8 @@ experiments).
   experiments and matched nothing anyone ran. The tutorial files (`sft_lora.yaml`,
   `sft_lora.sweep.yaml`) now fine-tune Qwen3.5-2B (was Qwen2.5-1.5B-Instruct, a model no other
   experiment uses) with the default schedule.
+  *Reversed 2026-11-18:* `conf/train/default.yaml` is restored from history and `conf/config.yaml`
+  points at it again; `shortrun` is selected with `override train: shortrun`.
 - **`grid.py` refuses saved configs with retired keys** (`RETIRED_KEYS`, currently `prompt_format`)
   and prints the exact `sed` fix, instead of Hydra's struct error. Removing the line by hand was the
   documented procedure; the check is cheap and the message is the procedure.

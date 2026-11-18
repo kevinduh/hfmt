@@ -1,11 +1,4 @@
-# Short schedule for full fine-tunes on the small mmtc sets (fr-en ~2.5k pairs: one epoch = ~39 steps
-# at batch 64; zh-en ~1.6k pairs: ~25 steps). Every full run so far (Qwen3.5 0.8B/2B/4B, lr
-# 5e-6 to 2e-5) peaked on dev at step 50 or 100 and then fell, so the 400/1000-step cosine never
-# decayed before the best checkpoint. 150 steps (~4 epochs fr-en, ~6 zh-en) lets the lr anneal around
-# the peak; evaluating every 25 steps resolves it. Not finer: each 4B checkpoint is ~50 GB.
-# Disk per run (2 checkpoints + model/, fp32): ~23 GB 0.8B, ~56 GB 2B, ~118 GB 4B; one checkpoint
-# more while a save is written.
-# The learning rate is set per model in the experiment (full FT needs far less than LoRA).
+# This config is for running short full fine-tunes on small training sets.
 
 # optimizer and learning rate
 max_steps: 150

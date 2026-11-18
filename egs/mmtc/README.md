@@ -5,8 +5,6 @@ Twitter posts, 13 source languages into English.
 
 * Paper: McNamee and Duh, [The Multilingual Microblog Translation Corpus: Improving and Evaluating
   Translation of User-Generated Text](https://www.cs.jhu.edu/~kevinduh/papers/mcnamee22mttt.pdf), LREC 2022.
-* Data: <https://pmcnamee.net/research/mmtc/mmtc.html>. The data is not in this repo, and its content
-  must never be committed or sent to W&B (`CLAUDE.md`, "Data confidentiality").
 
 ## Language pairs
 

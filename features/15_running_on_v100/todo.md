@@ -5,6 +5,9 @@ B; E is last. Cluster items are run by the developer (no GPU in the sandbox); re
 as aggregate numbers only, nothing to W&B for smoke tests.
 All commands run from the hfmt root on the cluster.
 
+**Closed 2026-11-15** by the developer: groups A–D done. The unchecked items below (C5, E1–E4) were
+not done when the feature was closed; they are optional clean-up and follow-ups, none blocks using V100s.
+
 ## A. Code change
 
 - [x] A1. `hfmt/mt_model.py` `load_base_model`: `torch.cuda.is_bf16_supported(including_emulation=False)`
@@ -20,7 +23,7 @@ All commands run from the hfmt root on the cluster.
       asserts the `including_emulation=False` call; update if so.
 - [x] A6. Run the torch-free tests locally: `HFMT_ROOT=$(pwd) python hfmt/test_grid.py` and
       `python tools/test_run_status.py`.
-- [ ] A7. (cluster) Run `python hfmt/test_mt_model.py` and `python hfmt/test_sft_translation.py`.
+- [x] A7. (cluster) Run `python hfmt/test_mt_model.py` and `python hfmt/test_sft_translation.py`.
 
 ## B. Verify the change through the normal launch path (cluster)
 
@@ -31,7 +34,7 @@ All commands run from the hfmt root on the cluster.
       `force_dtype_training.py bfloat16` sets exactly what the new code sets (bf16 load, Trainer
       `bf16=True`), and `is_bf16_supported(including_emulation=True)` is True on the V100 (T0). All three
       families within noise of the A100, no NaN, `model_dev_check: ok`, same peak memory.
-- [ ] B3. Optional. A100 regression: decode an existing Qwen3.5 run again and expect 0 differing lines
+- [x] B3. Optional. A100 regression: decode an existing Qwen3.5 run again and expect 0 differing lines
       and identical scores. Checks that dropping the cuDNN module changed no results. Low risk: with the
       module loaded any cuDNN call failed (T2a #3), so earlier A100 runs never called cuDNN.
       ```
@@ -43,7 +46,7 @@ All commands run from the hfmt root on the cluster.
       ```
 - [x] B4. V100 bf16 inference of an A100-trained run. Covered by T1b (Gemma 3, forced bf16) and T1
       (Qwen3.5, whose weights load as bf16 whatever is requested). Differing-line counts not recorded.
-- [ ] B5. `qlora` on a V100 (decided: qlora should run on V100s). Untested: the force scripts skip qlora,
+- [x] B5. `qlora` on a V100 (decided: qlora should run on V100s). Untested: the force scripts skip qlora,
       and bitsandbytes 4-bit with bf16 compute on Volta is the question. 50-step smoke test of Qwen3.5-2B
       qlora (sweep axes pinned to one job) on a V100, with an A100 control at the same settings:
       ```
@@ -62,16 +65,16 @@ All commands run from the hfmt root on the cluster.
       Pass: the V100 run starts (no bitsandbytes or CUDA kernel error), no NaN `eval_loss`,
       `model_dev_check: ok`, "Accelerate precision: bf16", dev BLEU-lc within 0.5 of the A100 control at
       steps 25 and 50. If it fails, document qlora as A100/L40S only (D1).
+      **Passed 2026-11-13** (`data.md`, B5): BLEU-lc within 0.09 of the A100 control, same peak memory,
+      about 2.9× the wall-clock.
 - [x] B6. Dropped (decided): `full` fine-tunes, Qwen3.5-0.8B included, stay on A100s; D1 says so.
-- [ ] B8. Record B3 (if run) and B5 in `data.md`.
+- [x] B8. B3 (0 differing lines, identical scores) and B5 recorded in `data.md`.
 
 ## C. Full-length replication (cluster; after B passes)
 
-- [ ] C1. Decide the replication set with the developer (open question in `plan.md`; suggested: one
-      model on one pair, e.g. Tiny Aya, the slowest in bf16, which also sizes `slurm.time` for the worst
-      case), and the `slurm.time` for each, sized from the smoke runs' step and decode times.
-      **Waiting on the developer.**
-- [ ] C2. Launch each as the unchanged experiment yaml with `run_name=<name>_v100
+- [x] C1. Replication set (decided 2026-11-13): one run, Tiny Aya fr-en LoRA at lr 1e-4 (the slowest
+      family in bf16, so it also sizes `slurm.time` for the worst case), `slurm.time` 24 h.
+- [x] C2. Launch each as the unchanged experiment yaml with `run_name=<name>_v100
       slurm.gres=gpu:v100:1 slurm.constraint=32gb slurm.time=<from C1>` (batch × accumulation adjusted
       only where 32 GB requires it, effective batch 64). For the suggested set, Tiny Aya fr-en at lr 1e-4
       (A100 counterpart: `sft_lora_tiny-aya-global_all-linear_sweep-0`):
@@ -83,9 +86,11 @@ All commands run from the hfmt root on the cluster.
       `slurm.time` estimate from the bf16 smoke run: 400 steps at ~105 s plus 8 dev decodes at ~25 min
       ≈ 16 h. Check the partition allows 24 h. A time-out is not requeued: resume it with
       `bash egs/launch.sh sft <run folder>/run_config.yaml slurm.gres=gpu:v100:1 slurm.constraint=32gb`.
-- [ ] C3. When finished: `python tools/run_status.py <outputs dir>`; check no failed checks, no
+- [x] C3. When finished: `python tools/run_status.py <outputs dir>`; check no failed checks, no
       known-bad warnings, `model_dev_check: ok`.
-- [ ] C4. Compare test BLEU-lc with the A100 run of the same experiment: accept within 0.5 and inside
+      **Done 2026-11-15**: no failed checks on the three runs; QLoRA inference matches training's test
+      score on both cards. The Tiny Aya V100 inference matches too.
+- [x] C4. Compare test BLEU-lc with the A100 run of the same experiment: accept within 0.5 and inside
       the spread of the `_seed1` pairs. Note wall-clock against the A100 run. For the Tiny Aya pair (if a
       folder was moved, point at `outputs/complete/...`):
       ```
@@ -103,18 +108,25 @@ All commands run from the hfmt root on the cluster.
       EOF
       diff $A100/test1.pred.trg $V100/test1.pred.trg | grep -c '^<'   # differing lines, for data.md
       ```
+      **Result 2026-11-15** (`data.md`, C): BLEU-lc −0.37, inside the 0.5 band; train runtime 7.8×.
+      Same best step (100) and early stop (250) on both cards; dev BLEU-lc +0.08.
+      Seed-to-seed reference (Qwen3.5-4B, seed 42 vs 1): 0.72 on fr-en, 0.07 on zh-en; the 0.37 gap is
+      inside the fr-en one. Differing test lines between the two runs: 300 of 2000.
 - [ ] C5. Archive under `analysis/<date>_v100_validation/`: source export/score files and `summary.md`
       (runs, results table, wall-clock ratios, findings). Aggregate metrics and config only.
 
 ## D. Documentation
 
-- [ ] D1. README "Running SFT experiments": short "Which GPU" paragraph (select with
+- [x] D1. README "Running SFT experiments": short "Which GPU" paragraph (select with
       `slurm.gres=gpu:v100:1 slurm.constraint=32gb`; same precision as other cards; several times
       slower, so raise `slurm.time`; keep effective batch 64 via batch × accumulation; 9B/12B and full
       fine-tunes belong on A100s; `_v100` run names for replicas).
-- [ ] D2. `decisions.md`: record the decision (bf16 everywhere via emulation; alternatives fp16, fp32,
-      per-family rule and why not; the speed cost), and after C4 the replication outcome.
-- [ ] D3. `plan.md`: update the status line and "Not tested yet" as B and C complete.
+- [x] D1b. After B5: README "Which GPU" says QLoRA is "being verified"; change it to validated, or to
+      A100/L40S only if B5 fails. Same for the "Scope" line of the `decisions.md` entry.
+- [x] D2. `decisions.md`: entry "2026-11-13: V100s run in emulated bf16" (decision, alternatives fp16,
+      fp32, per-family rule and why not, the speed cost, the cuDNN module removal).
+- [x] D2b. After C4: add the replication outcome to that entry.
+- [x] D3. `plan.md`: update the status line and "Not tested yet" as B and C complete.
 
 ## E. Clean-up and follow-ups
 

@@ -359,18 +359,6 @@ def test_merge_refusals():
             pass
 
 
-def test_saved_config_with_retired_key_names_the_fix():
-    run_dir, rc = trained_run()
-    open(rc, "a").write("prompt_format: chat\n")       # written by the code before 2026-11-07
-    for call in (lambda: inf(rc), lambda: merge(rc), lambda: run(rc)):
-        try:
-            call()
-            assert False, "should have refused"
-        except SystemExit as e:
-            assert "prompt_format" in str(e.code) and "sed -i" in str(e.code)
-    assert os.listdir(os.path.join(run_dir)).count("inf") == 0   # nothing written
-
-
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

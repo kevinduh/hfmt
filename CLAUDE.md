@@ -128,9 +128,8 @@ hfmt/
   its last step; `decisions.md` 2026-11-05). `tools/run_status.py` reports mismatches and known-bad log
   warnings (`BAD_WARNINGS`). Details: README "Training".
 - **Saved configs aren't backward compatible** — a run saved before a new required key was added
-  fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`). A saved config
-  with a key the schema has since dropped (`grid.py` `RETIRED_KEYS`, e.g. `prompt_format`) is refused
-  with the `sed` command that removes the line.
+  fails `launch.sh inf`/`merge`'s checks (pass the key on the command line for `inf`), and one
+  with a key the schema has since dropped fails with Hydra's struct error. Relaunch from the experiment yaml.
 - **Parameter sweeps (two kinds of experiment)** — a single-run file has no grid (1 job); a
   `.sweep.yaml` carries its grid in `hydra.sweeper.params` and always runs all of it. Axes are
   leaf values or component files (`peft: lora_default,qlora_default`). Command-line comma

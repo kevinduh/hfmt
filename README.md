@@ -99,6 +99,21 @@ scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run ha
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
 into an existing folder prints a warning and reuses it (training restarts from scratch).
 
+**Which GPU.** `slurm.gres` picks the card: `gpu:a100:1` (default), `gpu:l40s:1`, or
+`gpu:v100:1 slurm.constraint=32gb` for the 32 GB V100s. `tools/run_on_free_gpu.sh` chooses between
+A100 and L40S only, so a V100 is always an explicit choice. Every card trains and decodes in bf16: a
+V100 has no native bf16 and PyTorch emulates it (`mt_model.load_base_model`), so V100 runs are
+numerically comparable with A100 runs but several times slower (`decisions.md`, 2026-11-13). On a V100:
+
+* raise `slurm.time` well above the 4 h default for 4B-class models; a time-out is not requeued, so
+  resume it as below;
+* memory use is the same as on an A100, against a 32 GB limit: keep the effective batch at 64 with
+  `train.train_batch_size=<b> train.gradient_accumulation_steps=<64/b>` and leave LoRA settings and
+  `decode.batch_size` alone;
+* LoRA and QLoRA runs are validated (`features/15_running_on_v100/data.md`); full fine-tunes and the 9B/12B models belong on A100s;
+* a V100 replica of an existing experiment needs its own `run_name` (e.g. `<name>_v100`), or it
+  reuses the A100 run's folder.
+
 **How the saved model is checked.** `model/` is meant to hold the best checkpoint
 (`load_best_model_at_end`). For a full fine-tune, training loads it itself with
 `mt_model.load_checkpoint_weights` (`from_pretrained`, then a strict `load_state_dict`), because the
@@ -231,8 +246,8 @@ Accelerate's autocast wrapper before its test decoding, and a QLoRA base gets th
 preparation in both). `LOCAL=1`, `DRYRUN=1` and `slurm.*` overrides work as for training.
 
 Saved configs aren't backward compatible: a run saved before a new required key was added fails the
-checks (pass the key on the command line), and one that carries a key the schema has since dropped
-(e.g. `prompt_format`, written before 2026-11-07) is refused with the `sed` command that removes the line.
+checks (pass the key on the command line), and one that carries a key the schema has since dropped fails
+with Hydra's struct error.
 
 ### Merging and a second round of SFT
 

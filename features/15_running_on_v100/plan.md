@@ -1,7 +1,10 @@
 # 15_running_on_v100 — plan (v3)
 
 Status: 2026-11-13. Decided: V100 jobs run in bf16, like every other card. Measurements behind every
-statement here are in `data.md`.
+statement here are in `data.md`. Code change, README and `decisions.md` done. Validated
+2026-11-15: the QLoRA smoke test and one full-length replication (Tiny Aya fr-en) pass, and V100
+inference reproduces training's test scores. Feature closed 2026-11-15; the
+archive, clean-up and follow-ups left open are listed in `todo.md`.
 
 ## Decision
 
@@ -76,14 +79,14 @@ cost really is.
 
 ## Not tested yet
 
-- `qlora` on a V100 (decided: it should run there; a smoke test against an A100 control is in `todo.md`).
-  `full` fine-tunes stay on A100s, Qwen3.5-0.8B included (decided), so they are not tested on V100s.
-- Anything beyond 50 steps, one seed, one language pair (step 3).
+- `full` on a V100: `full` fine-tunes stay on A100s, Qwen3.5-0.8B included (decided). `qlora` passed
+  its smoke test against an A100 control (`data.md`, B5).
+- A second seed, family or language pair at full length (one full-length run was replicated: Tiny Aya
+  fr-en).
 
 ## Open questions
 
 - Should a run record which card it used (W&B config, `training_info.yaml`)? No longer needed for
   correctness, since precision is the same everywhere; useful only to explain run times.
-- Which runs make up the replication set in step 3.
 - Found along the way, outside this feature: Qwen3.5 `full` fine-tunes have been training bf16 weights,
   not fp32 (the Transformers dtype issue above). Needs its own decision.

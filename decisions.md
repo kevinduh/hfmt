@@ -310,6 +310,7 @@ newline, source) and every `apply_chat_template` call passes `mt_model.CHAT_TEMP
 - **Saved configs.** `run_config.yaml`s written on `hydra3-translategemma` carry `prompt_format:`,
   which this schema has no key for. Since 2026-11-10 `grid.py` refuses such a file (`RETIRED_KEYS`)
   and prints the `sed` command that removes the line; before, Hydra failed with a struct error.
+  (Check removed 2026-11-18: only current configs are used.)
 
 ---
 
@@ -339,6 +340,8 @@ experiments).
 - **`grid.py` refuses saved configs with retired keys** (`RETIRED_KEYS`, currently `prompt_format`)
   and prints the exact `sed` fix, instead of Hydra's struct error. Removing the line by hand was the
   documented procedure; the check is cheap and the message is the procedure.
+  **Removed 2026-11-18:** no saved config from before the port is used any more, so such a file
+  fails with Hydra's struct error again.
 - **Smaller fixes.** `install/install_hf_custom.sh` now installs `hydra-core==1.3.7` (it never
   installed Hydra; `check_versions.py` reports it). `wandb.entity` is `Optional[str] = None` like
   every other optional key (it was `MISSING` with `null` in `config.yaml`). The stale
@@ -347,3 +350,44 @@ experiments).
   `analysis/run_sacrebleu.py` is tracked under `analysis/`; the dated analysis folders and the W&B
   export script stay local. References to a non-existent `overview.md` are gone.
   Feature numbers in code comments are kept on purpose: they link code to `features/` directories.
+
+---
+
+## 2026-11-13: V100s run in emulated bf16, the same precision as every other card (15_running_on_v100)
+
+**Decision:** `mt_model.load_base_model` asks `torch.cuda.is_bf16_supported(including_emulation=True)`
+(was `False`). A V100 has no native bf16, but PyTorch emulates it, so V100 jobs now take the same path
+as A100/L40S jobs: bf16 weights for `lora`, bf16 compute for `qlora`, bf16 mixed precision in the
+Trainer. A100s and L40Ss are unchanged. Selecting a V100 needs no new code:
+`slurm.gres=gpu:v100:1 slurm.constraint=32gb`. Measurements: `features/15_running_on_v100/data.md`.
+
+- **Why.** Before, a V100 silently fell back to fp16, a different numerical setup from every result so
+  far. fp16 gives empty output for Gemma 3 (overflow; the same trained model decodes correctly in bf16
+  or fp32 on the same card). Emulated bf16 was the only precision that trained and decoded all three
+  families (Qwen3.5, Gemma 3, Tiny Aya) correctly on a V100, within noise of the A100 controls, at the
+  same memory. And with one precision everywhere, a run can resume, decode or merge on any card
+  without changing numerics, so no hardware record, resume guard or merge guard was needed.
+- **Alternatives rejected.** (1) fp16: breaks Gemma 3, and differs numerically from all existing
+  results. (2) fp32: doubles weight memory, so larger models don't fit in 32 GB, and is much slower
+  than fp16 where fp16 works. (3) A per-family rule (fp16 for families validated by a smoke test, fp32
+  otherwise): fastest, but V100 runs would then differ numerically from A100 runs, which needs a
+  validated-families list, a hardware record per run, resume and merge guards, and reporting. A
+  `precision` config key was rejected for the same reason, and because it would put a card-specific
+  setting into experiments that also run on A100s.
+- **Cost.** Emulated bf16 was the slowest V100 option measured for every family; a V100 job takes
+  several times as long as on an A100. Part of the measured gap may be the card model rather than the
+  precision (`gpu:v100` covers a V100S-PCIE and a V100-SXM2-LS, and the runs were split between them).
+  Accepted: V100s are extra capacity for when A100/L40S queues are the bottleneck, and a slow run that
+  is directly comparable is worth more than a fast one that needs an asterisk.
+- **Full-length replication (2026-11-15).** Tiny Aya fr-en LoRA, the slowest family in bf16, rerun
+  unchanged on a V100: same best step (100) and early stop (250) as the A100 run, dev BLEU-lc +0.08,
+  test BLEU-lc −0.37 (acceptance band 0.5), train runtime 7.8× the A100's.
+- **Scope.** LoRA validated on all three families, QLoRA on Qwen3.5-2B (50-step smoke tests against A100
+  controls). Full fine-tunes stay on A100s.
+- **cuDNN module dropped from `install/path.sh`, same feature.** The cluster's `cudnn/9.1.1.17_cuda12`
+  module shadowed the newer cuDNN bundled with the torch wheel, so any cuDNN call failed on every card.
+  No earlier run hit it because none called cuDNN; the first was a fp16 Qwen3.5 training step on a V100.
+  Assumed: the submitting shell loads no cuDNN module (`path.sh` stops loading it but does not unload it).
+- **Found along the way.** The pinned Transformers ignores the requested dtype for Qwen3.5 and loads its
+  stored bf16, so Qwen3.5 `full` fine-tunes have trained bf16 weights, not fp32 (Gemma 3 and Tiny Aya
+  full runs are fp32). Not addressed here.

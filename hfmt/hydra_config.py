@@ -5,7 +5,7 @@ its defaults, so every composed config is validated against these dataclasses: u
 and wrong types fail at compose time.
 
 **Types only, no default values** (feature 09). Value fields are ``MISSING``; optional blocks and
-keys are ``Optional[...] = None`` (absent). Every default lives in exactly one yaml:
+keys are ``Optional[...] = None`` (absent). Defaults live in yaml only:
 ``conf/config.yaml`` (project-wide: slurm, wandb, inf_name), ``conf/<group>/<option>.yaml``
 (train, peft, decode), or the experiment folder (experiment yaml, ``dataset.yaml``). A key that no
 yaml sets fails ``grid.py``'s missing-values check.
@@ -135,7 +135,7 @@ class WandbConfig:
 
     enabled: bool = MISSING
     project: str = MISSING
-    entity: Optional[str] = MISSING
+    entity: Optional[str] = None  # unset: W&B's default entity for the account
     tags: List[str] = MISSING
 
 

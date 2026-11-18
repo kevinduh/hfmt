@@ -1,3 +1,5 @@
+# This config is for running long training experiments.
+
 # optimizer and learning rate
 max_steps: 2000
 lr_scheduler_type: cosine
@@ -27,7 +29,7 @@ inference_callback_interval: 1   # dev decoding + BLEU every N evaluations (and 
 
 # early stopping
 load_best_model_at_end: true
-metric_for_best_model: eval_bleu
+metric_for_best_model: eval_sp_bleu
 greater_is_better: true
 early_stopping_patience: 50
 early_stopping_threshold: 0.05

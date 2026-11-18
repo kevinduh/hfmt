@@ -53,6 +53,7 @@ def test_single_is_one_job_without_suffix():
     out, dirs, stdout = run(SINGLE)
     assert dirs == ["sft_lora"]
     assert "--array=0-0%4" in stdout and "--gres=gpu:a100:1" in stdout
+    assert "--requeue --open-mode=append" in stdout                    # always added, not slurm: keys
 
 
 def test_sweep_runs_full_grid():
@@ -152,7 +153,9 @@ def test_errors_fail_before_writing():
 
 
 def test_each_peft_option_composes():
-    for opt, mode in [("full_finetune", "full"), ("lora_default", "lora"), ("qlora_default", "qlora")]:
+    for opt, mode in [("full_finetune", "full"), ("lora_default", "lora"), ("qlora_default", "qlora"),
+                      ("lora_qwen3_5_all_linear", "lora"), ("lora_gemma3_all_linear", "lora"),
+                      ("lora_tiny_aya_all_linear", "lora")]:
         out, _, _ = run(SINGLE, f"peft={opt}")
         peft = saved(out, "sft_lora").peft
         assert peft.mode == mode
@@ -167,7 +170,7 @@ def test_peft_mode_must_match_blocks():
 
 def test_inference_callback_interval():
     out, _, _ = run(SINGLE)
-    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/default.yaml
+    assert saved(out, "sft_lora").train.inference_callback_interval == 1   # conf/train/default.yaml (the default)
     out, _, _ = run(SINGLE, "train=longrun", "train.inference_callback_interval=0")
     assert saved(out, "sft_lora").train.inference_callback_interval == 0   # every train option sets it
     assert fails(SINGLE, "train.inference_callback_interval=-1")
@@ -259,6 +262,18 @@ def test_inf_default_name_is_test():
     run_dir, rc = trained_run()
     inf(rc)
     assert os.path.isfile(os.path.join(run_dir, "inf", "test", "inf_config.yaml"))
+
+
+def test_grid_folder_resume_and_inf_jobs_are_named_after_the_folder():
+    # So tools/run_status.py can tell one grid folder's queued job from its siblings' (all share run_name).
+    out, _, _ = run(SWEEP)
+    run_dir = os.path.join(out, "sft_lora_sweep-1")
+    rc = os.path.join(run_dir, "run_config.yaml")
+    os.makedirs(os.path.join(run_dir, "checkpoint-40"))
+    open(os.path.join(run_dir, "checkpoint-40", "trainer_state.json"), "w").close()
+    assert "--job-name=sft_lora_sweep-1 " in resume(rc) + " "
+    os.makedirs(os.path.join(run_dir, "model"))
+    assert "--job-name=sft_lora_sweep-1-inf" in inf(rc)
 
 
 def test_inf_errors_fail_before_writing():

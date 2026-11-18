@@ -77,6 +77,7 @@ pip install -e .
 pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
 pip install datasets evaluate sacrebleu ipywidgets accelerate sentencepiece wandb
 pip install trl peft bitsandbytes
+pip install hydra-core==1.3.7   # SFT/inference configuration (hfmt/grid.py relies on Hydra internals tested on 1.3.7)
 conda install -c conda-forge ipykernel -y
 
 # 3. install other tools

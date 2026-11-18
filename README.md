@@ -13,27 +13,36 @@ with Huggingface Transformers and other necessary packages included.
 
 ## Code Structure
 
-Example Bash and Qsub scripts are in the subfolder `egs/`. 
-* These scripts will first activate the conda environment by calling `install/path.sh`. Please modify this if needed.
-* Then they call the relevant Python code in the subfolder `hfmt/`. 
+* `hfmt/`: the Python entry points. `sft_translation.py` (supervised fine-tuning of decoder-only LLMs
+  for MT: QLoRA, LoRA or full), `inf_translation.py` (inference with a trained run or a downloaded
+  checkpoint) and `merge_model.py` (merge a LoRA/QLoRA run into a full checkpoint) are configured with
+  Hydra and launched with `egs/launch.sh` (next section). `train_seq2seq.py` (encoder-decoder MT) and
+  `decode_summarization.py` take command-line arguments.
+* `egs/`: recipes. `egs/mmtc/<src>-<trg>/` holds the Hydra SFT experiments. `egs/translation/` and
+  `egs/summarization/` are plain shell scripts for the two command-line entry points: they activate
+  the conda environment with `install/path.sh` (edit it for your system) and need
+  `export HFMT_ROOT=path/to/this/repo` to find everything; `egs/launch.sh` finds the repo itself.
+* `conf/`: the SFT base config and its option groups. `tools/`: cluster helpers (GPU availability,
+  run status, model inspection, checkpoint cleanup). `analysis/`: a standalone BLEU/chrF/TER scorer.
 
-Before running the scripts, please set the `HFMT_ROOT` variable, e.g. `export HFMT_ROOT=path/to/this/repo/`. This is needed for the scripts to find the path to everything.  
-
-Currently implemented: 
-* `hfmt/sft_translation.py`: Supervised fine-tuning (QLoRA, LoRA or full) of decoder-only LLMs for MT, configured with Hydra (see below)
-* `hfmt/inf_translation.py`: Inference with a fine-tuned run or a downloaded checkpoint; `hfmt/merge_model.py`: merges a LoRA/QLoRA run into a full checkpoint (see below)
-
-Scripts that perform training integrate with (Weights & Biases)[https://wandb.ai/] for logging purposes, so it is recommended that you set up a free account on that service. 
+Training logs to [Weights & Biases](https://wandb.ai/), so set up a free account. Only config and
+aggregate metrics are sent there, never data (see `CLAUDE.md`).
 
 ## Running SFT experiments (decoder-only MT, Hydra)
 
 `hfmt/sft_translation.py` (training) and `hfmt/inf_translation.py` (inference) are configured
 with [Hydra](https://hydra.cc). The schema in `hfmt/hydra_config.py` defines every key and its
-type but holds no default values; each default lives in exactly one yaml:
+type but holds no default values; defaults live in yaml only:
 
 * `conf/config.yaml`: the defaults list and project-wide settings (`slurm`, `wandb`, `inf_name`).
-* `conf/<group>/<option>.yaml`: swappable bundles for `train` (`default`), `peft`
-  (`qlora_default`, `lora_default`, `full_finetune`) and `decode` (`default`).
+* `conf/<group>/<option>.yaml`: swappable bundles, selected with `override <group>: <option>` in an
+  experiment or `<group>=<option>` on the command line. Each file's header comment says what it is for.
+  * `train/`: the schedules. `default` is the default; `shortrun`, `midrun`, `longrun`, `full_finetune_short` and
+    `lora_anneal_short` are the others.
+  * `peft/`: the fine-tuning method. `qlora_default` (4-bit base + LoRA), `lora_default` (bf16 base +
+    LoRA), `full_finetune`, and per-model all-linear LoRA options (`lora_qwen3_5_all_linear`,
+    `lora_gemma3_all_linear`, `lora_tiny_aya_all_linear`).
+  * `decode/`: generation settings (`default`).
 * the experiment folder, e.g. `egs/mmtc/fr-en/`:
   * `dataset.yaml`: `data_root`, `src`, `trg` and the train/dev/test file lists. Several train or
     dev files are concatenated in order; several test files are each decoded and scored on their
@@ -41,10 +50,18 @@ type but holds no default values; each default lives in exactly one yaml:
     left out). A dataset yaml may also list absolute paths instead.
   * `local_setting.sh` (untracked, one per machine): `export HFMT_DATA_ROOT=...`, where this
     machine keeps the data. Copy `local_setting.sh.example` to create it.
-  * `sft_lora.yaml`: a **single-run** experiment (one job). It sets `run_name`, `checkpoint` and
-    `instruction`, and picks options with `override <group>: <option>` lines.
+  * `sft_lora.yaml`: a **single-run** experiment (one job): LoRA on Qwen3.5-2B with the default
+    schedule. It sets `run_name`, `checkpoint` and `instruction`, and picks options with
+    `override <group>: <option>` lines.
   * `sft_lora.sweep.yaml`: a **sweep** experiment. Its grid in `hydra.sweeper.params` (here 2
     learning rates x 2 LoRA ranks = 4 jobs) always runs in full.
+  * the other yamls in each pair's folder are full fine-tunes of Qwen3.5-4B, Gemma 3 4B and Tiny Aya;
+    each header says what it runs.
+
+**Prompt.** `instruction` is prefixed to each source sentence as the user turn and rendered with the
+checkpoint's chat template; every render passes `enable_thinking=False` (`hfmt/mt_model.py`
+`CHAT_TEMPLATE_KWARGS`), which turns off Qwen3.5-4B's default thinking and is ignored by templates
+without it.
 
 ### Training
 
@@ -72,11 +89,63 @@ job's **run folder**:
   index's values. Change `run_name` when you change a grid's shape.
 
 A run folder holds `run_config.yaml`, `git_rev`, the Slurm log, the training log,
-`dev.step_*.pred`, `model/` (adapter or full weights, plus the tokenizer), and for the test sets
+`dev.step_*.pred`, `trainer_state.json` (the Trainer's final state: every evaluation's loss and
+dev BLEU/chrF/TER in `log_history`, `best_metric`, `best_global_step`), `model/` (adapter or full
+weights, the tokenizer, and `training_info.yaml`: the step whose weights it holds, the best
+`metric_for_best_model` value and step, whether training stopped early, and the dev scores of the saved
+weights — `dev.model.pred` — with `model_dev_check`, which compares them with that step's dev BLEU), and for the test sets
 `test1.pred.trg`, `test2.pred.trg`, ... (in `data.test.src` order) with `scores.json`. Test
-scores also go to the W&B run summary as `test/test<i>/bleu` etc. The W&B run has the same name as the
+scores also go to the W&B run summary as `test/test<i>/sp_bleu` etc. The W&B run has the same name as the
 folder and is grouped by `run_name`; only config and aggregate metrics are sent to W&B. Launching
 into an existing folder prints a warning and reuses it (training restarts from scratch).
+
+**Which GPU.** `slurm.gres` picks the card: `gpu:a100:1` (default), `gpu:l40s:1`, or
+`gpu:v100:1 slurm.constraint=32gb` for the 32 GB V100s. `tools/run_on_free_gpu.sh` chooses between
+A100 and L40S only, so a V100 is always an explicit choice. Every card trains and decodes in bf16: a
+V100 has no native bf16 and PyTorch emulates it (`mt_model.load_base_model`), so V100 runs are
+numerically comparable with A100 runs but several times slower (`decisions.md`, 2026-11-13). On a V100:
+
+* raise `slurm.time` well above the 4 h default for 4B-class models; a time-out is not requeued, so
+  resume it as below;
+* memory use is the same as on an A100, against a 32 GB limit: keep the effective batch at 64 with
+  `train.train_batch_size=<b> train.gradient_accumulation_steps=<64/b>` and leave LoRA settings and
+  `decode.batch_size` alone;
+* LoRA and QLoRA runs are validated (`features/15_running_on_v100/data.md`); full fine-tunes and the 9B/12B models belong on A100s;
+* a V100 replica of an existing experiment needs its own `run_name` (e.g. `<name>_v100`), or it
+  reuses the A100 run's folder.
+
+**How the saved model is checked.** `model/` is meant to hold the best checkpoint
+(`load_best_model_at_end`). For a full fine-tune, training loads it itself with
+`mt_model.load_checkpoint_weights` (`from_pretrained`, then a strict `load_state_dict`), because the
+Trainer's own reload matches saved weight names against module names and for Qwen3.5 loads nothing and
+only warns. Training then decodes dev once more with the saved `model/` (`dev.model.pred`) and compares
+its BLEU with the callback's BLEU at that step: within 1 BLEU is `model_dev_check: ok` in
+`training_info.yaml`, otherwise `MISMATCH: ...` (logged, not fatal). `tools/run_status.py` reports
+mismatches and known-bad library warnings found in the logs.
+
+Full fine-tunes trained before 2026-11-05 (Qwen3.5 for sure; any run whose Slurm log has
+"There were missing keys in the checkpoint model loaded" and no `model_dev_check`): `model/`, both
+`scores.json` and `training_info.yaml`'s `model_global_step` are the *last* step, not the best
+checkpoint — the Trainer's reload loaded nothing (see `decisions.md`). `checkpoint-<best_global_step>/`
+is kept, so decode it instead (an experiment yaml with `checkpoint:` set to that folder,
+`peft=full_finetune`).
+
+**Requeue.** Every job `egs/launch.sh` submits has `--requeue --open-mode=append`, so Slurm puts a
+task back in the queue by itself after a node failure or a preemption; nothing needs to be run by hand.
+When the task starts again:
+
+* a training task that already has a `checkpoint-N/` continues from the last one, in the same run
+  folder and the same W&B run, exactly as a resume (below); one without a checkpoint starts from step 0;
+* an inference or merge task simply runs again from the start;
+* the task keeps its job id and its log: the new attempt is appended to the same `slurm-*.out`, after a
+  line `job.sh: requeued (restart <n>); resuming from the last checkpoint`.
+
+Slurm does **not** requeue a task that exits with an error, runs out of memory, hits its time limit or
+is cancelled with `scancel`: resume those as below. To requeue a running or pending task yourself
+(e.g. to move it off a bad node), use `scontrol requeue <job id>` (`<job id>_<idx>` for one task of a
+sweep); it restarts in the same way. Don't delete a run's `checkpoint-*` folders while its job is still
+in `squeue`: a requeued task without them trains again from step 0 (`tools/run_status.py
+--delete-checkpoints` skips such runs).
 
 **Resume** a job that was cancelled midway (time limit, OOM, node failure, `scancel`) from its
 last `checkpoint-N/`, by passing its run folder's `run_config.yaml`:
@@ -110,6 +179,41 @@ Check `squeue` first: never resume a job that is still running.
 **To change a run, don't resume it.** Launch the experiment yaml again with overrides and a new
 `run_name`, e.g. `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml train.seed=1 run_name=sft_lora-seed1`.
 
+**Checking many runs at once.** `tools/run_status.py` lists every run folder with its training and
+test-inference state and prints the command that fixes each unfinished one. It only prints; you
+review and run the commands. States:
+- finished: trained, and `launch.sh inf` has scored the test sets; or queued/running (from `squeue`);
+- trained, inference not run, failed or queued (it prints `launch.sh inf` when nothing is queued);
+- interrupted (it prints the resume command above);
+- failed before its first checkpoint (it prints an `sbatch egs/job.sh sft <run folder>` that reruns
+  just that folder from its saved config; resume refuses these);
+- a `checkpoint-N/` or `model/` cut off while saving (it says which folder to delete).
+
+It also reads the experiment yamls (next to a `dataset.yaml`, in a folder you pass or the one holding the
+`outputs/` you pass) and lists those with fewer run folders of their `run_name` (in `outputs/` or
+`complete/`) than grid points: never launched ones with their `launch.sh sft` command, part-launched sweeps
+with how many of their jobs exist.
+
+Each row shows the test scores of training's own end-of-run decoding and of `launch.sh inf`, and
+whether inference reproduced training (same scores, identical `test<i>.pred.trg`). For failed jobs it
+also shows the error line and the node, and points out nodes where several jobs failed:
+
+```bash
+python tools/run_status.py egs/mmtc/fr-en/outputs                         # every run + fix commands
+python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node>  # fix commands avoid that node
+python tools/run_status.py egs/mmtc                                       # all pairs, + experiments not launched
+```
+
+**Housekeeping.** Runs you are done with can be moved into `egs/mmtc/fr-en/outputs/complete/`;
+`run_status.py` skips that folder unless you pass it itself. Checkpoints are the bulk of the disk use
+(a 4B full fine-tune checkpoint is ~50 GB). `run_status.py` lists, with their sizes, the runs whose
+`checkpoint-*` folders can go: test scores written (for a run without test sets, a complete `model/`) and
+no training job in squeue (`model/` alone isn't enough: it is saved before the dev check and test
+decoding). `python tools/run_status.py egs/mmtc/fr-en/outputs --delete-checkpoints` deletes them after you
+confirm, so unfinished runs stay resumable; both include the runs moved into `complete/`.
+Run it on a login node, where squeue is available. `trainer_state.json` and `model/training_info.yaml` keep
+the per-evaluation scores and the best step.
+
 To debug one configuration directly (output goes to `outputs/<date>/<time>/` unless you pass
 `hydra.run.dir=...`; add `--cfg job` to only print the config):
 
@@ -120,12 +224,15 @@ python -m hfmt.sft_translation --config-dir egs/mmtc/fr-en --config-name sft_lor
 
 Decoding the dev set for BLEU during training is slow. `train.inference_callback_interval=N`
 does it every N evaluations (and at the last step) instead of every evaluation; `0` turns it off.
+Early stopping still runs at every evaluation. With a BLEU-type `metric_for_best_model`, the
+evaluations without decoding get a never-best placeholder so the Trainer's best-checkpoint selection
+keeps working (the placeholder never reaches W&B or `trainer_state.json`).
 
 The LoRA options set `peft.lora.r`, `alpha`, `dropout` and `target_modules`. `target_modules` is a
 list of exact module names. Names differ between model families, so look them up for a new checkpoint:
 
 ```bash
-python tools/inspect_model.py Qwen/Qwen2.5-1.5B-Instruct     # a model id or a local folder
+python tools/inspect_model.py Qwen/Qwen3.5-2B                # a model id or a local folder
 ```
 
 ### Inference
@@ -142,16 +249,22 @@ bash egs/launch.sh inf egs/mmtc/fr-en/sft_lora.yaml                     # decodi
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml decode.num_beams=5 inf_name=beam5
 bash egs/launch.sh inf egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml \
     'data.test.src=[/path/a.fr,/path/b.fr]' 'data.test.trg=[/path/a.en,null]' inf_name=ab
-for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; done
+for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do bash egs/launch.sh inf $rc; sleep 3; done
 ```
 
 Output goes to `<run folder>/inf/<inf_name>/` for a trained run, and to
 `<output_root>/<run_name>/base_ckpt_inf/<inf_name>/` for a base model checkpoint (`inf_name`
 defaults to `test`). It holds `inf_config.yaml`, one `test<i>.pred.trg` per test file, and
-`scores.json` with each test set's paths and, when it has a reference, BLEU/chrF/TER. A run
-folder's `run_config.yaml` is never changed, and nothing is sent to W&B. With the run's own test
-sets, the outputs are identical to those written at the end of training. `LOCAL=1`, `DRYRUN=1`
-and `slurm.*` overrides work as for training.
+`scores.json` with each test set's paths and, when it has a reference, `sp_bleu` (sacrebleu, flores200
+tokenization), `bleu_13a` (13a tokenization, lowercased, exp smoothing), `chrf` and `ter`. A
+run folder's `run_config.yaml` is never changed, and nothing is sent to W&B. With the run's own test
+sets, the outputs are identical to those written at the end of training (training unwraps
+Accelerate's autocast wrapper before its test decoding, and a QLoRA base gets the same fp32
+preparation in both). `LOCAL=1`, `DRYRUN=1` and `slurm.*` overrides work as for training.
+
+Saved configs aren't backward compatible: a run saved before a new required key was added fails the
+checks (pass the key on the command line), and one that carries a key the schema has since dropped fails
+with Hydra's struct error.
 
 ### Merging and a second round of SFT
 
@@ -161,8 +274,11 @@ A LoRA run can be merged into a full checkpoint, e.g. to start another round of 
 bash egs/launch.sh merge egs/mmtc/fr-en/outputs/sft_lora/run_config.yaml   # -> sft_lora/model_merged/
 ```
 
-`model_merged/` holds full weights, the tokenizer, and `merge_info.yaml` (source run, base
-checkpoint, `git_rev`). Use the merged model as the `checkpoint` of another experiment.
+`model_merged/` holds full bf16 weights, the tokenizer, and `merge_info.yaml` (source run, base
+checkpoint, `git_rev`). Only `slurm.*` overrides apply. A QLoRA run is merged onto its 4-bit base
+dequantized to bf16, i.e. the weights the adapter was trained against (a warning notes the 4-bit
+rounding; merged and adapter outputs were within ~0.3 BLEU). Use the merged model as the `checkpoint`
+of another experiment.
 
 ```bash
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml run_name=sft_lora_r2 \

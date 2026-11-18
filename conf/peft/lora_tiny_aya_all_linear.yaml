@@ -1,0 +1,7 @@
+# LoRA on every linear layer of a Tiny Aya decoder.
+mode: lora
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

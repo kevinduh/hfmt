@@ -6,16 +6,20 @@ Builds the model from its config on the meta device: no weights are downloaded a
 used, so it runs on a login node in seconds (in the hfmt env: source install/path.sh). Prints:
   1. the model                       5. a training memory estimate (equations + numbers)
   2. module types with counts        6. config highlights
-  3. LoRA candidates (Linear names)  7. tokenizer and chat-template overhead
+  3. LoRA candidates (Linear names)  7. tokenizer and prompt overhead (hfmt's prompt, as training renders it)
   4. parameter counts
 Remote-code models and pre-quantized checkpoints are not supported.
 """
 
+import os
 import sys
 from collections import Counter, defaultdict
 
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root, for hfmt
+from hfmt.mt_model import CHAT_TEMPLATE_KWARGS, format_input_prompt  # noqa: E402  (no heavy imports at module level)
 
 GIB = 1024 ** 3
 SETTINGS = [(16, 128), (16, 512), (32, 512), (8, 2048)]    # (batch, sequence length) table columns
@@ -192,12 +196,16 @@ def main(checkpoint):
     if not tok.chat_template:
         print("  no chat template")
         return
+    # hfmt's prompt as training and decoding render it: format_input_prompt + CHAT_TEMPLATE_KWARGS
+    # (enable_thinking=False, so a Qwen3.5 count includes the empty think block; Gemma ignores it).
     word = "Hello"
-    templated = tok.apply_chat_template([{"role": "user", "content": word}], add_generation_prompt=True,
-                                        tokenize=True, return_dict=True)["input_ids"]
+    messages = format_input_prompt("Translate French to English", word)
+    templated = tok.apply_chat_template(messages, add_generation_prompt=True, tokenize=True, return_dict=True,
+                                        **CHAT_TEMPLATE_KWARGS)["input_ids"]
     plain = tok(word, add_special_tokens=False)["input_ids"]
-    print(f"  chat template: yes; it adds {len(templated) - len(plain)} tokens around a one-word user message")
-    print("  (includes any default system prompt; counts toward decode.max_length and the sequence length above)")
+    print(f"  chat template: yes; hfmt's prompt adds {len(templated) - len(plain)} tokens around a one-word source")
+    print(f"  (the example instruction, the template's turn markers and any default system prompt; apply_chat_template")
+    print(f"  kwargs {CHAT_TEMPLATE_KWARGS}). They count toward decode.max_length and the sequence length above.")
 
 
 if __name__ == "__main__":

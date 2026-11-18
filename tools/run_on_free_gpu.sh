@@ -16,7 +16,7 @@
 #   GPU_TYPES="a100 l40s v100" bash tools/run_on_free_gpu.sh sft egs/mmtc/fr-en/sft_lora.sweep.yaml
 #
 # Policy: pick the type with the most free GPUs (tie -> first in GPU_TYPES). Note your
-# 4gpu_tier caps you at 4 concurrent GPUs regardless, so "freest" mainly shortens queueing.
+# per-user GPU quota caps concurrent GPUs regardless, so "freest" mainly shortens queueing.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

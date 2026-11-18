@@ -116,10 +116,14 @@ def _save(job_dir, name, cfg, git_rev):
 def _print_jobs(job_dirs, s, job_name, log):
     """Print the bash that launch.sh evals (see the module docstring): JOBS = job folders, in array
     order; SBATCH_ARGS = sbatch options from the slurm: block ``s``. ``log`` is sbatch's --output
-    pattern (%A = job id, %a = array index)."""
+    pattern (%A = job id, %a = array index).
+
+    Always added, not slurm: keys (a new required key would break every saved run_config.yaml):
+    --requeue reruns a task after a node failure or preemption (egs/job.sh then resumes training),
+    and --open-mode=append keeps the earlier attempt's log (a requeued task keeps its job id)."""
     sbatch = [f"--array=0-{len(job_dirs) - 1}%{s.array_parallelism}", f"--partition={s.partition}",
               f"--gres={s.gres}", f"--time={s.time}", f"--mem={s.mem_gb}G", f"--cpus-per-task={s.cpus}",
-              f"--job-name={job_name}", f"--output={log}"]
+              "--requeue", "--open-mode=append", f"--job-name={job_name}", f"--output={log}"]
     if s.constraint:
         sbatch.append(f"--constraint={s.constraint}")
     if s.exclude:
@@ -215,7 +219,9 @@ def main_resume(exp_dir, exp_name, args, parsed):
     _log(f"resuming {exp_dir} from checkpoint-{max(steps)} (step {max(steps)} of {cfg.train.max_steps})")
 
     # 4. Print the bash for launch.sh: the job folder is the run folder; KIND picks job.sh sft_resume.
-    _print_jobs([exp_dir], cfg.slurm, cfg.run_name, os.path.join(exp_dir, "slurm-%A.out"))
+    #    The job is named after the folder, so tools/run_status.py can tell a grid folder's queued
+    #    resume from its siblings'.
+    _print_jobs([exp_dir], cfg.slurm, os.path.basename(exp_dir), os.path.join(exp_dir, "slurm-%A.out"))
     print("KIND=sft_resume")
 
 
@@ -233,7 +239,7 @@ def main_inf(exp_dir, exp_name, args, parsed):
             sys.exit(f"grid --inf: no trained model in {model_dir}")
         cfg = _compose_checked(exp_dir, exp_name, [f"model_dir={model_dir}"] + args)
         inf_dir = os.path.join(exp_dir, "inf", cfg.inf_name)
-        job_name = f"{cfg.run_name}-inf"
+        job_name = f"{os.path.basename(exp_dir)}-inf"   # per folder, for tools/run_status.py
     else:
         # 2b. Experiment: decode the checkpoint as downloaded (model_dir stays unset; the peft
         # option only sets the load precision). A sweep file would silently use its base values,

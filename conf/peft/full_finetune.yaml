@@ -1,3 +1,2 @@
-# This mode indicates full fine-tune of all base-model parameters
-# It's technically not a PEFT method, but it's mutually exclusive with QLoRA/LoRA so it simplifies the code implement it this way.
+# Full fine-tune of all base-model parameters: no adapter, no quantization.
 mode: full

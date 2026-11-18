@@ -1,3 +1,5 @@
+# This config is the default training schedule (200 steps, reduce-on-plateau, selected on eval loss).
+
 # optimizer and learning rate
 max_steps: 200
 lr_scheduler_type: reduce_lr_on_plateau
@@ -21,7 +23,7 @@ packing: false
 # logging
 logging_steps: 10
 eval_steps: 20
-save_steps: ${train.eval_steps}   
+save_steps: ${train.eval_steps}
 save_total_limit: 3
 inference_callback_interval: 1   # dev decoding + BLEU every N evaluations (and at the last step); 0 = never
 

@@ -29,7 +29,8 @@
 #   overrides e.g. decode.num_beams=5 inf_name=beam5, or other test sets (null = no reference):
 #       'data.test.src=[/path/x.fr,/path/y.fr]' 'data.test.trg=[/path/x.en,null]' inf_name=xy
 #   a whole sweep: for rc in egs/mmtc/fr-en/outputs/sft_lora_sweep-*/run_config.yaml; do
-#                      bash egs/launch.sh inf $rc; done
+#                      bash egs/launch.sh inf $rc; sleep 3; done
+#       (sleep: separate submissions that start in the same second race for GPUs; see egs/job.sh)
 #
 # merge: fold a lora/qlora run's model/ into its base -> <run folder>/model_merged/ (full bf16
 # weights, tokenizer, merge_info.yaml), usable as `checkpoint:` in another experiment (a second

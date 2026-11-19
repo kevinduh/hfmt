@@ -254,29 +254,30 @@ Result (2026-11-19): `egs/mmtc` report rows unchanged against the pre-E version;
 
 ## F. Experiments: `egs/synlrl/` (plan §5)
 
-- [ ] `egs/synlrl/dataset.yaml`: `# @package data`, one-line header, `seed1` train, `monotext:
+- [x] `egs/synlrl/dataset.yaml`: `# @package data`, one-line header, `seed1` train, `monotext:
       [${oc.env:HFMT_DATA_ROOT}/synth1.${data.src}]`, `flores200.smalldev-256` dev, `flores200.dev` test.
-- [ ] For each of `tuk-eng`, `shn-eng`, `ewe-eng` (instruction: Turkmen / Shan / Ewe):
-  - [ ] `local_setting.sh.example` (`export HFMT_DATA_ROOT=/path/to/...`, one comment line);
-  - [ ] `sft_lora.yaml`: one-line header; `config`, `../dataset`, `override peft:
+- [x] For each of `tuk-eng`, `shn-eng`, `ewe-eng` (instruction: Turkmen / Shan / Ewe):
+  - [x] `local_setting.sh.example` (`export HFMT_DATA_ROOT=/path/to/...`, one comment line);
+  - [x] `sft_lora.yaml`: one-line header; `config`, `../dataset`, `override peft:
         lora_tiny_aya_all_linear`; `run_name: sft_lora`; Tiny Aya global; `data.src/trg`;
         `decode.batch_size: 64`; tags `[synlrl, <pair>]`;
-  - [ ] `cpt_lora.yaml`: as in plan §5 (`- cpt: default`, `run_name: cpt_lora`, small batch +
+  - [x] `cpt_lora.yaml`: as in plan §5 (`- cpt: default`, `run_name: cpt_lora`, small batch +
         gradient accumulation, tags with `cpt`);
-  - [ ] `sft_lora_after_cpt.yaml`: `sft_lora.yaml` with `run_name: sft_lora_after_cpt`, `checkpoint:
+  - [x] `sft_lora_after_cpt.yaml`: `sft_lora.yaml` with `run_name: sft_lora_after_cpt`, `checkpoint:
         ${oc.env:HFMT_ROOT}/egs/synlrl/<pair>/outputs/cpt_lora/model_merged`.
-- [ ] `egs/synlrl/README.md` (short, like `egs/mmtc/README.md`): data files `$HFMT_DATA_ROOT` must hold
+- [x] `egs/synlrl/README.md` (short, like `egs/mmtc/README.md`): data files `$HFMT_DATA_ROOT` must hold
       (names only), `local_setting.sh`, the four-command workflow (CPT, merge, SFT after CPT, baseline SFT).
-- [ ] Nothing under `egs/synth_lrl/` is touched.
+- [x] Nothing under `egs/synth_lrl/` is touched.
 
 ### Done when
-- [ ] With a scratch `local_setting.sh` (pointing at the real data root, not committed):
+Result (2026-11-19): `cpt_lora` and `sft_lora` of all three pairs dry-run to `job.sh cpt` / `job.sh sft`; the three `sft_lora_after_cpt` are refused by the checkpoint check (no `model_merged/` yet); `run_status.py egs/synlrl` finds all nine yamls with the right launch kind, and per pair (output_root) once run folders exist. `cpt_lora` uses `train_batch_size: 8` (the smoke test used 13 GiB at 2). The dry-run folders are deleted; each pair has a gitignored `local_setting.sh` copied from `egs/synth_lrl/tuk-eng/`.
+- [x] With a scratch `local_setting.sh` (pointing at the real data root, not committed):
   - `DRYRUN=1 bash egs/launch.sh cpt egs/synlrl/tuk-eng/cpt_lora.yaml` composes and prints the sbatch line;
   - the same for `sft_lora.yaml`;
   - `sft_lora_after_cpt.yaml` is refused by Q14 until `model_merged/` exists (expected).
   - Delete the folders the dry runs created.
-- [ ] `tools/run_status.py egs/synlrl` lists the yamls as not launched (needs E).
-- [ ] `todo.md` F ticked; commit message presented (files staged by name).
+- [x] `tools/run_status.py egs/synlrl` lists the yamls as not launched (needs E).
+- [x] `todo.md` F ticked; commit message presented (files staged by name).
 
 ## G. Quick test: Qwen3.5 packing leak (plan R1; independent, any time)
 

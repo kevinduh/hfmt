@@ -1,0 +1,19 @@
+# @package data
+# synlrl <src>-eng data (seed bitext, synthetic monotext, flores dev/test); each experiment sets data.src/trg.
+train:
+  src:
+    - ${oc.env:HFMT_DATA_ROOT}/seed1.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${oc.env:HFMT_DATA_ROOT}/seed1.${data.src}-${data.trg}.${data.trg}
+monotext:
+  - ${oc.env:HFMT_DATA_ROOT}/synth1.${data.src}
+dev:
+  src:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.smalldev-256.${data.src}
+  trg:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.smalldev-256.${data.trg}
+test:
+  src:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.dev.${data.src}
+  trg:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.dev.${data.trg}

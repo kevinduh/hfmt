@@ -1,0 +1,22 @@
+# This experiment is for LoRA CPT of Tiny Aya global on synlrl tuk-eng monotext and bitext.
+defaults:
+  - config
+  - ../dataset
+  - cpt: default
+  - override peft: lora_tiny_aya_all_linear
+  - _self_
+
+run_name: cpt_lora
+checkpoint: CohereLabs/tiny-aya-global
+instruction: "Translate Turkmen to English"    # required by the schema; CPT doesn't read it
+
+data:
+  src: tuk
+  trg: eng
+
+train:
+  train_batch_size: 8               # packed rows of cpt.max_length tokens
+  eval_batch_size: 8
+
+wandb:
+  tags: [synlrl, tuk-eng, cpt]

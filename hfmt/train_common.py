@@ -1,4 +1,4 @@
-"""Training steps shared by the Hydra training scripts (SFT: sft_translation.py; feature 16_cpt).
+"""Training steps shared by the Hydra training scripts, sft_translation.py and cpt_monotext_bitext.py (16_cpt).
 
 Each function is one block of the training flow -- W&B setup, model + PEFT, Trainer arguments, the
 first-batch dump, training with resume and the full fine-tune reload, saving model/ -- so the scripts

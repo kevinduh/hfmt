@@ -155,56 +155,74 @@ Result (2026-11-18), A100 80GB, Qwen3.5-2B LoRA, 40 steps, same config and seed:
 ## D. CPT script: `hfmt/cpt_monotext_bitext.py` (plan §2, §3)
 
 ### D1. Data prep (module-level functions, options through `fn_kwargs`)
-- [ ] Bitext examples: `separate` → each src and trg line its own `text`; `concat` → `src + " " + trg`.
-- [ ] Monotext examples: each line its own `text`.
-- [ ] Empty (whitespace-only) lines dropped in both.
-- [ ] Loading: bitext as in SFT (src/trg files joined line by line); monotext with
+- [x] Bitext examples: `separate` → each src and trg line its own `text`; `concat` → `src + " " + trg`.
+- [x] Monotext examples: each line its own `text`.
+- [x] Empty (whitespace-only) lines dropped in both.
+- [x] Loading: bitext as in SFT (src/trg files joined line by line); monotext with
       `load_dataset("text", data_files=list(cfg.data.monotext))`.
-- [ ] Mixing: both sources → `interleave_datasets([mono, bitext], probabilities=[r, 1-r],
+- [x] Mixing: both sources → `interleave_datasets([mono, bitext], probabilities=[r, 1-r],
       seed=cfg.train.seed, stopping_strategy="all_exhausted")`; one source → that source.
-- [ ] Dev: `data.dev` bitext formatted with `bitext_format`, also when `use_bitext` is false.
-- [ ] Final datasets hold only the `text` column.
-- [ ] Logs: example counts per source before and after mixing, token share per source (from tokenized
-      lengths), examples longer than `cpt.max_length` (R4), and the time of each step (R8).
+- [x] Dev: `data.dev` bitext formatted with `bitext_format`, also when `use_bitext` is false.
+- [x] Final datasets hold only the `text` column.
+- [x] Logs: example counts per source before and after mixing, token share per source (estimated from
+      the first 10k examples of each source, so large data isn't tokenized twice), examples longer than `cpt.max_length` (R4), and the time of each step (R8).
 
 ### D2. `main()`
-- [ ] `@hydra.main` like `sft_translation.py`; `check_config`; exit if `cfg.cpt` is unset ("use
+- [x] `@hydra.main` like `sft_translation.py`; `check_config`; exit if `cfg.cpt` is unset ("use
       sft_translation.py").
-- [ ] `apply_cpt_overrides(cfg)` and log any change (none on a saved config).
-- [ ] Log once that `data.test`, `instruction` and `decode` are not used by CPT.
-- [ ] Shared calls: `init_wandb`, `load_tokenizer`, `build_model`.
-- [ ] `trainer_args(cfg, outdir, use_bf16, dataset_text_field="text", max_length=cfg.cpt.max_length,
+- [x] `apply_cpt_overrides(cfg)` and log any change (none on a saved config).
+- [x] Log once that `data.test`, `instruction` and `decode` are not used by CPT.
+- [x] Shared calls: `init_wandb`, `load_tokenizer`, `build_model`.
+- [x] `trainer_args(cfg, outdir, use_bf16, dataset_text_field="text", max_length=cfg.cpt.max_length,
       packing_strategy=cfg.cpt.packing_strategy, dataset_num_proc=cfg.slurm.cpus)`; tokenizer's own
       `eos_token` (Q7); `processing_class=tokenizer`.
-- [ ] Callback: transformers' `EarlyStoppingCallback(train.early_stopping_patience,
+- [x] Callback: transformers' `EarlyStoppingCallback(train.early_stopping_patience,
       train.early_stopping_threshold)`. No MT callback, no decoding.
-- [ ] `inspect_first_batch` (shows the packed row and the EOS/BOS between examples).
-- [ ] `train(...)`, `save_model(...)`.
-- [ ] model/ check: `trainer.evaluate()` on the saved model; compare `eval_loss` with `log_history`'s
+- [x] `inspect_first_batch` (shows the packed row and the EOS/BOS between examples).
+- [x] `train(...)`, `save_model(...)`.
+- [x] model/ check: `trainer.evaluate()` on the saved model; compare `eval_loss` with `log_history`'s
       `eval_loss` at `model_global_step` (relative tolerance constant, initially 1e-3, set from E/G
       runs); write `model_dev_scores` (`{"eval_loss": ...}`) and `model_dev_check` ("ok" / "unchecked: …" /
       "MISMATCH: …") into `training_info.yaml`; log like SFT. A function `check_model_dev_loss(log_history,
       step, eval_loss, tolerance)` that is testable without torch.
-- [ ] W&B summary: `dev/model/eval_loss` (numbers only). No test decoding.
-- [ ] Module docstring: how it's launched, direct-run example, what it reads/ignores.
+- [x] W&B summary: `dev/model/eval_loss` (numbers only). No test decoding.
+- [x] Module docstring: how it's launched, direct-run example, what it reads/ignores.
 
 ### D3. Tests: `hfmt/test_cpt_monotext_bitext.py` (needs `datasets`, not torch)
-- [ ] separate / concat (space) / monotext example building on made-up lines; empty lines dropped.
-- [ ] Dev formatting follows `bitext_format`, also with `use_bitext: false`.
-- [ ] Interleave with r = 0.25 on two small made-up sets: every example of both appears; monotext share of
+- [x] separate / concat (space) / monotext example building on made-up lines; empty lines dropped.
+- [x] Dev formatting follows `bitext_format`, also with `use_bitext: false`.
+- [x] Interleave with r = 0.25 on two small made-up sets: every example of both appears; monotext share of
       the mixed set ≈ 25%; same seed → same order.
-- [ ] `check_model_dev_loss`: ok / mismatch / unchecked.
+- [x] `check_model_dev_loss`: ok / mismatch / unchecked.
 
 ### Done when
-- [ ] `black`/`flake8` clean; `python -c "import hfmt.cpt_monotext_bitext"` works without torch.
-- [ ] D3 passes in the cluster env; no-torch tests pass.
-- [ ] Cluster smoke test (Tiny Aya, made-up text files in the scratchpad as monotext/bitext, via a
+CPU check (2026-11-19, sandbox, not a substitute for the GPU run): a tiny random Llama with Tiny Aya's
+tokenizer on made-up text, full fine-tune, 4 steps, `torch.cuda` memory calls stubbed for `save_model`.
+Forced keys logged; counts/token share logged; TRL packed 244 examples into 40 rows of 64; the batch is one
+flattened row with `position_ids`, each example `<BOS_TOKEN> … <|END_OF_TURN_TOKEN|>` (R2 seen); `model/`
+loads as a checkpoint; `model_dev_check: ok` (fresh eval_loss = logged); no decoding, no `scores.json`;
+resume from checkpoint-2 continues at step 3 and ends at the same eval_loss.
+- [ ] `black`/`flake8` clean (not installed in the hfmt env; not run).
+- [x] `python -c "import hfmt.cpt_monotext_bitext"` works without torch.
+- [x] D3 passes (6 tests; runs here, `datasets` only); no-torch tests pass.
+- [x] Cluster smoke test (Tiny Aya, made-up text files in `features/16_cpt/smoke/` as monotext/bitext, via a
       scratch experiment yaml; `train.max_steps=20 train.eval_steps=10 wandb.enabled=false`), `LOCAL=1` or
       sbatch:
   - batch dump: examples packed in one row, each ending with `<|END_OF_TURN_TOKEN|>` (R2 seen), BOS where
     the tokenizer adds it;
   - forced keys logged; no decoding anywhere in the log;
   - `model/` and `training_info.yaml` with `model_dev_check: ok`; no `scores.json`.
+  Result (2026-11-19, job 1252427, A100 80GB, Tiny Aya global + `lora_tiny_aya_all_linear`, 20 steps, batch 2 × 1024):
+  - 3000 monotext + 2000 bitext examples → 5905 mixed → 101 packed rows; first batch is one 2048-token
+    row (2 × 1024) holding 81 examples, each with BOS and `<|END_OF_TURN_TOKEN|>`;
+  - train loss 7.52 → 3.75, eval loss 4.28 (step 10) → 3.89 (step 20); 16 s training;
+  - peak memory 12.9 GiB allocated / 15 GB reserved;
+  - forced keys were already in the saved config (grid), so the job logged none; no decoding, no `scores.json`;
+  - `model_dev_check: ok`, but fresh 3.8879 vs logged 3.8914 is 9e-4 relative, just under the planned 1e-3,
+    so `DEV_LOSS_TOLERANCE` is now 5e-3;
+  - TRL warns that padding-free/packing without flash attention may let examples attend to each other.
+    Expected; Transformers builds a per-example mask from `position_ids` for attention layers (R1). G's
+    test (Tiny Aya as the control) checks it.
 - [ ] Delete the smoke-test folder. `todo.md` D ticked; commit message presented.
 
 ## E. `tools/run_status.py` (plan §4, §5)

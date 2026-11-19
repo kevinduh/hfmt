@@ -1,7 +1,7 @@
 #!/bin/bash
-# Launch SFT training, inference or an adapter merge from a login node (features 08-12).
+# Launch SFT or CPT training, inference or an adapter merge from a login node (features 08-12, 16).
 #
-#   bash egs/launch.sh <sft|inf|merge> <yaml> [overrides...]
+#   bash egs/launch.sh <sft|cpt|inf|merge> <yaml> [overrides...]
 #
 # How it works: hfmt/grid.py checks the yaml + overrides and writes each job's folder (and saved
 # config), then prints the job folders and sbatch options; this script submits them as one Slurm
@@ -19,6 +19,12 @@
 # from its last checkpoint, in the same folder with the same config; only slurm.* may change.
 # To change a run, launch its experiment yaml with overrides and a new run_name instead.
 #   bash egs/launch.sh sft <run folder>/run_config.yaml [slurm.* overrides]   # e.g. slurm.gres=gpu:h100:1
+#
+# cpt: continued pre-training (hfmt/cpt_monotext_bitext.py) of a CPT experiment, i.e. one with a
+# `- cpt: <option>` default; folders, grids and resume as for sft. The SFT-only train keys are set to
+# CPT's values before saving (printed). sft refuses a CPT experiment, and cpt an SFT one.
+#   bash egs/launch.sh cpt egs/synlrl/tuk-eng/cpt_lora.yaml                          # 1 job
+#   bash egs/launch.sh cpt <run folder>/run_config.yaml [slurm.* overrides]           # resume
 #
 # inf: decode the test sets with one model per call -> test<i>.pred.trg per test file, scores.json
 #   bash egs/launch.sh inf <run folder>/run_config.yaml [overrides]     # the run's trained model/
@@ -42,9 +48,9 @@
 set -eo pipefail
 
 # 1. Arguments: the kind, then the yaml (relative to the current dir or the repo root, or absolute).
-usage="usage: bash egs/launch.sh <sft|inf|merge> <yaml> [overrides...]"
+usage="usage: bash egs/launch.sh <sft|cpt|inf|merge> <yaml> [overrides...]"
 kind=$1
-case "$kind" in sft|inf|merge) ;; *) echo "$usage" >&2; exit 1 ;; esac
+case "$kind" in sft|cpt|inf|merge) ;; *) echo "$usage" >&2; exit 1 ;; esac
 shift
 export HFMT_ROOT=${HFMT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 if [ -f "$1" ]; then yaml=$(realpath "$1")
@@ -68,7 +74,7 @@ cd "${HFMT_ROOT}"
 
 # 4. grid.py checks everything and writes the job folders, then prints bash that sets
 #    JOBS=(job folders) and SBATCH_ARGS=(sbatch options); see its docstring. Any problem exits here,
-#    before anything is submitted. For a resume it also sets KIND=sft_resume (the job.sh kind).
+#    before anything is submitted. For a resume it also sets KIND=sft_resume or cpt_resume (the job.sh kind).
 if [ "$kind" = sft ]; then grid_args=("$yaml"); else grid_args=("--$kind" "$yaml"); fi
 grid=$(python -m hfmt.grid "${grid_args[@]}" "$@")
 KIND=$kind

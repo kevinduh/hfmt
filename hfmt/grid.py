@@ -1,6 +1,6 @@
-"""Turn a yaml + overrides into checked job folders for egs/launch.sh (login node; features 08-10).
+"""Turn a yaml + overrides into checked job folders for egs/launch.sh (login node; features 08-10, 12, 16).
 
-egs/launch.sh calls this once per launch, then submits what it prints. Three flows:
+egs/launch.sh calls this once per launch, then submits what it prints. The flows:
 
   launch.sh sft <experiment.yaml> [overrides]                  ->  main_sft
       python -m hfmt.grid <yaml> [overrides...]
@@ -10,6 +10,12 @@ egs/launch.sh calls this once per launch, then submits what it prints. Three flo
       python -m hfmt.grid <run_config.yaml> [slurm.* overrides...]
       Resume a cancelled run from its last checkpoint, in its own folder with its saved config
       (feature 12). Checks it and writes nothing; prints KIND=sft_resume for launch.sh.
+  launch.sh cpt <cpt experiment.yaml> [overrides]               ->  main_sft(kind="cpt")
+      python -m hfmt.grid --cpt <yaml> [overrides...]
+      The same as sft for a CPT experiment (one with a `cpt` block; feature 16_cpt). Before saving, each
+      job's SFT-only train keys are set to CPT's values (hydra_config.CPT_FORCED_TRAIN), so the saved
+      config says what runs. `launch.sh cpt <run_config.yaml>` resumes a CPT run (KIND=cpt_resume).
+      An SFT launch refuses a CPT experiment and vice versa; saved configs tell the two apart by `cpt`.
   launch.sh inf <run_config.yaml | experiment.yaml> [overrides]  ->  main_inf
       python -m hfmt.grid --inf <yaml> [overrides...]
       One job. The yaml kind decides which model gets decoded:
@@ -35,6 +41,8 @@ Training details:
   Saved configs are fully resolved (no ${...} left), so jobs don't need local_setting.sh.
 - ``output_root`` defaults to ``<experiment folder>/outputs``.
 - An existing job folder only warns (no timestamps): its files are overwritten.
+- A `checkpoint` that is an absolute path must exist (every flow), so an SFT run from a CPT run that isn't
+  merged yet fails here, not on a GPU where Hugging Face would read the path as a hub id.
 
 Relies on Hydra internals (OverridesParser, BasicSweeper.split_arguments); tested on 1.3.7.
 """
@@ -49,7 +57,7 @@ from hydra._internal.core_plugins.basic_sweeper import BasicSweeper
 from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import OmegaConf
 
-from hfmt.hydra_config import check_config, register_configs
+from hfmt.hydra_config import CPT_FORCED_TRAIN, apply_cpt_overrides, check_config, register_configs
 
 SAVED = "run_config"        # a trained run's saved config: <run folder>/run_config.yaml
 INF_SAVED = "inf_config"    # an inference job's saved config: <inference folder>/inf_config.yaml
@@ -89,7 +97,17 @@ def _compose_checked(exp_dir, exp_name, job):
     missing = OmegaConf.missing_keys(cfg)
     if missing:
         sys.exit(f"grid: missing values: {sorted(missing)}")
+    if os.path.isabs(cfg.checkpoint) and not os.path.exists(cfg.checkpoint):
+        sys.exit(f"grid: checkpoint {cfg.checkpoint} doesn't exist (a run not finished or merged yet?)")
     return cfg
+
+
+def _check_kind(cfg, kind, what):
+    """Exit unless the config's kind matches the launch: a CPT config has a `cpt` block, an SFT one doesn't."""
+    if kind == "cpt" and cfg.cpt is None:
+        sys.exit(f"grid: {what} is not a CPT config (no cpt block); use launch.sh sft")
+    if kind == "sft" and cfg.cpt is not None:
+        sys.exit(f"grid: {what} is a CPT config (has a cpt block); use launch.sh cpt")
 
 
 def _git_rev():
@@ -132,10 +150,10 @@ def _print_jobs(job_dirs, s, job_name, log):
     print("SBATCH_ARGS=(" + " ".join(shlex.quote(a) for a in sbatch) + ")")
 
 
-def main_sft(exp_dir, exp_name, args, parsed, parser):
-    """Training: expand the grid, check every job, write one run folder per job."""
+def main_sft(exp_dir, exp_name, args, parsed, parser, kind="sft"):
+    """Training (``kind`` sft or cpt): expand the grid, check every job, write one run folder per job."""
     if exp_name == SAVED:                # a saved run: resume it (nothing else)
-        return main_resume(exp_dir, exp_name, args, parsed)
+        return main_resume(exp_dir, exp_name, args, parsed, kind)
 
     # 1. Read the experiment's own grid. hydra.sweeper.params is only visible after composing, and a
     #    comma list can't be composed, so compose once with the single-value overrides only.
@@ -152,9 +170,19 @@ def main_sft(exp_dir, exp_name, args, parsed, parser):
     swept = [k for k, is_sweep in swept.items() if is_sweep]
     if any(k.startswith("slurm.") for k in swept):
         sys.exit("grid: slurm.* can't be a grid axis (one sbatch array per launch)")
+    if kind == "cpt":                    # CPT sets these itself; an override could only be a mistake
+        forced = sorted({o.get_key_element() for o in all_overrides} & {f"train.{k}" for k in CPT_FORCED_TRAIN})
+        if forced:
+            sys.exit(f"grid: CPT sets {', '.join(forced)} itself (hydra_config.CPT_FORCED_TRAIN); drop the override")
 
-    # 3. Compose and check every job before writing anything.
+    # 3. Compose and check every job before writing anything; CPT jobs get their forced train keys.
     cfgs = [_compose_checked(exp_dir, exp_name, job) for job in jobs]
+    for cfg in cfgs:
+        _check_kind(cfg, kind, f"{exp_name}.yaml")
+    if kind == "cpt":
+        changes = sorted({change for cfg in cfgs for change in apply_cpt_overrides(cfg)}, key=str)
+        for key, old, new, reason in changes:
+            _log(f"grid: cpt: train.{key} {old} -> {new} ({reason})")
 
     # 4. Choose job folders: <run_name> for one job, <run_name>-<idx> for a grid (idx zero-padded so
     #    folders sort in order).
@@ -187,10 +215,11 @@ def main_sft(exp_dir, exp_name, args, parsed, parser):
     _print_jobs(job_dirs, cfgs[0].slurm, run_name, log)
 
 
-def main_resume(exp_dir, exp_name, args, parsed):
+def main_resume(exp_dir, exp_name, args, parsed, kind="sft"):
     """Resume a cancelled training run (``launch.sh sft <run folder>/run_config.yaml``): same config,
     same folder; the job continues from the last checkpoint (TRL's resume_from_checkpoint).
-    Writes nothing. Only slurm.* overrides (e.g. a bigger GPU after an OOM)."""
+    Writes nothing. Only slurm.* overrides (e.g. a bigger GPU after an OOM). ``kind`` (sft or cpt, from
+    the launch) must match the saved config."""
     # 1. Nothing about the run may change, except where it runs.
     if any(o.is_sweep_override() for o in parsed):
         sys.exit("grid: resume: comma lists aren't allowed (one run folder per call; loop in the shell)")
@@ -210,6 +239,7 @@ def main_resume(exp_dir, exp_name, args, parsed):
     if not os.path.isfile(os.path.join(last, "trainer_state.json")):
         sys.exit(f"grid: resume: {last} is incomplete (no trainer_state.json); delete it and resume again")
     cfg = _compose_checked(exp_dir, exp_name, args)
+    _check_kind(cfg, kind, f"{exp_dir}/{SAVED}.yaml")
 
     # 3. Warn if the code changed since the run was launched.
     rev_file = os.path.join(exp_dir, "git_rev")
@@ -218,11 +248,11 @@ def main_resume(exp_dir, exp_name, args, parsed):
         _log(f"WARNING: code changed since launch (git_rev {saved_rev} -> {_git_rev()})")
     _log(f"resuming {exp_dir} from checkpoint-{max(steps)} (step {max(steps)} of {cfg.train.max_steps})")
 
-    # 4. Print the bash for launch.sh: the job folder is the run folder; KIND picks job.sh sft_resume.
+    # 4. Print the bash for launch.sh: the job folder is the run folder; KIND picks job.sh <kind>_resume.
     #    The job is named after the folder, so tools/run_status.py can tell a grid folder's queued
     #    resume from its siblings'.
     _print_jobs([exp_dir], cfg.slurm, os.path.basename(exp_dir), os.path.join(exp_dir, "slurm-%A.out"))
-    print("KIND=sft_resume")
+    print(f"KIND={kind}_resume")
 
 
 def main_inf(exp_dir, exp_name, args, parsed):
@@ -282,8 +312,8 @@ def main_merge(exp_dir, exp_name, args, parsed):
 
 
 def main(argv):
-    """Parse ``[--inf|--merge] <yaml> [overrides...]`` and hand off to the flow's function."""
-    mode = argv[0] if argv[:1] in (["--inf"], ["--merge"]) else None
+    """Parse ``[--inf|--merge|--cpt] <yaml> [overrides...]`` and hand off to the flow's function."""
+    mode = argv[0] if argv[:1] in (["--inf"], ["--merge"], ["--cpt"]) else None
     if mode:
         argv = argv[1:]
     exp_path, args = os.path.abspath(argv[0]), argv[1:]
@@ -300,7 +330,7 @@ def main(argv):
         return main_inf(exp_dir, exp_name, args, parsed)
     if mode == "--merge":
         return main_merge(exp_dir, exp_name, args, parsed)
-    return main_sft(exp_dir, exp_name, args, parsed, parser)
+    return main_sft(exp_dir, exp_name, args, parsed, parser, kind="cpt" if mode == "--cpt" else "sft")
 
 
 if __name__ == "__main__":

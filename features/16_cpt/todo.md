@@ -113,44 +113,44 @@ Result (2026-11-18), A100 80GB, Qwen3.5-2B LoRA, 40 steps, same config and seed:
 ## C. Launch path: `grid.py`, `launch.sh`, `job.sh` (plan §4)
 
 ### C1. `grid.py`
-- [ ] CLI: `--cpt` (next to `--inf`/`--merge`) → `main_sft(..., kind="cpt")`; plain → `kind="sft"`.
-- [ ] `main_sft(kind)`:
+- [x] CLI: `--cpt` (next to `--inf`/`--merge`) → `main_sft(..., kind="cpt")`; plain → `kind="sft"`.
+- [x] `main_sft(kind)`:
   - after composing each job: `kind="cpt"` and no `cpt` → exit ("not a CPT experiment; use launch.sh
     sft"); `kind="sft"` and `cpt` → exit ("a CPT experiment; use launch.sh cpt");
   - `kind="cpt"`: refuse command-line overrides of a forced key (`train.packing=...` etc.: "CPT sets
     train.<key>"); then `apply_cpt_overrides` on each job before `_save`, logging each change
     (`grid: cpt: train.<key> <old> -> <new> (<reason>)`);
-  - prints `KIND=cpt` for a CPT launch (`launch.sh` keeps `KIND=sft` otherwise).
-- [ ] `main_resume`: the launch kind must match the saved config (`cpt` present ⇔ `cpt`), else exit;
+  - (`launch.sh` sets `KIND=cpt` itself for a new CPT launch; grid prints `KIND` only for a resume.)
+- [x] `main_resume`: the launch kind must match the saved config (`cpt` present ⇔ `cpt`), else exit;
       prints `KIND=cpt_resume` or `KIND=sft_resume`.
-- [ ] `main_inf`/`main_merge`: unchanged (check a CPT `run_config.yaml` goes through both).
-- [ ] Q14: in `_compose_checked` (all flows), an absolute `checkpoint` path that doesn't exist exits
+- [x] `main_inf`/`main_merge`: unchanged (check a CPT `run_config.yaml` goes through both).
+- [x] Q14: in `_compose_checked` (all flows), an absolute `checkpoint` path that doesn't exist exits
       ("checkpoint <path> doesn't exist (not merged/finished yet?)"). Hub ids and relative names untouched.
-- [ ] Module docstring: the `cpt` flow.
+- [x] Module docstring: the `cpt` flow.
 
 ### C2. `launch.sh`
-- [ ] Accept `cpt`: usage line, `case`, `grid_args=(--cpt "$yaml")`; the usage comment gets a cpt block
+- [x] Accept `cpt`: usage line, `case`, `grid_args=(--cpt "$yaml")`; the usage comment gets a cpt block
       (launch, resume) in the style of the sft one.
 
 ### C3. `job.sh`
-- [ ] Kinds `cpt` and `cpt_resume` → `python -m hfmt.cpt_monotext_bitext` (same arguments as `sft`;
+- [x] Kinds `cpt` and `cpt_resume` → `python -m hfmt.cpt_monotext_bitext` (same arguments as `sft`;
       `cpt_resume` sets `HFMT_SFT_RESUME=1`).
-- [ ] Requeue rule: `sft|cpt` with `SLURM_RESTART_COUNT > 0` and a checkpoint → `<kind>_resume`.
-- [ ] Usage line and header comment.
+- [x] Requeue rule: `sft|cpt` with `SLURM_RESTART_COUNT > 0` and a checkpoint → `<kind>_resume`.
+- [x] Usage line and header comment.
 
 ### Done when
-- [ ] `test_grid.py` additions:
+- [x] `test_grid.py` additions:
   - `launch.sh cpt` (grid `--cpt`) saves `<output_root>/<run_name>/run_config.yaml` with `cpt` and the
-    forced train values, and prints `KIND=cpt`;
+    forced train values;
   - `--cpt` on an SFT yaml and plain on a CPT yaml are refused;
   - a forced-key override on a CPT launch is refused; the same override on an SFT launch is fine;
   - a CPT sweep (`cpt.bitext_format=separate,concat`) gives 2 folders and a `.grid.txt`;
   - resume of a CPT run prints `KIND=cpt_resume`; a kind mismatch is refused;
   - `--inf` and `--merge` accept a CPT run folder;
   - Q14: a missing absolute checkpoint is refused; an existing one and a hub id pass.
-- [ ] `DRYRUN=1 bash egs/launch.sh cpt <cpt yaml>` prints `sbatch ... egs/job.sh cpt <folder>`; the same
+- [x] `DRYRUN=1 bash egs/launch.sh cpt <cpt yaml>` prints `sbatch ... egs/job.sh cpt <folder>`; the same
       for a resume of a scratchpad copy of a CPT run folder (`job.sh cpt_resume`).
-- [ ] `bash -n egs/launch.sh egs/job.sh`. Tests pass. `todo.md` C ticked; commit message presented.
+- [x] `bash -n egs/launch.sh egs/job.sh`. Tests pass. `todo.md` C ticked; commit message presented.
 
 ## D. CPT script: `hfmt/cpt_monotext_bitext.py` (plan §2, §3)
 

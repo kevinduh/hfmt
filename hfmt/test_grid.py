@@ -301,6 +301,96 @@ def test_sft_ignores_monotext_in_shared_dataset():
     assert list(cfg.data.monotext) == ["/abs/mono.fr"] and cfg.cpt is None
 
 
+def run_cpt(exp, *overrides, out=None):
+    """run() through `launch.sh cpt` (grid --cpt)."""
+    out = out or tempfile.mkdtemp()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main(["--cpt", exp, *overrides, f"output_root={out}"])
+    dirs = sorted(d for d in os.listdir(out) if os.path.isdir(os.path.join(out, d)))
+    return out, dirs, stdout.getvalue()
+
+
+def fails_cpt(exp, *overrides):
+    out = tempfile.mkdtemp()
+    try:
+        run_cpt(exp, *overrides, out=out)
+    except SystemExit:
+        return os.listdir(out) == []  # failed before writing anything
+    return False
+
+
+def cpt_path():
+    tmp, name = cpt_experiment()
+    return os.path.join(tmp, f"{name}.yaml")
+
+
+def test_cpt_launch_saves_forced_train_keys():
+    out, dirs, stdout = run_cpt(cpt_path(), "train=longrun")
+    assert dirs == ["sft_lora"] and f"JOBS=({out}/sft_lora)" in stdout
+    cfg = saved(out, "sft_lora")
+    assert cfg.cpt.bitext_format == "separate" and list(cfg.data.monotext) == ["/abs/mono.fr"]
+    assert all(cfg.train[key] == value for key, (value, _) in CPT_FORCED_TRAIN.items())
+    assert cfg.train.max_steps == OmegaConf.load(os.path.join(ROOT, "conf/train/longrun.yaml")).max_steps
+    assert "KIND" not in stdout                          # launch.sh sets KIND=cpt itself
+
+
+def test_cpt_and_sft_launches_refuse_each_other():
+    assert fails_cpt(SINGLE)                             # an SFT experiment through launch.sh cpt
+    assert fails(cpt_path())                             # a CPT experiment through launch.sh sft
+
+
+def test_cpt_refuses_overrides_of_forced_keys():
+    exp = cpt_path()
+    assert fails_cpt(exp, "train.packing=false")
+    assert fails_cpt(exp, "train.inference_callback_interval=1")
+    assert fails_cpt(exp, "train.metric_for_best_model=eval_loss,eval_sp_bleu")   # as a grid axis too
+    run_cpt(exp, "train.learning_rate=1e-4")             # other train keys are fine
+    run(SINGLE, "train.packing=true")                    # SFT may set them
+
+
+def test_cpt_sweep():
+    out, dirs, _ = run_cpt(cpt_path(), "cpt.bitext_format=separate,concat")
+    assert dirs == ["sft_lora-0", "sft_lora-1"]
+    assert [saved(out, d).cpt.bitext_format for d in dirs] == ["separate", "concat"]
+    assert open(os.path.join(out, "sft_lora.grid.txt")).read().splitlines() == [
+        "0: cpt.bitext_format=separate", "1: cpt.bitext_format=concat"]
+
+
+def test_cpt_resume_and_kind_mismatch():
+    out, _, _ = run_cpt(cpt_path())
+    run_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(run_dir, "checkpoint-20"))
+    open(os.path.join(run_dir, "checkpoint-20", "trainer_state.json"), "w").close()
+    rc = os.path.join(run_dir, "run_config.yaml")
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main(["--cpt", rc, "slurm.gres=gpu:l40s:1"])
+    assert f"JOBS=({run_dir})" in stdout.getvalue() and "KIND=cpt_resume" in stdout.getvalue()
+    for argv in ([rc], ["--cpt", cancelled_run()[1]]):  # sft on a CPT run, cpt on an SFT run
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                grid.main(argv)
+            assert False, argv
+        except SystemExit:
+            pass
+
+
+def test_inf_and_merge_accept_cpt_runs():
+    out, _, _ = run_cpt(cpt_path())
+    run_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(run_dir, "model"))
+    rc = os.path.join(run_dir, "run_config.yaml")
+    assert f"JOBS=({run_dir}/inf/test)" in inf(rc)
+    assert f"JOBS=({run_dir})" in merge(rc)
+
+
+def test_absolute_checkpoint_must_exist():
+    assert fails(SINGLE, "checkpoint=/no/such/model_merged")   # e.g. a CPT run not merged yet
+    existing = tempfile.mkdtemp()
+    run(SINGLE, f"checkpoint={existing}")                # an existing path and a hub id (the default) pass
+
+
 def test_configs_saved_before_cpt_still_compose():
     out, _, _ = run(SINGLE)                                       # strip the new keys, as in an old run_config
     rc = os.path.join(out, "sft_lora", "run_config.yaml")

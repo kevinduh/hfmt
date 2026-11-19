@@ -1,0 +1,20 @@
+# This experiment is for a LoRA SFT of Tiny Aya global on synlrl ewe-eng, starting from cpt_lora's merged model.
+defaults:
+  - config
+  - ../dataset
+  - override peft: lora_tiny_aya_all_linear
+  - _self_
+
+run_name: sft_lora_after_cpt
+checkpoint: ${oc.env:HFMT_ROOT}/egs/synlrl/ewe-eng/outputs/cpt_lora/model_merged
+instruction: "Translate Ewe to English"
+
+data:
+  src: ewe
+  trg: eng
+
+decode:
+  batch_size: 64
+
+wandb:
+  tags: [synlrl, ewe-eng, after_cpt]

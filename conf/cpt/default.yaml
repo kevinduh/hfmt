@@ -1,0 +1,8 @@
+# This config is the default CPT setup: monotext and both bitext sides as separate examples, mixed 50/50, packed.
+
+use_monotext: true
+use_bitext: true
+bitext_format: separate      # separate | concat (src + " " + trg on one line)
+monotext_ratio: 0.5          # fraction of training examples drawn from monotext (lines, not tokens)
+max_length: 1024             # packed sequence length in tokens
+packing_strategy: bfd        # bfd | wrapped

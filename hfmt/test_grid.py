@@ -21,6 +21,7 @@ ROOT = os.environ.setdefault("HFMT_ROOT", os.path.dirname(os.path.dirname(os.pat
 os.environ["HFMT_DATA_ROOT"] = "/dummy/data/fr-en"
 sys.path.insert(0, ROOT)
 from hfmt import grid  # noqa: E402
+from hfmt.hydra_config import CPT_FORCED_TRAIN, apply_cpt_overrides  # noqa: E402
 
 SINGLE = os.path.join(ROOT, "egs/mmtc/fr-en/sft_lora.yaml")
 SWEEP = os.path.join(ROOT, "egs/mmtc/fr-en/sft_lora.sweep.yaml")
@@ -227,6 +228,176 @@ def test_dataset_with_absolute_paths_needs_no_data_root():
         os.environ["HFMT_DATA_ROOT"] = saved_root
     data = saved(out, "sft_lora").data
     assert data.data_root is None and data.test is None and list(data.train.src) == ["/abs/train.fr"]
+
+
+# --- CPT config (feature 16_cpt) ---
+
+def cpt_experiment(monotext="[/abs/mono.fr]"):
+    """A temp experiment folder: fr-en's dataset.yaml + sft_lora.yaml with `- cpt: default` and a
+    data.monotext list. Returns (folder, experiment name)."""
+    tmp = tempfile.mkdtemp()
+    shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)
+    text = open(SINGLE).read().replace("  - override peft:", "  - cpt: default\n  - override peft:", 1)
+    open(os.path.join(tmp, "cpt_lora.yaml"), "w").write(text + f"\ndata:\n  monotext: {monotext}\n")
+    return tmp, "cpt_lora"
+
+
+def compose_checked(exp_dir, name, *overrides):
+    """grid's compose + resolve + check_config + missing-keys check; SystemExit on any problem."""
+    grid.register_configs()                                       # grid.main does this for a launch
+    with contextlib.redirect_stderr(io.StringIO()):
+        return grid._compose_checked(exp_dir, name, list(overrides))
+
+
+def compose_fails(exp_dir, name, *overrides):
+    try:
+        compose_checked(exp_dir, name, *overrides)
+    except SystemExit:
+        return True
+    return False
+
+
+def test_cpt_experiment_composes():
+    cfg = compose_checked(*cpt_experiment())
+    assert (cfg.cpt.use_monotext, cfg.cpt.use_bitext, cfg.cpt.bitext_format) == (True, True, "separate")
+    assert (cfg.cpt.monotext_ratio, cfg.cpt.max_length, cfg.cpt.packing_strategy) == (0.5, 1024, "bfd")
+    assert list(cfg.data.monotext) == ["/abs/mono.fr"]
+    assert compose_checked(os.path.dirname(SINGLE), "sft_lora").cpt is None    # SFT: no cpt block
+
+
+def test_cpt_rules():
+    exp = cpt_experiment()
+    assert compose_fails(*exp, "cpt.bitext_format=both")
+    assert compose_fails(*exp, "cpt.packing_strategy=greedy")
+    assert compose_fails(*exp, "cpt.use_monotext=false", "cpt.use_bitext=false")   # no data
+    assert compose_fails(*exp, "data.monotext=null")                               # use_monotext without files
+    assert compose_fails(*exp, "data.monotext=[]")
+    assert compose_fails(*exp, "cpt.monotext_ratio=0")                             # both sources: 0 < r < 1
+    assert compose_fails(*exp, "cpt.monotext_ratio=1")
+    assert compose_fails(*exp, "cpt.use_bitext=false", "cpt.monotext_ratio=abc")   # wrong type
+    compose_checked(*exp, "cpt.use_bitext=false", "cpt.monotext_ratio=1")          # one source: ratio unused
+    compose_checked(*exp, "cpt.use_monotext=false", "data.monotext=null")          # bitext only: no files needed
+    compose_checked(*exp, "cpt.bitext_format=concat", "cpt.packing_strategy=wrapped")
+
+
+def test_apply_cpt_overrides():
+    cfg = compose_checked(*cpt_experiment(), "train=longrun")     # an SFT schedule: decodes, BLEU-selected
+    changed = apply_cpt_overrides(cfg)
+    assert {key for key, *_ in changed} == set(CPT_FORCED_TRAIN)
+    assert all(cfg.train[key] == value for key, (value, _) in CPT_FORCED_TRAIN.items())
+    assert apply_cpt_overrides(cfg) == []                         # a saved CPT config: nothing to change
+    sft = compose_checked(os.path.dirname(SINGLE), "sft_lora", "train=longrun")
+    before = OmegaConf.to_container(sft.train)
+    assert apply_cpt_overrides(sft) == [] and OmegaConf.to_container(sft.train) == before
+
+
+def test_sft_ignores_monotext_in_shared_dataset():
+    tmp = tempfile.mkdtemp()                                      # dataset.yaml lists monotext too
+    open(os.path.join(tmp, "dataset.yaml"), "w").write(
+        open(os.path.join(os.path.dirname(SINGLE), "dataset.yaml")).read() + "monotext:\n  - /abs/mono.fr\n")
+    shutil.copy(SINGLE, tmp)
+    out, dirs, _ = run(os.path.join(tmp, "sft_lora.yaml"))
+    cfg = saved(out, "sft_lora")
+    assert list(cfg.data.monotext) == ["/abs/mono.fr"] and cfg.cpt is None
+
+
+def run_cpt(exp, *overrides, out=None):
+    """run() through `launch.sh cpt` (grid --cpt)."""
+    out = out or tempfile.mkdtemp()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main(["--cpt", exp, *overrides, f"output_root={out}"])
+    dirs = sorted(d for d in os.listdir(out) if os.path.isdir(os.path.join(out, d)))
+    return out, dirs, stdout.getvalue()
+
+
+def fails_cpt(exp, *overrides):
+    out = tempfile.mkdtemp()
+    try:
+        run_cpt(exp, *overrides, out=out)
+    except SystemExit:
+        return os.listdir(out) == []  # failed before writing anything
+    return False
+
+
+def cpt_path():
+    tmp, name = cpt_experiment()
+    return os.path.join(tmp, f"{name}.yaml")
+
+
+def test_cpt_launch_saves_forced_train_keys():
+    out, dirs, stdout = run_cpt(cpt_path(), "train=longrun")
+    assert dirs == ["sft_lora"] and f"JOBS=({out}/sft_lora)" in stdout
+    cfg = saved(out, "sft_lora")
+    assert cfg.cpt.bitext_format == "separate" and list(cfg.data.monotext) == ["/abs/mono.fr"]
+    assert all(cfg.train[key] == value for key, (value, _) in CPT_FORCED_TRAIN.items())
+    assert cfg.train.max_steps == OmegaConf.load(os.path.join(ROOT, "conf/train/longrun.yaml")).max_steps
+    assert "KIND" not in stdout                          # launch.sh sets KIND=cpt itself
+
+
+def test_cpt_and_sft_launches_refuse_each_other():
+    assert fails_cpt(SINGLE)                             # an SFT experiment through launch.sh cpt
+    assert fails(cpt_path())                             # a CPT experiment through launch.sh sft
+
+
+def test_cpt_refuses_overrides_of_forced_keys():
+    exp = cpt_path()
+    assert fails_cpt(exp, "train.packing=false")
+    assert fails_cpt(exp, "train.inference_callback_interval=1")
+    assert fails_cpt(exp, "train.metric_for_best_model=eval_loss,eval_sp_bleu")   # as a grid axis too
+    run_cpt(exp, "train.learning_rate=1e-4")             # other train keys are fine
+    run(SINGLE, "train.packing=true")                    # SFT may set them
+
+
+def test_cpt_sweep():
+    out, dirs, _ = run_cpt(cpt_path(), "cpt.bitext_format=separate,concat")
+    assert dirs == ["sft_lora-0", "sft_lora-1"]
+    assert [saved(out, d).cpt.bitext_format for d in dirs] == ["separate", "concat"]
+    assert open(os.path.join(out, "sft_lora.grid.txt")).read().splitlines() == [
+        "0: cpt.bitext_format=separate", "1: cpt.bitext_format=concat"]
+
+
+def test_cpt_resume_and_kind_mismatch():
+    out, _, _ = run_cpt(cpt_path())
+    run_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(run_dir, "checkpoint-20"))
+    open(os.path.join(run_dir, "checkpoint-20", "trainer_state.json"), "w").close()
+    rc = os.path.join(run_dir, "run_config.yaml")
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        grid.main(["--cpt", rc, "slurm.gres=gpu:l40s:1"])
+    assert f"JOBS=({run_dir})" in stdout.getvalue() and "KIND=cpt_resume" in stdout.getvalue()
+    for argv in ([rc], ["--cpt", cancelled_run()[1]]):  # sft on a CPT run, cpt on an SFT run
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                grid.main(argv)
+            assert False, argv
+        except SystemExit:
+            pass
+
+
+def test_inf_and_merge_accept_cpt_runs():
+    out, _, _ = run_cpt(cpt_path())
+    run_dir = os.path.join(out, "sft_lora")
+    os.makedirs(os.path.join(run_dir, "model"))
+    rc = os.path.join(run_dir, "run_config.yaml")
+    assert f"JOBS=({run_dir}/inf/test)" in inf(rc)
+    assert f"JOBS=({run_dir})" in merge(rc)
+
+
+def test_absolute_checkpoint_must_exist():
+    assert fails(SINGLE, "checkpoint=/no/such/model_merged")   # e.g. a CPT run not merged yet
+    existing = tempfile.mkdtemp()
+    run(SINGLE, f"checkpoint={existing}")                # an existing path and a hub id (the default) pass
+
+
+def test_configs_saved_before_cpt_still_compose():
+    out, _, _ = run(SINGLE)                                       # strip the new keys, as in an old run_config
+    rc = os.path.join(out, "sft_lora", "run_config.yaml")
+    text = "".join(l for l in open(rc) if not l.startswith(("cpt:", "  monotext:")))
+    open(rc, "w").write(text)
+    cfg = compose_checked(os.path.dirname(rc), "run_config")
+    assert cfg.cpt is None and cfg.data.monotext is None
 
 
 

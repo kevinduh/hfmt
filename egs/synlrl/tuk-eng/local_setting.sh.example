@@ -1,0 +1,2 @@
+# Copy to local_setting.sh (untracked) and point at this machine's synlrl data folder (see ../README.md).
+export HFMT_DATA_ROOT=/path/to/synlrl/data

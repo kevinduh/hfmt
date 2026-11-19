@@ -1,0 +1,19 @@
+# @package data
+# synlrl <src>-eng data (seed bitext, pool8k <src> side as monotext, flores dev/test); experiments set data.src/trg.
+train:
+  src:
+    - ${oc.env:HFMT_DATA_ROOT}/seed1.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${oc.env:HFMT_DATA_ROOT}/seed1.${data.src}-${data.trg}.${data.trg}
+monotext:
+  - ${oc.env:HFMT_DATA_ROOT}/pool8k.${data.src}-${data.trg}.${data.src}
+dev:
+  src:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.smalldev-256.${data.src}
+  trg:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.smalldev-256.${data.trg}
+test:
+  src:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.dev.${data.src}
+  trg:
+    - ${oc.env:HFMT_DATA_ROOT}/flores200.dev.${data.trg}

@@ -12,7 +12,9 @@ yaml sets fails ``grid.py``'s missing-values check.
 
 Every field is read by code (``sft_translation.py``/``inf_translation.py``, or ``grid.py`` for
 ``slurm``, ``output_root``, ``inf_name``), except the optional ``data.data_root/src/trg``, which a
-``dataset.yaml`` may use to build file paths. Don't add fields nothing reads.
+``dataset.yaml`` may use to build file paths. Don't add fields nothing reads. ``cpt`` and
+``data.monotext`` are read by ``cpt_monotext_bitext.py`` (feature 16_cpt); SFT ignores ``data.monotext``,
+and CPT ignores ``data.test``.
 
 Imports nothing heavy, so ``grid.py`` and ``--cfg job`` stay fast on a login node.
 Config carries data *paths*, never data content (CLAUDE.md).
@@ -84,6 +86,8 @@ class DataConfig:
     train: Bitext = MISSING
     dev: Bitext = MISSING
     test: Optional[TestSet] = None
+    # Monolingual text files for CPT (cpt.use_monotext), one example per non-empty line; SFT ignores them.
+    monotext: Optional[List[str]] = None
 
 
 @dataclass
@@ -129,6 +133,20 @@ class DecodeConfig:
 
 
 @dataclass
+class CPTConfig:
+    """Continued pre-training data and packing (``hfmt/cpt_monotext_bitext.py``, feature 16_cpt): the
+    ``cpt`` group (``conf/cpt/``), added only by CPT experiments, so its presence makes a run a CPT run.
+    CPT's schedule is the top-level ``train``, with ``CPT_FORCED_TRAIN`` applied."""
+
+    use_monotext: bool = MISSING  # train on data.monotext
+    use_bitext: bool = MISSING  # train on data.train (src and trg)
+    bitext_format: str = MISSING  # separate (each side its own example) | concat (src + " " + trg)
+    monotext_ratio: float = MISSING  # with both sources: fraction of training examples drawn from monotext
+    max_length: int = MISSING  # packed sequence length in tokens (SFTConfig.max_length)
+    packing_strategy: str = MISSING  # bfd | wrapped (SFTConfig.packing_strategy)
+
+
+@dataclass
 class WandbConfig:
     """W&B logging: config and aggregate metrics only, never data (CLAUDE.md).
     Run name and group are derived from the run folder and ``run_name``."""
@@ -170,12 +188,26 @@ class Config:
     decode: DecodeConfig = field(default_factory=DecodeConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
     slurm: SlurmConfig = field(default_factory=SlurmConfig)
+    cpt: Optional[CPTConfig] = None  # set by CPT experiments only (- cpt: <option>)
+
+
+# The train keys that only make sense for SFT, and CPT's value for each (feature 16_cpt). With `cpt` set,
+# apply_cpt_overrides puts these in place of whatever the train option says, so any conf/train/ schedule
+# works for CPT and conf/train/ needs no knowledge of CPT.
+CPT_FORCED_TRAIN = {
+    "packing": (True, "CPT packs examples into max_length rows"),
+    "completion_only_loss": (False, "a CPT example has no prompt/completion split"),
+    "inference_callback_interval": (0, "CPT never decodes"),
+    "metric_for_best_model": ("eval_loss", "the only dev metric without decoding"),
+    "greater_is_better": (False, "goes with eval_loss"),
+}
 
 
 def check_config(cfg) -> None:
     """Fail if ``peft.mode`` disagrees with which ``peft`` blocks are present, on an empty
-    ``peft.lora.target_modules``, on a negative ``train.inference_callback_interval``, or if
-    ``data.test.trg`` doesn't match ``data.test.src``."""
+    ``peft.lora.target_modules``, on a negative ``train.inference_callback_interval``, if
+    ``data.test.trg`` doesn't match ``data.test.src``, or, for a CPT config, on a ``cpt`` rule
+    (``_check_cpt``)."""
     if cfg.train.inference_callback_interval < 0:
         raise ValueError(f"train.inference_callback_interval={cfg.train.inference_callback_interval}: "
                          "must be >= 0 (0 = no dev decoding)")
@@ -192,6 +224,41 @@ def check_config(cfg) -> None:
         raise ValueError(f"peft.mode={mode} needs {state(*need[mode])}; got {state(has_lora, has_quant)}")
     if has_lora and not cfg.peft.lora.target_modules:
         raise ValueError("peft.lora.target_modules is empty: list the module names to wrap, e.g. [q_proj,v_proj]")
+    if cfg.cpt is not None:
+        _check_cpt(cfg)
+
+
+def _check_cpt(cfg) -> None:
+    """The ``cpt`` rules: known ``bitext_format``/``packing_strategy``, at least one data source, monotext
+    files when monotext is used, and a ``monotext_ratio`` strictly between 0 and 1 when both sources mix.
+    The SFT-only train keys aren't checked: ``apply_cpt_overrides`` sets them."""
+    cpt = cfg.cpt
+    if cpt.bitext_format not in ("separate", "concat"):
+        raise ValueError(f"cpt.bitext_format={cpt.bitext_format}: must be separate | concat")
+    if cpt.packing_strategy not in ("bfd", "wrapped"):
+        raise ValueError(f"cpt.packing_strategy={cpt.packing_strategy}: must be bfd | wrapped")
+    if not (cpt.use_monotext or cpt.use_bitext):
+        raise ValueError("cpt.use_monotext and cpt.use_bitext are both false: CPT has no training data")
+    if cpt.use_monotext and not cfg.data.monotext:
+        raise ValueError("cpt.use_monotext=true but data.monotext is unset or empty: list the monotext files")
+    if cpt.use_monotext and cpt.use_bitext and not 0 < cpt.monotext_ratio < 1:
+        raise ValueError(f"cpt.monotext_ratio={cpt.monotext_ratio}: must be between 0 and 1 (exclusive) "
+                         "when both monotext and bitext are used")
+
+
+def apply_cpt_overrides(cfg) -> list:
+    """For a CPT config (``cpt`` set), put ``CPT_FORCED_TRAIN``'s values into ``cfg.train`` in place.
+    Returns ``[(key, old, new, reason)]`` for the keys that changed: empty for an SFT config and for a
+    config this already ran on (a saved CPT ``run_config.yaml``)."""
+    if cfg.cpt is None:
+        return []
+    changed = []
+    for key, (value, reason) in CPT_FORCED_TRAIN.items():
+        old = cfg.train[key]
+        if old != value:
+            cfg.train[key] = value
+            changed.append((key, old, value, reason))
+    return changed
 
 
 def register_configs() -> None:

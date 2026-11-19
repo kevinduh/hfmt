@@ -40,16 +40,21 @@ def write_logs(folder, logs):
 
 def make_run(root, folder, run_name="sweep", *, model=False, scores=None, inf_scores=None, checkpoints=(),
              logs=(), inf_logs=(), preds=None, inf_preds=None, inf_decode=None, test=True, max_steps=400,
-             metric="eval_sp_bleu"):
+             metric="eval_sp_bleu", cpt=False, output_root=None):
     """A run folder like grid.py + training (+ launch.sh inf) leave it. model: True (saved, with
     training_info.yaml) or "partial" (cut off while saving); checkpoints: (step, complete[, best_step,
     best]); logs: (file name, text); scores/inf_scores: the scores.json content; preds/inf_preds: the
-    lines of test1.pred.trg. Any inf_* argument also writes inf/test/inf_config.yaml (decode: inf_decode)."""
+    lines of test1.pred.trg. Any inf_* argument also writes inf/test/inf_config.yaml (decode: inf_decode).
+    cpt: a CPT run (the saved config has a cpt block); output_root: the saved output_root."""
     path = os.path.join(root, folder)
     os.makedirs(path)
     cfg = {"run_name": run_name, "inf_name": "test", "slurm": SLURM, "decode": DECODE,
            "train": {"max_steps": max_steps, "metric_for_best_model": metric},
            "data": {"test": TEST if test else None}}
+    if cpt:
+        cfg["cpt"] = {"use_monotext": True, "use_bitext": True, "bitext_format": "separate"}
+    if output_root:
+        cfg["output_root"] = output_root
     with open(os.path.join(path, "run_config.yaml"), "w") as f:
         f.write("defaults:\n  - base_config\n  - _self_\n\n" + yaml.safe_dump(cfg))   # as grid.py saves it
     if model:
@@ -343,7 +348,8 @@ def test_report_and_delete_checkpoints():
 # --- experiments not launched ------------------------------------------------------
 
 def write_experiment(folder, name, run_name, grid=None, defaults=("config", "dataset")):
-    """An experiment yaml as egs/ has them; grid: {axis: "v1,v2"} for a .sweep.yaml."""
+    """An experiment yaml as egs/ has them; grid: {axis: "v1,v2"} for a .sweep.yaml; defaults: the
+    entries before the peft override (e.g. add {"cpt": "default"} for a CPT experiment)."""
     cfg = {"defaults": list(defaults) + [{"override peft": "lora_default"}, "_self_"], "run_name": run_name,
            "checkpoint": "Qwen/Qwen3.5-2B", "instruction": "Translate French to English"}
     if grid:
@@ -394,6 +400,49 @@ def test_experiments_not_launched():
     with contextlib.redirect_stdout(out):
         R.main([empty, "--no-slurm"])
     assert "first.yaml  # 1 job(s)" in out.getvalue() and out.getvalue().count("first.yaml") == 1
+
+
+def test_cpt_runs():
+    root = tempfile.mkdtemp()
+    ck = [(50, True)]
+    done = R.inspect_folder(make_run(root, "cpt_done", "cpt_done", model=True, checkpoints=ck, cpt=True))
+    assert done["kind"] == "cpt" and not done["has_test"]                  # never decodes, though data.test is set
+    assert R.classify(done) == "finished" and R.checkpoints_deletable(done)
+    interrupted = R.inspect_folder(make_run(root, "cpt_int", "cpt_int", checkpoints=ck, cpt=True))
+    assert R.fix_command("interrupted", interrupted) == f"bash egs/launch.sh cpt {interrupted['path']}/run_config.yaml"
+    failed = R.inspect_folder(make_run(root, "cpt_fail", "cpt_fail", logs=[("slurm-78.out", TRACEBACK)], cpt=True))
+    assert R.fix_command("failed", failed).endswith(f" egs/job.sh cpt {failed['path']}")
+    sft = R.inspect_folder(make_run(root, "sft_done", "sft_done", model=True, checkpoints=ck))
+    assert sft["kind"] == "sft" and sft["has_test"] and R.classify(sft) == "no_inference"   # SFT unchanged
+
+
+def test_experiments_in_pair_folders_with_shared_dataset():
+    """egs/synlrl layout: dataset.yaml one level up, pair folders with `- ../dataset` yamls and the same
+    run_names in every pair."""
+    root = tempfile.mkdtemp()
+    open(os.path.join(root, "dataset.yaml"), "w").close()
+    pairs = {p: os.path.join(root, p) for p in ("tuk-eng", "shn-eng")}
+    exps = {}
+    for p, folder in pairs.items():
+        os.makedirs(os.path.join(folder, "outputs"))
+        exps[p, "sft"] = write_experiment(folder, "sft_lora.yaml", "sft_lora", defaults=("config", "../dataset"))
+        exps[p, "cpt"] = write_experiment(folder, "cpt_lora.yaml", "cpt_lora",
+                                          defaults=("config", "../dataset", {"cpt": "default"}))
+    write_experiment(pairs["tuk-eng"], "not_an_experiment.yaml", "x", defaults=("config", "base"))
+    assert R.find_experiments([root]) == sorted(exps.values())
+    assert R.find_experiments([os.path.join(pairs["tuk-eng"], "outputs")]) == [exps["tuk-eng", "cpt"], exps["tuk-eng", "sft"]]
+    assert R.read_experiment(exps["tuk-eng", "cpt"])["kind"] == "cpt" and R.read_experiment(exps["tuk-eng", "sft"])["kind"] == "sft"
+    tuk_out = os.path.join(pairs["tuk-eng"], "outputs")
+    make_run(tuk_out, "sft_lora", "sft_lora", model=True, test=False, output_root=tuk_out)   # only tuk-eng's SFT ran
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        R.main([root, "--no-slurm"])
+    text = out.getvalue()
+    rel = lambda path: os.path.relpath(path, R.ROOT)
+    assert f"bash egs/launch.sh sft {rel(exps['shn-eng', 'sft'])}" in text           # same run_name, other pair
+    assert f"bash egs/launch.sh sft {rel(exps['tuk-eng', 'sft'])}" not in text
+    assert f"bash egs/launch.sh cpt {rel(exps['tuk-eng', 'cpt'])}" in text           # CPT experiments get launch.sh cpt
+    assert f"bash egs/launch.sh cpt {rel(exps['shn-eng', 'cpt'])}" in text
 
 
 def test_read_real_experiments():

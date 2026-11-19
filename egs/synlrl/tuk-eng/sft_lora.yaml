@@ -1,0 +1,20 @@
+# This experiment is for a LoRA SFT of Tiny Aya global on synlrl tuk-eng (the example SFT run).
+defaults:
+  - config
+  - ../dataset
+  - override peft: lora_tiny_aya_all_linear
+  - _self_
+
+run_name: sft_lora
+checkpoint: CohereLabs/tiny-aya-global
+instruction: "Translate Turkmen to English"
+
+data:
+  src: tuk
+  trg: eng
+
+decode:
+  batch_size: 64
+
+wandb:
+  tags: [synlrl, tuk-eng]

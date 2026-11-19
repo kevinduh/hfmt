@@ -1,7 +1,7 @@
 # synlrl experiments
 
 Low-resource X-English translation with Tiny Aya global: SFT on a small seed bitext, and continued
-pre-training (CPT) on synthetic monolingual text plus the seed bitext before SFT.
+pre-training (CPT) on monolingual text (the source side of `pool8k`) plus the seed bitext before SFT.
 
 ## Language pairs
 
@@ -20,7 +20,7 @@ All pairs share `dataset.yaml` (`- ../dataset`); each experiment sets `data.src`
    | File | Used for |
    |---|---|
    | `seed1.<src>-eng.<src>`, `seed1.<src>-eng.eng` | training bitext (SFT; CPT when `cpt.use_bitext`) |
-   | `synth1.<src>` | monolingual text (CPT when `cpt.use_monotext`; SFT ignores it) |
+   | `pool8k.<src>-eng.<src>` | monolingual text: the source side only (CPT when `cpt.use_monotext`; SFT ignores it) |
    | `flores200.smalldev-256.<src>`, `flores200.smalldev-256.eng` | dev |
    | `flores200.dev.<src>`, `flores200.dev.eng` | test (SFT; CPT never decodes) |
 
@@ -40,7 +40,7 @@ Each pair folder has three experiments, all LoRA (`lora_tiny_aya_all_linear`):
 | File | What it runs |
 |---|---|
 | `sft_lora.yaml` | SFT from Tiny Aya global (the baseline) |
-| `cpt_lora.yaml` | CPT from Tiny Aya global on `synth1` + `seed1` (`conf/cpt/default.yaml`) |
+| `cpt_lora.yaml` | CPT from Tiny Aya global on `pool8k` (source side) + `seed1` (`conf/cpt/default.yaml`) |
 | `sft_lora_after_cpt.yaml` | SFT from `cpt_lora`'s merged model (`outputs/cpt_lora/model_merged`) |
 
 From the repo root, on a login node:

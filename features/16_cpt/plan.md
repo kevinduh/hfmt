@@ -20,7 +20,7 @@ Developer decisions so far (2026-11-18):
 - Q13: an explicit `launch.sh cpt <cpt yaml>`; a mismatch is refused both ways.
 - §5: the examples go in a **new, committed `egs/synlrl/`** with `tuk-eng`, `shn-eng` and `ewe-eng`. Each
   pair has an `sft_lora.yaml` (the example SFT run, as in `egs/synth_lrl`) and a `cpt_lora.yaml` like it.
-  `egs/synlrl/dataset.yaml` adds `monotext: [${oc.env:HFMT_DATA_ROOT}/synth1.${data.src}]`. The original
+  `egs/synlrl/dataset.yaml` adds `monotext: [${oc.env:HFMT_DATA_ROOT}/pool8k.${data.src}-${data.trg}.${data.src}]` (2026-11-19: the pool8k source side, since those files exist; was `synth1.${data.src}`). The original
   `egs/synth_lrl/` stays untracked and untouched, and will be deleted by hand later. D5: fix
   `run_status.py` for `- ../dataset` yamls.
 - E1: the `egs/synlrl` yamls use the tracked `conf/peft/lora_tiny_aya_all_linear.yaml` as is. E2: the
@@ -305,7 +305,7 @@ train:
   src: [${oc.env:HFMT_DATA_ROOT}/seed1.${data.src}-${data.trg}.${data.src}]
   trg: [${oc.env:HFMT_DATA_ROOT}/seed1.${data.src}-${data.trg}.${data.trg}]
 monotext:
-  - ${oc.env:HFMT_DATA_ROOT}/synth1.${data.src}
+  - ${oc.env:HFMT_DATA_ROOT}/pool8k.${data.src}-${data.trg}.${data.src}
 dev:
   src: [${oc.env:HFMT_DATA_ROOT}/flores200.smalldev-256.${data.src}]
   trg: [${oc.env:HFMT_DATA_ROOT}/flores200.smalldev-256.${data.trg}]
@@ -314,8 +314,7 @@ test:
   trg: [${oc.env:HFMT_DATA_ROOT}/flores200.dev.${data.trg}]
 ```
 - SFT ignores `monotext`; CPT ignores `test`.
-- `synth1.{tuk,shn,ewe}` aren't in `$HFMT_DATA_ROOT` yet (checked 2026-11-18). Until they are, a CPT launch
-  composes but the job fails when it loads the file.
+- Monotext is the source side of `pool8k.<src>-eng` (8003 lines per pair; `synth1.<src>` wasn't available).
 
 **`local_setting.sh.example`** (per pair, like mmtc's): `export HFMT_DATA_ROOT=/path/to/...` with a
 one-line comment. Each user copies it to the gitignored `local_setting.sh`.
@@ -401,6 +400,13 @@ reported). Change:
     built by TRL's own collator (`DataCollatorForLanguageModeling(padding_free=True)`);
   - for Qwen3.5-0.8B or 2B (hybrid) and Gemma 3 1B / Tiny Aya (control, expected equal);
   - a per-example loss difference beyond bf16 noise on Qwen3.5 only confirms R1.
+
+  **Result (2026-11-19, job 1252491, A100, float32, use_cache=False as in training): confirmed.** Per-example
+  loss, packed vs alone, 8 made-up sentences: Qwen3.5-2B differs by 0.05–1.42 nats on every example after
+  the first (first example: 4e-6, the noise floor); Tiny Aya global (attention + sliding) and Qwen3-0.6B
+  stay at ≤7e-6. So plain-attention models are kept apart by transformers' position_ids mask, and Qwen3.5's
+  Gated DeltaNet layers leak. (Job 1252483 ran with the default cache on; transformers then skips the
+  per-example mask and every model leaked. Training is unaffected: build_model sets use_cache=False.)
 - **R2 — EOS is a chat-turn token.** Raw-text CPT appends `<|END_OF_TURN_TOKEN|>` (Aya) / likely
   `<|im_end|>` (Qwen) after every sentence. The model learns "a sentence is followed by end-of-turn", which is
   close to what it sees in SFT replies, so this is probably harmless or even helpful. The alternative is the

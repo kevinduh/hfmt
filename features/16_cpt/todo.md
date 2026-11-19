@@ -255,7 +255,7 @@ Result (2026-11-19): `egs/mmtc` report rows unchanged against the pre-E version;
 ## F. Experiments: `egs/synlrl/` (plan §5)
 
 - [x] `egs/synlrl/dataset.yaml`: `# @package data`, one-line header, `seed1` train, `monotext:
-      [${oc.env:HFMT_DATA_ROOT}/synth1.${data.src}]`, `flores200.smalldev-256` dev, `flores200.dev` test.
+      [${oc.env:HFMT_DATA_ROOT}/pool8k.${data.src}-${data.trg}.${data.src}]` (was `synth1.${data.src}`; changed 2026-11-19), `flores200.smalldev-256` dev, `flores200.dev` test.
 - [x] For each of `tuk-eng`, `shn-eng`, `ewe-eng` (instruction: Turkmen / Shan / Ewe):
   - [x] `local_setting.sh.example` (`export HFMT_DATA_ROOT=/path/to/...`, one comment line);
   - [x] `sft_lora.yaml`: one-line header; `config`, `../dataset`, `override peft:
@@ -281,17 +281,18 @@ Result (2026-11-19): `cpt_lora` and `sft_lora` of all three pairs dry-run to `jo
 
 ## G. Quick test: Qwen3.5 packing leak (plan R1; independent, any time)
 
-- [ ] `features/16_cpt/test_packing_leak.py`:
+- [x] `features/16_cpt/test_packing_leak.py`:
   - made-up sentences;
   - load with `mt_model.load_base_model` (lora mode = bf16, no adapter needed);
   - per-example loss (1) one sequence at a time and (2) as one packed padding-free batch from TRL's
     `DataCollatorForLanguageModeling(padding_free=True)` (position_ids reset, no attention mask);
   - models: Qwen3.5-0.8B or 2B (hybrid) and Tiny Aya global or Gemma 3 1B (control);
   - prints the per-example loss difference and the max.
-- [ ] `features/16_cpt/test_packing_leak.sh`: sbatch wrapper that sources `install/path.sh` and waits for
+- [x] `features/16_cpt/test_packing_leak.sh`: sbatch wrapper that sources `install/path.sh` and waits for
       its GPU as `egs/job.sh` does.
-- [ ] Give the developer the command; read the output before concluding.
-- [ ] Record the result in `plan.md` R1. If the leak is confirmed on Qwen3.5 only: note "use
+- [x] Give the developer the command; read the output before concluding.
+- [x] Record the result in `plan.md` R1 (confirmed: Qwen3.5 leaks, Tiny Aya / Qwen3-0.6B don't; job 1252491).
+- [ ] Decide the Qwen3.5 strategy with the developer (recommended: `wrapped`). If the leak is confirmed on Qwen3.5 only: note "use
       `cpt.packing_strategy=wrapped` for Qwen3.5" in the README CPT section (or a
       `conf/cpt/` option for it), and decide with the developer.
 
@@ -320,7 +321,7 @@ Result (2026-11-19): `cpt_lora` and `sft_lora` of all three pairs dry-run to `jo
 
 ## I. Developer validation (cluster)
 
-- [ ] `egs/synlrl/<pair>` once `synth1.<src>` exists: CPT (`cpt_lora.yaml`), merge, `sft_lora_after_cpt.yaml`,
+- [ ] `egs/synlrl/<pair>` (monotext = `pool8k` source side): CPT (`cpt_lora.yaml`), merge, `sft_lora_after_cpt.yaml`,
       and the `sft_lora.yaml` baseline. Check:
   - the CPT log: forced keys, example counts and token share per source, packing truncation count;
   - memory and batch size (R3); adjust `train_batch_size` / `gradient_accumulation_steps` in `cpt_lora.yaml`;

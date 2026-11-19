@@ -21,6 +21,7 @@ ROOT = os.environ.setdefault("HFMT_ROOT", os.path.dirname(os.path.dirname(os.pat
 os.environ["HFMT_DATA_ROOT"] = "/dummy/data/fr-en"
 sys.path.insert(0, ROOT)
 from hfmt import grid  # noqa: E402
+from hfmt.hydra_config import CPT_FORCED_TRAIN, apply_cpt_overrides  # noqa: E402
 
 SINGLE = os.path.join(ROOT, "egs/mmtc/fr-en/sft_lora.yaml")
 SWEEP = os.path.join(ROOT, "egs/mmtc/fr-en/sft_lora.sweep.yaml")
@@ -227,6 +228,86 @@ def test_dataset_with_absolute_paths_needs_no_data_root():
         os.environ["HFMT_DATA_ROOT"] = saved_root
     data = saved(out, "sft_lora").data
     assert data.data_root is None and data.test is None and list(data.train.src) == ["/abs/train.fr"]
+
+
+# --- CPT config (feature 16_cpt) ---
+
+def cpt_experiment(monotext="[/abs/mono.fr]"):
+    """A temp experiment folder: fr-en's dataset.yaml + sft_lora.yaml with `- cpt: default` and a
+    data.monotext list. Returns (folder, experiment name)."""
+    tmp = tempfile.mkdtemp()
+    shutil.copy(os.path.join(os.path.dirname(SINGLE), "dataset.yaml"), tmp)
+    text = open(SINGLE).read().replace("  - override peft:", "  - cpt: default\n  - override peft:", 1)
+    open(os.path.join(tmp, "cpt_lora.yaml"), "w").write(text + f"\ndata:\n  monotext: {monotext}\n")
+    return tmp, "cpt_lora"
+
+
+def compose_checked(exp_dir, name, *overrides):
+    """grid's compose + resolve + check_config + missing-keys check; SystemExit on any problem."""
+    grid.register_configs()                                       # grid.main does this for a launch
+    with contextlib.redirect_stderr(io.StringIO()):
+        return grid._compose_checked(exp_dir, name, list(overrides))
+
+
+def compose_fails(exp_dir, name, *overrides):
+    try:
+        compose_checked(exp_dir, name, *overrides)
+    except SystemExit:
+        return True
+    return False
+
+
+def test_cpt_experiment_composes():
+    cfg = compose_checked(*cpt_experiment())
+    assert (cfg.cpt.use_monotext, cfg.cpt.use_bitext, cfg.cpt.bitext_format) == (True, True, "separate")
+    assert (cfg.cpt.monotext_ratio, cfg.cpt.max_length, cfg.cpt.packing_strategy) == (0.5, 1024, "bfd")
+    assert list(cfg.data.monotext) == ["/abs/mono.fr"]
+    assert compose_checked(os.path.dirname(SINGLE), "sft_lora").cpt is None    # SFT: no cpt block
+
+
+def test_cpt_rules():
+    exp = cpt_experiment()
+    assert compose_fails(*exp, "cpt.bitext_format=both")
+    assert compose_fails(*exp, "cpt.packing_strategy=greedy")
+    assert compose_fails(*exp, "cpt.use_monotext=false", "cpt.use_bitext=false")   # no data
+    assert compose_fails(*exp, "data.monotext=null")                               # use_monotext without files
+    assert compose_fails(*exp, "data.monotext=[]")
+    assert compose_fails(*exp, "cpt.monotext_ratio=0")                             # both sources: 0 < r < 1
+    assert compose_fails(*exp, "cpt.monotext_ratio=1")
+    assert compose_fails(*exp, "cpt.use_bitext=false", "cpt.monotext_ratio=abc")   # wrong type
+    compose_checked(*exp, "cpt.use_bitext=false", "cpt.monotext_ratio=1")          # one source: ratio unused
+    compose_checked(*exp, "cpt.use_monotext=false", "data.monotext=null")          # bitext only: no files needed
+    compose_checked(*exp, "cpt.bitext_format=concat", "cpt.packing_strategy=wrapped")
+
+
+def test_apply_cpt_overrides():
+    cfg = compose_checked(*cpt_experiment(), "train=longrun")     # an SFT schedule: decodes, BLEU-selected
+    changed = apply_cpt_overrides(cfg)
+    assert {key for key, *_ in changed} == set(CPT_FORCED_TRAIN)
+    assert all(cfg.train[key] == value for key, (value, _) in CPT_FORCED_TRAIN.items())
+    assert apply_cpt_overrides(cfg) == []                         # a saved CPT config: nothing to change
+    sft = compose_checked(os.path.dirname(SINGLE), "sft_lora", "train=longrun")
+    before = OmegaConf.to_container(sft.train)
+    assert apply_cpt_overrides(sft) == [] and OmegaConf.to_container(sft.train) == before
+
+
+def test_sft_ignores_monotext_in_shared_dataset():
+    tmp = tempfile.mkdtemp()                                      # dataset.yaml lists monotext too
+    open(os.path.join(tmp, "dataset.yaml"), "w").write(
+        open(os.path.join(os.path.dirname(SINGLE), "dataset.yaml")).read() + "monotext:\n  - /abs/mono.fr\n")
+    shutil.copy(SINGLE, tmp)
+    out, dirs, _ = run(os.path.join(tmp, "sft_lora.yaml"))
+    cfg = saved(out, "sft_lora")
+    assert list(cfg.data.monotext) == ["/abs/mono.fr"] and cfg.cpt is None
+
+
+def test_configs_saved_before_cpt_still_compose():
+    out, _, _ = run(SINGLE)                                       # strip the new keys, as in an old run_config
+    rc = os.path.join(out, "sft_lora", "run_config.yaml")
+    text = "".join(l for l in open(rc) if not l.startswith(("cpt:", "  monotext:")))
+    open(rc, "w").write(text)
+    cfg = compose_checked(os.path.dirname(rc), "run_config")
+    assert cfg.cpt is None and cfg.data.monotext is None
 
 
 

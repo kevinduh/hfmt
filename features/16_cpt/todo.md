@@ -73,42 +73,42 @@ Result (2026-11-18), A100 80GB, Qwen3.5-2B LoRA, 40 steps, same config and seed:
 ## B. Config: schema, `conf/cpt/`, checks, forced train keys (plan §1)
 
 ### B1. Schema (`hfmt/hydra_config.py`)
-- [ ] `DataConfig.monotext: Optional[List[str]] = None`.
-- [ ] `CPTConfig` (`use_monotext`, `use_bitext`, `bitext_format`, `monotext_ratio`, `max_length`,
+- [x] `DataConfig.monotext: Optional[List[str]] = None`.
+- [x] `CPTConfig` (`use_monotext`, `use_bitext`, `bitext_format`, `monotext_ratio`, `max_length`,
       `packing_strategy`, all `MISSING`), with a docstring; `Config.cpt: Optional[CPTConfig] = None`.
-- [ ] Module docstring: `cpt` and `data.monotext` are read by `cpt_monotext_bitext.py` (and `grid.py`);
+- [x] Module docstring: `cpt` and `data.monotext` are read by `cpt_monotext_bitext.py` (and `grid.py`);
       SFT ignores `monotext`, CPT ignores `test`.
 
 ### B2. `conf/cpt/default.yaml`
-- [ ] Header (1 line, what it's for). Values: `use_monotext: true`, `use_bitext: true`,
+- [x] Header (1 line, what it's for). Values: `use_monotext: true`, `use_bitext: true`,
       `bitext_format: separate`, `monotext_ratio: 0.5`, `max_length: 1024`, `packing_strategy: bfd`.
-- [ ] Not added to `conf/config.yaml`'s defaults (experiments add `- cpt: default`).
+- [x] Not added to `conf/config.yaml`'s defaults (experiments add `- cpt: default`).
 
 ### B3. `check_config` additions
-- [ ] With `cpt` set:
+- [x] With `cpt` set:
   - `bitext_format ∈ {separate, concat}`, `packing_strategy ∈ {bfd, wrapped}`;
   - at least one of `use_monotext` / `use_bitext`;
   - `use_monotext` needs a non-empty `data.monotext`;
   - `0 < monotext_ratio < 1` when both sources are on.
-- [ ] Without `cpt`: nothing new (`data.monotext` allowed and ignored).
-- [ ] Docstring updated.
+- [x] Without `cpt`: nothing new (`data.monotext` allowed and ignored).
+- [x] Docstring updated.
 
 ### B4. Forced train keys
-- [ ] `CPT_FORCED_TRAIN = {packing: True, completion_only_loss: False, inference_callback_interval: 0,
+- [x] `CPT_FORCED_TRAIN = {packing: True, completion_only_loss: False, inference_callback_interval: 0,
       metric_for_best_model: "eval_loss", greater_is_better: False}` with a one-line reason each, in
       `hydra_config.py`.
-- [ ] `apply_cpt_overrides(cfg) -> list[(key, old, new)]`: sets them in place when `cfg.cpt` is set,
+- [x] `apply_cpt_overrides(cfg) -> list[(key, old, new)]`: sets them in place when `cfg.cpt` is set,
       returns what changed (empty on a saved CPT config or an SFT config).
 
 ### Done when
-- [ ] `test_grid.py` additions (with B's code; the launch-path tests come in C):
+- [x] `test_grid.py` additions (with B's code; the launch-path tests come in C):
   - a CPT experiment composes and passes `check_config`;
   - each `check_config` CPT rule fails with its message;
   - `apply_cpt_overrides` on `train=longrun` changes the five keys, a second call changes nothing, and an
     SFT config is untouched;
   - a `dataset.yaml` with `monotext` composes for an SFT experiment;
   - old saved configs (no `cpt`) still compose.
-- [ ] Tests pass. `todo.md` B ticked; commit message presented.
+- [x] Tests pass. `todo.md` B ticked; commit message presented.
 
 ## C. Launch path: `grid.py`, `launch.sh`, `job.sh` (plan §4)
 

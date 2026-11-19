@@ -223,28 +223,33 @@ resume from checkpoint-2 continues at step 3 and ends at the same eval_loss.
   - TRL warns that padding-free/packing without flash attention may let examples attend to each other.
     Expected; Transformers builds a per-example mask from `position_ids` for attention layers (R1). G's
     test (Tiny Aya as the control) checks it.
-- [ ] Delete the smoke-test folder. `todo.md` D ticked; commit message presented.
+- [x] Delete the smoke-test folder (deleted 2026-11-19). `todo.md` D ticked; commit message presented.
 
 ## E. `tools/run_status.py` (plan §4, §5)
 
-- [ ] `inspect_folder`: `is_cpt` = the saved config has `cpt`; `has_test = False` for a CPT run.
-- [ ] `fix_command`: `cpt` instead of `sft` for a CPT run (`launch.sh cpt <rc>`, `sbatch ... egs/job.sh cpt
+- [x] `inspect_folder`: `is_cpt` = the saved config has `cpt`; `has_test = False` for a CPT run.
+- [x] `fix_command`: `cpt` instead of `sft` for a CPT run (`launch.sh cpt <rc>`, `sbatch ... egs/job.sh cpt
       <folder>`).
-- [ ] `find_experiments` / `read_experiment` (D5):
+- [x] `find_experiments` / `read_experiment` (D5):
   - an experiment's defaults start with `config` followed by a plain string whose last path component
     starts with `dataset` (`dataset`, `../dataset`, `dataset_small100.yaml`); it sets `run_name`;
   - an experiment folder is any searched folder holding such a yaml (outputs/, run folders and
     checkpoints still skipped), not only folders with a `dataset.yaml`; the folder holding a root
     `outputs/` counts as before.
-- [ ] Module docstring: CPT runs and the experiment rule.
+- [x] Module docstring: CPT runs and the experiment rule.
+- [x] (Found while doing E) `launch_status` matched run folders to experiments by `run_name` only, so pair
+      folders sharing run_names (every synlrl pair's `sft_lora`) hid each other; it now also matches the
+      saved `output_root` (run folders without one still match by `run_name`). Not-launched commands use
+      `launch.sh cpt` for CPT experiments.
 
 ### Done when
-- [ ] `tools/test_run_status.py` additions:
+Result (2026-11-19): `egs/mmtc` report rows unchanged against the pre-E version; `egs/synth_lrl` (untracked, read only) now has its `../dataset` and `dataset_*.yaml` experiments found (before: none), with only the two `TEMPLATE` yamls not launched.
+- [x] `tools/test_run_status.py` additions:
   - a CPT run with `model/training_info.yaml` is "finished" and its checkpoints deletable;
   - an interrupted CPT run's fix command is `launch.sh cpt ...`; a failed one's is `... egs/job.sh cpt ...`;
   - a pair folder with `- ../dataset` yamls and no `dataset.yaml` is found, from its parent and from its
     `outputs/`; a yaml whose second default isn't a dataset still isn't an experiment.
-- [ ] Tests pass. Run it read-only on `egs/mmtc` and compare with the output before the change (same
+- [x] Tests pass. Run it read-only on `egs/mmtc` and compare with the output before the change (same
       rows). `todo.md` E ticked; commit message presented.
 
 ## F. Experiments: `egs/synlrl/` (plan §5)

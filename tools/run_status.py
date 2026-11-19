@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""Status of SFT run folders: training and test inference, the scores of both, and the command for each
-unfinished one.
+"""Status of SFT and CPT run folders: training and test inference, the scores of both, and the command for
+each unfinished one.
 
     python tools/run_status.py egs/mmtc/fr-en/outputs                  # every run folder + fix commands
     python tools/run_status.py egs/mmtc/fr-en/outputs --slurm exclude=<node> --slurm gres=gpu:a100:1
@@ -13,12 +13,14 @@ folder is any folder with a run_config.yaml (written by hfmt/grid.py); folders u
 and Slurm:
   running/pending      the training job is in squeue
   finished             model/, and inference scores (<run>/inf/<inf_name>/scores.json) if the run has test sets
+                       (a CPT run, one whose run_config.yaml has a cpt block, never decodes: model/ is enough)
   inf_running/pending  model/, and the inference job (launch.sh inf) is in squeue
   no_inference         model/ but no inference scores -> launch.sh inf <run>/run_config.yaml
                        (REASON: the inference error, if one ran and failed)
   bad_model            model/ was cut off while saving (no model/training_info.yaml, no scores) -> delete
                        it, then run this tool again (runs from before 2026-11-02 have no training_info.yaml)
   interrupted          a complete checkpoint-N (trainer_state.json), no model/ -> launch.sh sft <run>/run_config.yaml
+                       (launch.sh cpt for a CPT run, here and in the commands below)
                        (resume; also after a crash midway: check REASON first, e.g. OOM -> --slurm gres=...)
   bad_checkpoint       the last checkpoint-N was cut off while saving -> delete it, then run this tool again
   failed               a log but no checkpoint: died before its first save -> sbatch egs/job.sh sft <run>
@@ -30,9 +32,10 @@ test<i>.pred.trg files; "NO: ..." = what differs (counts of differing lines); "d
 used other decode.* or data.test settings, so the two aren't comparable.
 --slurm KEY=VALUE replaces that slurm setting of the saved config in the commands (partition, gres, time,
 mem_gb, cpus, constraint, exclude). Without squeue/sacct (or with --no-slurm), queued jobs aren't detected.
-Experiments not launched: the experiment yamls (next to a dataset.yaml, in a folder searched or holding a
-searched outputs/ folder) with fewer run folders of their run_name (outputs/ or complete/) than grid points
-(hydra.sweeper.params; 1 for a single-run file). Partly launched grids are listed there; never launched
+Experiments not launched: the experiment yamls (defaults starting with config and a dataset yaml, e.g.
+`dataset` or `../dataset`; in a folder searched or holding a searched outputs/ folder) with fewer run folders
+of their run_name and output_root (outputs/ or complete/) than grid points (hydra.sweeper.params; 1 for a
+single-run file). Partly launched grids are listed there; never launched
 ones only as their launch.sh command (with the job count) under "To fix". A run folder
 under another output_root counts only if it's below a searched folder.
 Checkpoints deletable: folders whose checkpoint-*/ can go (count, size) -- test scores written (training's
@@ -107,7 +110,7 @@ TRAINING_DONE = {"finished", "no_inference", "inf_running", "inf_pending"}
 FIX_TITLES = {
     "no_inference": "decode the test sets of the trained model (written to <run>/inf/<inf_name>/)",
     "bad_model": "model/ was cut off while saving: training didn't finish",
-    "interrupted": "resume from the last complete checkpoint (launch.sh sft <run>/run_config.yaml)",
+    "interrupted": "resume from the last complete checkpoint (launch.sh sft|cpt <run>/run_config.yaml)",
     "failed": "rerun from the saved run_config.yaml, in the same folder",
     "not_started": "run from the saved run_config.yaml, in the same folder",
     "bad_checkpoint": "a checkpoint was cut off while saving (resume refuses it)",
@@ -153,52 +156,65 @@ def find_run_folders(roots, include_archived=False):
 
 
 def find_experiments(roots):
-    """Experiment yamls (sorted absolute paths) in the experiment folders (those with a dataset.yaml) below
-    `roots`, or holding a root (an experiment's outputs/ folder): every yaml there but dataset.yaml whose
-    defaults start with config and dataset and that sets a run_name (CLAUDE.md). outputs/ and run folders
-    aren't searched."""
+    """Experiment yamls (sorted absolute paths) below `roots`, or next to a root that is an experiment's
+    outputs/ folder: every yaml whose defaults start with config and a dataset yaml (`dataset`,
+    `../dataset`, ...) and that sets a run_name (CLAUDE.md). outputs/ and run folders aren't searched."""
     folders = set()
     for root in roots:
         root = os.path.abspath(root)
-        if os.path.isfile(os.path.join(os.path.dirname(root), "dataset.yaml")):
+        if os.path.basename(root) == "outputs" or os.path.isfile(os.path.join(os.path.dirname(root), "dataset.yaml")):
             folders.add(os.path.dirname(root))
         for dirpath, dirnames, filenames in os.walk(root):
             if "run_config.yaml" in filenames:
                 dirnames[:] = []
                 continue
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS | {"outputs"} and not CHECKPOINT_RE.match(d)]
-            if "dataset.yaml" in filenames:
-                folders.add(dirpath)
+            folders.add(dirpath)
     found = []
     for folder in folders:
         for name in os.listdir(folder):
             path = os.path.join(folder, name)
-            if name.endswith(".yaml") and name != "dataset.yaml" and read_experiment(path):
+            if name.endswith(".yaml") and not name.startswith("dataset") and read_experiment(path):
                 found.append(path)
     return sorted(found)
 
 
+def _is_dataset_default(entry):
+    """Whether a defaults-list entry names a dataset yaml: a plain string whose last path component starts
+    with "dataset" (`dataset`, `../dataset`, `dataset_small100.yaml`)."""
+    return isinstance(entry, str) and os.path.basename(entry).startswith("dataset")
+
+
 def read_experiment(path):
-    """{"path", "run_name", "jobs"} of an experiment yaml (jobs: its grid size, 1 for a single-run file), or
-    None if it isn't one. The grid is hydra.sweeper.params, one axis per key, comma-separated values."""
+    """{"path", "run_name", "jobs", "kind", "output_root"} of an experiment yaml (jobs: its grid size, 1 for
+    a single-run file; kind: "cpt" if its defaults pick a cpt option, else "sft"; output_root: where its run
+    folders go), or None if it isn't one. The grid is hydra.sweeper.params, one axis per key,
+    comma-separated values."""
     cfg, error = _load_yaml(path)
     defaults = cfg.get("defaults") if isinstance(cfg, dict) else None
-    if error or not isinstance(defaults, list) or defaults[:2] != ["config", "dataset"] \
-            or not isinstance(cfg.get("run_name"), str):
+    if error or not isinstance(defaults, list) or len(defaults) < 2 or defaults[0] != "config" \
+            or not _is_dataset_default(defaults[1]) or not isinstance(cfg.get("run_name"), str):
         return None
     params = ((cfg.get("hydra") or {}).get("sweeper") or {}).get("params") or {}
     jobs = 1
     for values in params.values():
         jobs *= len(str(values).split(","))
-    return {"path": path, "run_name": cfg["run_name"], "jobs": jobs}
+    kind = "cpt" if any(isinstance(d, dict) and "cpt" in d for d in defaults) else "sft"
+    output_root = cfg.get("output_root") if isinstance(cfg.get("output_root"), str) else None
+    return {"path": path, "run_name": cfg["run_name"], "jobs": jobs, "kind": kind,
+            "output_root": os.path.abspath(output_root or os.path.join(os.path.dirname(path), "outputs"))}
 
 
 def launch_status(experiments, run_infos):
     """(experiment, run folders launched) for the experiments with fewer run folders (any folder whose saved
-    run_name is theirs, complete/ included) than grid points: 0 = never launched; fewer = part of a grid
-    (a pinned axis, or folders deleted)."""
-    launched = Counter(info["run_name"] for info in run_infos)
-    return [(exp, launched[exp["run_name"]]) for exp in experiments if launched[exp["run_name"]] < exp["jobs"]]
+    run_name and output_root are theirs, complete/ included) than grid points: 0 = never launched; fewer =
+    part of a grid (a pinned axis, or folders deleted). A run folder whose saved config has no output_root
+    counts by run_name alone. Matching output_root keeps apart pair folders whose experiments share a
+    run_name (e.g. every egs/synlrl pair's sft_lora)."""
+    def launched(exp):
+        return sum(1 for info in run_infos if info["run_name"] == exp["run_name"]
+                   and info.get("output_root") in (None, exp["output_root"]))
+    return [(exp, n) for exp in experiments if (n := launched(exp)) < exp["jobs"]]
 
 
 def inspect_folder(path):
@@ -223,11 +239,15 @@ def inspect_folder(path):
     inf_config = os.path.join(inf_dir, "inf_config.yaml")
     inf_cfg = _load_yaml(inf_config)[0] if os.path.isfile(inf_config) else None
     inf_scores = _scores(os.path.join(inf_dir, "scores.json"))
+    kind = "cpt" if cfg.get("cpt") else "sft"           # a CPT run's saved config has a cpt block
+    output_root = cfg.get("output_root")
     info.update(
         run_name=cfg.get("run_name") or os.path.basename(path),
+        kind=kind,
+        output_root=os.path.abspath(output_root) if isinstance(output_root, str) else None,
         max_steps=train.get("max_steps"),
         metric=train.get("metric_for_best_model"),
-        has_test=bool(test.get("src")),
+        has_test=bool(test.get("src")) and kind != "cpt",   # CPT never decodes: model/ is the end
         slurm=cfg.get("slurm") or {},
         model=os.path.isdir(os.path.join(path, "model")),
         # Training writes model/training_info.yaml after the weights, the tokenizer and trainer_state.json,
@@ -538,7 +558,7 @@ def fix_command(state, info, overrides=()):
     rc = shlex.quote(os.path.join(info["path"], "run_config.yaml"))
     launch_overrides = "".join(" " + shlex.quote(f"slurm.{k}={v}") for k, v in overrides)
     if state == "interrupted":
-        return f"bash egs/launch.sh sft {rc}{launch_overrides}"
+        return f"bash egs/launch.sh {info['kind']} {rc}{launch_overrides}"
     if state == "no_inference":
         return f"bash egs/launch.sh inf {rc}{launch_overrides}"
     if state in ("failed", "not_started"):
@@ -547,7 +567,7 @@ def fix_command(state, info, overrides=()):
         flags += ["--requeue", "--open-mode=append",                       # as hfmt/grid.py's sbatch
                   f"--job-name={os.path.basename(info['path'])}",
                   f"--output={os.path.join(info['path'], 'slurm-%j.out')}"]
-        return "sbatch " + " ".join(shlex.quote(f) for f in flags) + f" egs/job.sh sft {shlex.quote(info['path'])}"
+        return "sbatch " + " ".join(shlex.quote(f) for f in flags) + f" egs/job.sh {info['kind']} {shlex.quote(info['path'])}"
     if state == "bad_checkpoint":
         step = info["checkpoints"][-1][0]
         return f"# delete {shlex.quote(os.path.join(info['path'], f'checkpoint-{step}'))}, then run this tool again"
@@ -648,7 +668,7 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", de
         # launched grids (no command) are listed here.
         never = sum(1 for _, n in unlaunched if not n)
         lines += ["", f"Experiments not launched ({len(unlaunched)}): fewer run folders with their run_name "
-                  "(outputs/ or complete/) than grid points"
+                  "and output_root (outputs/ or complete/) than grid points"
                   + (f"; {never} never launched (launch.sh commands below)" if never else "")]
         lines += [f"  {os.path.relpath(exp['path'], ROOT)}: {n} of {exp['jobs']} job(s)"
                   for exp, n in unlaunched if n]
@@ -660,7 +680,7 @@ def report(infos, states, rows, jobs, overrides=(), base=None, slurm_note="", de
             fixes[state].append(command)
     for exp, n in unlaunched:
         if not n:   # part of a grid: relaunching adds the whole grid again, so it's left to you
-            fixes["not_launched"].append(f"bash egs/launch.sh sft {shlex.quote(os.path.relpath(exp['path'], ROOT))}"
+            fixes["not_launched"].append(f"bash egs/launch.sh {exp['kind']} {shlex.quote(os.path.relpath(exp['path'], ROOT))}"
                                          f"  # {exp['jobs']} job(s)")
     if fixes:
         lines += ["", "To fix (review first; run on a login node):",

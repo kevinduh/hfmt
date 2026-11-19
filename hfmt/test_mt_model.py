@@ -1,5 +1,6 @@
-"""Tests for hfmt/mt_model.py's load_checkpoint_weights (the full fine-tune checkpoint reload). No GPU
-or training deps needed: a stand-in model class plays the PreTrainedModel.
+"""Tests for hfmt/mt_model.py's load_checkpoint_weights (the full fine-tune checkpoint reload) and
+check_parameter_dtype (the precision guard after a load). No GPU or training deps needed: a stand-in
+model class plays the PreTrainedModel.
 
 Run standalone (pytest isn't installed in the hfmt env):
     python hfmt/test_mt_model.py
@@ -10,7 +11,7 @@ import sys
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from hfmt.mt_model import load_checkpoint_weights  # noqa: E402
+from hfmt.mt_model import check_parameter_dtype, load_checkpoint_weights  # noqa: E402
 
 
 class FakeModel:
@@ -55,6 +56,39 @@ def test_a_name_mismatch_fails_instead_of_warning():
         assert model.weights == {"model.embed_tokens.weight": 0}
     else:
         raise AssertionError("expected the strict load_state_dict to fail")
+
+
+class FakeParameters:
+    """A model whose parameters are (dtype, is_floating_point) pairs."""
+
+    def __init__(self, *dtypes_and_floating):
+        self.dtypes_and_floating = dtypes_and_floating
+
+    def parameters(self):
+        return iter(SimpleNamespace(dtype=dtype, is_floating_point=lambda floating=floating: floating)
+                    for dtype, floating in self.dtypes_and_floating)
+
+
+def test_dtype_guard_passes_when_every_floating_parameter_matches():
+    check_parameter_dtype(FakeParameters(("torch.float32", True), ("torch.float32", True)),
+                          "torch.float32", "some/checkpoint")
+
+
+def test_dtype_guard_raises_on_a_mismatch_and_names_both_dtypes():
+    model = FakeParameters(("torch.bfloat16", True), ("torch.bfloat16", True), ("torch.float32", True))
+    try:
+        check_parameter_dtype(model, "torch.float32", "some/checkpoint")
+    except RuntimeError as error:
+        message = str(error)
+        assert "some/checkpoint" in message and "torch.float32" in message
+        assert "'torch.bfloat16': 2" in message
+    else:
+        raise AssertionError("expected a RuntimeError for bf16 parameters under a float32 request")
+
+
+def test_dtype_guard_ignores_non_floating_parameters():
+    check_parameter_dtype(FakeParameters(("torch.float32", True), ("torch.int64", False)),
+                          "torch.float32", "some/checkpoint")
 
 
 if __name__ == "__main__":

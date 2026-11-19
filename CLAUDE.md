@@ -36,22 +36,25 @@ hfmt/
 ├── hfmt/                    # Python entry-point scripts (not yet a package)
 │   ├── train_seq2seq.py     # encoder–decoder MT (T5, Marian) via Seq2SeqTrainer
 │   ├── sft_translation.py   # decoder-only MT SFT (qlora/lora/full) — Hydra-driven (@hydra.main)
+│   ├── cpt_monotext_bitext.py  # continued pre-training on monotext + bitext (packed raw text, no decoding) — Hydra-driven
+│   ├── train_common.py      # training steps shared by SFT and CPT (W&B, model + PEFT, SFTConfig, train/resume, save model/)
 │   ├── inf_translation.py   # decoder-only MT inference (trained run or downloaded checkpoint) — Hydra-driven
 │   ├── merge_model.py       # merge a run's lora/qlora adapter into model_merged/ (launch.sh merge)
 │   ├── mt_model.py          # model loading, prompting (CHAT_TEMPLATE_KWARGS), decoding, scoring shared by SFT + inference
 │   ├── hydra_config.py      # typed Hydra config schema (ConfigStore): types only, no defaults
-│   ├── grid.py              # login-node checks + job folders for egs/launch.sh (sft grid, inf, merge)
+│   ├── grid.py              # login-node checks + job folders for egs/launch.sh (sft/cpt grid, inf, merge)
 │   ├── decode_summarization.py  # zero/few-shot summarization
-│   └── test_grid.py  test_mt_model.py  test_sft_translation.py   # standalone tests (see "Tools and commands")
-├── conf/                    # SFT base config.yaml + groups train/ peft/ decode/; never experiments
+│   └── test_grid.py  test_mt_model.py  test_sft_translation.py  test_cpt_monotext_bitext.py   # standalone tests (see "Tools and commands")
+├── conf/                    # base config.yaml + groups train/ peft/ decode/ cpt/; never experiments
 ├── analysis/run_sacrebleu.py    # standalone BLEU/CHRF/TER + vocab-overlap scorer
 ├── install/                 # conda bootstrap; pins an exact Transformers commit and hydra-core
-├── egs/                     # recipes; launch.sh <sft|inf|merge> <yaml> launches the Hydra SFT workflow
+├── egs/                     # recipes; launch.sh <sft|cpt|inf|merge> <yaml> launches the Hydra workflow
 │   ├── launch.sh            # launcher (sbatch array, LOCAL=1 or DRYRUN=1) for training, inference, merging
-│   ├── job.sh               # one job of a launch: job.sh <sft|sft_resume|inf|merge> <folders...>
+│   ├── job.sh               # one job of a launch: job.sh <sft|sft_resume|cpt|cpt_resume|inf|merge> <folders...>
 │   ├── data/                # example bitext, YAML/JSONL manifests
 │   ├── mmtc/<src>-<trg>/    # SFT experiments, dataset.yaml, local_setting.sh (untracked);
 │   │                        #   outputs/<run_name>[-<idx>]/ (gitignored)
+│   ├── synlrl/<src>-eng/    # SFT + CPT examples (Tiny Aya, tuk/shn/ewe-eng) sharing synlrl/dataset.yaml (- ../dataset)
 │   ├── translation/  summarization/   # shell recipes for the two command-line entry points
 ├── tools/                   # gpu_free.sh, run_on_free_gpu.sh (pick the freest GPU type),
 │                            #   inspect_model.py <checkpoint> (module names, LoRA candidates, memory estimate, prompt overhead),
@@ -77,8 +80,9 @@ hfmt/
   before launch. Every schema field must be read by code (or, for the optional
   `data.data_root/src/trg`, by `dataset.yaml`).
   An experiment is a yaml in `egs/<dataset>/<src>-<trg>/` whose defaults start with `- config`
-  and `- dataset` (the `dataset.yaml` next to it: `data_root`, `src`, `trg`, split file lists),
-  then `override <group>: <option>` lines; it sets `run_name`, `checkpoint` and `instruction`.
+  and a dataset yaml (`- dataset`, the `dataset.yaml` next to it, or e.g. `- ../dataset` for one shared
+  by several pair folders: `data_root`, `src`, `trg`, split file lists), then `override <group>: <option>`
+  lines; it sets `run_name`, `checkpoint` and `instruction`.
   `data_root` comes from `$HFMT_DATA_ROOT`, set in the folder's untracked `local_setting.sh`
   (copy `local_setting.sh.example`); a dataset yaml may instead list absolute paths. Launch with
   `bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml [overrides]` from a login node; e.g.
@@ -118,6 +122,16 @@ hfmt/
   writes `test<i>.pred.trg` + `scores.json` for both training's end-of-run decoding and inference, and
   the two are identical (training unwraps Accelerate's autocast wrapper first). Outputs, overrides and
   score keys: README "Inference".
+- **Continued pre-training (feature 16_cpt)** — `bash egs/launch.sh cpt <yaml>`: an experiment with a
+  `- cpt: <option>` default (`conf/cpt/`; its presence marks a CPT run in composed and saved configs)
+  runs `hfmt/cpt_monotext_bitext.py`: raw text, no chat template, packed into `cpt.max_length` rows by
+  TRL, from `data.monotext` and/or `data.train` (`cpt.bitext_format` separate|concat), mixed by
+  `cpt.monotext_ratio`. `sft` and `cpt` launches refuse each other's configs, also on resume. CPT never
+  decodes; `conf/train/` stays SFT-only: `hydra_config.CPT_FORCED_TRAIN` (packing, no completion-only
+  loss, no dev decoding, eval_loss selection) is applied by `grid.py` before saving and again by the
+  script. `model_dev_check` compares a fresh dev eval_loss. SFT ignores `data.monotext`, CPT `data.test`.
+  Qwen3.5 leaks context across packed examples (use `cpt.packing_strategy=wrapped`); README "Continued
+  pre-training (CPT)".
 - **Merging / second SFT round** — `bash egs/launch.sh merge <run folder>/run_config.yaml` writes
   `<run folder>/model_merged/` for lora/qlora runs (qlora: onto the dequantized 4-bit base), usable as
   another experiment's `checkpoint`. A full fine-tune's `model/` is a checkpoint already. README
@@ -167,7 +181,8 @@ hfmt/
 - Tests are standalone scripts (pytest isn't in the hfmt env; they also run under pytest). After a
   change to `grid.py`, the schema, `conf/`, the experiment yamls or `run_status.py`, run the two that
   need no torch: `HFMT_ROOT=$(pwd) python hfmt/test_grid.py` and `python tools/test_run_status.py`.
-  `python hfmt/test_mt_model.py` and `python hfmt/test_sft_translation.py` need torch (cluster env).
+  `python hfmt/test_mt_model.py` and `python hfmt/test_sft_translation.py` need torch (cluster env);
+  `python hfmt/test_cpt_monotext_bitext.py` needs only `datasets`.
 - Format with `black`, lint with `pylint`/`flake8`.
 - Follow PEP 8, write docstrings, use type hints, keep functions focused.
 

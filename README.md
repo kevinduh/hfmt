@@ -14,11 +14,13 @@ with Huggingface Transformers and other necessary packages included.
 ## Code Structure
 
 * `hfmt/`: the Python entry points. `sft_translation.py` (supervised fine-tuning of decoder-only LLMs
-  for MT: QLoRA, LoRA or full), `inf_translation.py` (inference with a trained run or a downloaded
-  checkpoint) and `merge_model.py` (merge a LoRA/QLoRA run into a full checkpoint) are configured with
-  Hydra and launched with `egs/launch.sh` (next section). `train_seq2seq.py` (encoder-decoder MT) and
+  for MT: QLoRA, LoRA or full), `cpt_monotext_bitext.py` (continued pre-training on monotext and
+  bitext), `inf_translation.py` (inference with a trained run or a downloaded checkpoint) and
+  `merge_model.py` (merge a LoRA/QLoRA run into a full checkpoint) are configured with Hydra and
+  launched with `egs/launch.sh` (next section). `train_common.py` holds the training steps SFT and CPT share. `train_seq2seq.py` (encoder-decoder MT) and
   `decode_summarization.py` take command-line arguments.
-* `egs/`: recipes. `egs/mmtc/<src>-<trg>/` holds the Hydra SFT experiments. `egs/translation/` and
+* `egs/`: recipes. `egs/mmtc/<src>-<trg>/` holds the Hydra SFT experiments; `egs/synlrl/<src>-eng/` has
+  SFT and CPT examples. `egs/translation/` and
   `egs/summarization/` are plain shell scripts for the two command-line entry points: they activate
   the conda environment with `install/path.sh` (edit it for your system) and need
   `export HFMT_ROOT=path/to/this/repo` to find everything; `egs/launch.sh` finds the repo itself.
@@ -43,6 +45,8 @@ type but holds no default values; defaults live in yaml only:
     LoRA), `full_finetune`, and per-model all-linear LoRA options (`lora_qwen3_5_all_linear`,
     `lora_gemma3_all_linear`, `lora_tiny_aya_all_linear`).
   * `decode/`: generation settings (`default`).
+  * `cpt/`: continued pre-training data and packing (`default`), added only by CPT experiments with a
+    `- cpt: <option>` line (see "Continued pre-training").
 * the experiment folder, e.g. `egs/mmtc/fr-en/`:
   * `dataset.yaml`: `data_root`, `src`, `trg` and the train/dev/test file lists. Several train or
     dev files are concatenated in order; several test files are each decoded and scored on their
@@ -284,3 +288,47 @@ of another experiment.
 bash egs/launch.sh sft egs/mmtc/fr-en/sft_lora.yaml run_name=sft_lora_r2 \
     checkpoint=$PWD/egs/mmtc/fr-en/outputs/sft_lora/model_merged
 ```
+
+### Continued pre-training (CPT)
+
+`hfmt/cpt_monotext_bitext.py` continues pre-training on raw text, without a chat template: plain
+next-token loss on every token, packed into rows of `cpt.max_length` tokens. Its model is then the
+`checkpoint` of an SFT experiment. A CPT experiment is an ordinary experiment yaml with a
+`- cpt: <option>` line in its defaults, launched with `cpt` instead of `sft`:
+
+```bash
+bash egs/launch.sh cpt   egs/synlrl/tuk-eng/cpt_lora.yaml                       # -> outputs/cpt_lora/
+bash egs/launch.sh merge egs/synlrl/tuk-eng/outputs/cpt_lora/run_config.yaml    # lora/qlora -> model_merged/
+bash egs/launch.sh sft   egs/synlrl/tuk-eng/sft_lora_after_cpt.yaml             # checkpoint: .../model_merged
+```
+
+`launch.sh sft` refuses a CPT experiment and `launch.sh cpt` an SFT one, also for a resume
+(`launch.sh cpt <run folder>/run_config.yaml`). A full fine-tune's `model/` is a checkpoint without merging.
+
+* **Data.** It comes from the same dataset yaml as SFT. `data.monotext` (a list of files, one example per
+  non-empty line) can sit in a shared `dataset.yaml`: SFT ignores it, and CPT ignores `data.test`.
+  * `cpt.use_monotext`, `cpt.use_bitext`: which sources to train on (`data.monotext`, `data.train`).
+  * `cpt.bitext_format`: `separate` (each side its own example) or `concat` (`src + " " + trg`).
+  * `cpt.monotext_ratio`: with both sources, the probability that an example is drawn from monotext.
+    It sets the mix, not how much is trained. Every example of both sources is used, the smaller source
+    is repeated to keep the ratio, and `train.max_steps` decides how much is trained. It counts lines,
+    not tokens; the log shows the token share per source.
+  * Dev loss is on `data.dev`, formatted like the bitext.
+* **Schedule.** Any `conf/train/` option works. CPT sets the train keys that only make sense for SFT,
+  whatever the option says: `packing: true`, `completion_only_loss: false`, `inference_callback_interval: 0`,
+  `metric_for_best_model: eval_loss`, `greater_is_better: false` (`hydra_config.CPT_FORCED_TRAIN`).
+  `launch.sh cpt` prints each change and saves the forced values in `run_config.yaml`; overriding one of
+  them on the command line is refused.
+* **No decoding.** CPT never decodes: no dev BLEU, no test decoding, no `scores.json`. At the end,
+  `model/training_info.yaml`'s `model_dev_check` compares a fresh dev `eval_loss` of `model/` with the one
+  logged at its step. A zero-shot BLEU of a CPT model: `launch.sh inf <run folder>/run_config.yaml`.
+* **Batch size.** `train.train_batch_size` counts packed rows of `cpt.max_length` tokens, far more
+  tokens per step than an SFT batch of sentence pairs. Tiny Aya global with LoRA used 13 GiB at 2 × 1024
+  tokens on an A100.
+* **Packing and model families.** TRL's default `bfd` packing flattens a batch into one row whose
+  `position_ids` restart at each example; TRL ends each example with the tokenizer's `eos_token` (Tiny
+  Aya's is its end-of-turn token). Transformers keeps examples apart in attention layers: packed and
+  one-at-a-time losses matched for Tiny Aya global and Qwen3-0.6B. Qwen3.5's linear-attention (Gated
+  DeltaNet) layers get no example boundaries and carry state from one packed example into the next
+  (measured: up to 1.4 nats per example; `features/16_cpt/test_packing_leak.py`). For Qwen3.5 and other hybrid linear-attention models, use
+  `cpt.packing_strategy=wrapped`: plain concatenate-and-chunk, so every layer sees across examples alike.

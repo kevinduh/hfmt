@@ -60,7 +60,8 @@ Result (2026-11-18), A100 80GB, Qwen3.5-2B LoRA, 40 steps, same config and seed:
 - Resume: cancelled after checkpoint-20; the second attempt logs `Resume from the last checkpoint: True`,
   its progress bar restarts at 21/40, and it ends with `model/`, `model_dev_check: ok` and `scores.json`
   (test sp_BLEU 67.07).
-- [ ] `black`/`flake8` clean on the two files (not installed in the hfmt env; not run); `python -c "import hfmt.sft_translation"` works without
+- [x] ~~`black`/`flake8` clean on the two files~~ not applicable (developer, 2026-11-19): the codebase isn't
+      black-formatted, so black would reformat whole files; unused imports/undefined names were checked otherwise; `python -c "import hfmt.sft_translation"` works without
       torch (heavy imports stay inside functions).
 - [x] Tests pass (no-torch pair; `test_sft_translation.py` on the cluster).
 - [x] Cluster: the same SFT run after the move (`run_name=p16atest_new`, same overrides and seed):
@@ -202,7 +203,7 @@ Forced keys logged; counts/token share logged; TRL packed 244 examples into 40 r
 flattened row with `position_ids`, each example `<BOS_TOKEN> … <|END_OF_TURN_TOKEN|>` (R2 seen); `model/`
 loads as a checkpoint; `model_dev_check: ok` (fresh eval_loss = logged); no decoding, no `scores.json`;
 resume from checkpoint-2 continues at step 3 and ends at the same eval_loss.
-- [ ] `black`/`flake8` clean (not installed in the hfmt env; not run).
+- [x] ~~`black`/`flake8` clean~~ not applicable (developer, 2026-11-19), as in A.
 - [x] `python -c "import hfmt.cpt_monotext_bitext"` works without torch.
 - [x] D3 passes (6 tests; runs here, `datasets` only); no-torch tests pass.
 - [x] Cluster smoke test (Tiny Aya, made-up text files in `features/16_cpt/smoke/` as monotext/bitext, via a
@@ -292,41 +293,51 @@ Result (2026-11-19): `cpt_lora` and `sft_lora` of all three pairs dry-run to `jo
       its GPU as `egs/job.sh` does.
 - [x] Give the developer the command; read the output before concluding.
 - [x] Record the result in `plan.md` R1 (confirmed: Qwen3.5 leaks, Tiny Aya / Qwen3-0.6B don't; job 1252491).
-- [ ] Decide the Qwen3.5 strategy with the developer (recommended: `wrapped`). If the leak is confirmed on Qwen3.5 only: note "use
-      `cpt.packing_strategy=wrapped` for Qwen3.5" in the README CPT section (or a
-      `conf/cpt/` option for it), and decide with the developer.
+- [x] Qwen3.5 strategy (developer, 2026-11-19): Qwen3.5 isn't run here, so nothing changes in code or
+      conf; a note in the README CPT section (H) suggests `cpt.packing_strategy=wrapped` for Qwen3.5
+      (hybrid linear-attention models) and says why.
 
 ## H. Docs (plan "Docs")
 
-- [ ] README: "Continued pre-training" section after "Merging and a second round of SFT":
+- [x] README: "Continued pre-training" section after "Merging and a second round of SFT":
   - `launch.sh cpt`, the `cpt:` options, `data.monotext` in the shared dataset yaml;
   - the forced train keys and why any `conf/train/` schedule works;
   - `monotext_ratio` (mix, not amount; lines, not tokens);
   - CPT → merge → SFT with `egs/synlrl`;
-  - packing caveats (R1 result, batch size R3).
-- [ ] README option list: the `cpt/` group.
-- [ ] CLAUDE.md:
+  - packing caveats (R1 result: Qwen3.5 leaks, suggest `wrapped`; batch size R3).
+- [x] README option list: the `cpt/` group.
+- [x] CLAUDE.md:
   - structure tree: `cpt_monotext_bitext.py`, `train_common.py`, `conf/cpt/`, `egs/synlrl/`,
     `test_cpt_monotext_bitext.py`;
   - experiment convention: defaults start with `- config` and a dataset yaml (`- dataset`,
     `- ../dataset`, …);
   - a CPT convention bullet; `launch.sh <sft|cpt|inf|merge>`; tests list.
-- [ ] `decisions.md` entry (16_cpt):
+- [x] `decisions.md` entry (16_cpt):
   - separate CPT and SFT yamls (and why, over a shared yaml);
   - `cpt` as the run-kind marker, with no required key;
   - CPT never decodes; forced train keys, applied in `grid.py` so the saved config says what ran;
   - the packing strategy after R1;
   - the eval-loss model/ check.
-- [ ] Tests pass. `todo.md` H ticked; commit message presented.
+- [x] Tests pass. `todo.md` H ticked; commit message presented.
 
 ## I. Developer validation (cluster)
 
-- [ ] `egs/synlrl/<pair>` (monotext = `pool8k` source side): CPT (`cpt_lora.yaml`), merge, `sft_lora_after_cpt.yaml`,
+- [ ] `egs/synlrl/<pair>` (monotext = `pool8k` source side; tuk-eng done, shn-eng and ewe-eng to run): CPT (`cpt_lora.yaml`), merge, `sft_lora_after_cpt.yaml`,
       and the `sft_lora.yaml` baseline. Check:
   - the CPT log: forced keys, example counts and token share per source, packing truncation count;
   - memory and batch size (R3); adjust `train_batch_size` / `gradient_accumulation_steps` in `cpt_lora.yaml`;
   - preprocessing time per step on the real data (R8);
   - `model_dev_check: ok`; set the eval-loss tolerance from the measured difference if needed;
   - `tools/run_status.py egs/synlrl/<pair>/outputs` reports the CPT run as finished.
+  tuk-eng CPT (2026-11-19, job 1252509, 12 min): 8003 monotext + 3994 bitext examples → 16,062 mixed →
+  615 packed rows (token share 62/38, none truncated); eval loss 4.50 → 3.57 at step 140, then up to 3.69
+  (overfits after ~1.8 passes), so `model/` = step 140; `model_dev_check: ok` (1.4e-4); no decoding;
+  31.9 GiB allocated / 65 GB reserved at batch 8 (left as is, developer). Baseline `sft_lora` test sp_BLEU
+  17.66.
+  tuk-eng merge + SFT after CPT (2026-11-19, jobs 1252541, 1252542): `model_merged/` (from model/ = step 140,
+  no warning); `sft_lora_after_cpt` saved `checkpoint: .../cpt_lora/model_merged`, no bad warnings,
+  model/ = step 120, `model_dev_check: ok`. Test (flores200.dev) vs baseline: sp_BLEU 19.25 vs 17.66,
+  BLEU-13a-lc 17.91 vs 15.87, chrF 42.34 vs 40.50, TER 75.61 vs 75.97. Dev at the selected step: 18.67 vs
+  18.47 sp_BLEU. One run each (one seed, one pair): not yet a conclusion.
 - [ ] Resume a cancelled CPT run (`launch.sh cpt <run>/run_config.yaml`).
 - [ ] A CPT launch with `override train: longrun` logs the forced keys and never decodes.

@@ -407,6 +407,8 @@ reported). Change:
   stay at ≤7e-6. So plain-attention models are kept apart by transformers' position_ids mask, and Qwen3.5's
   Gated DeltaNet layers leak. (Job 1252483 ran with the default cache on; transformers then skips the
   per-example mask and every model leaked. Training is unaffected: build_model sets use_cache=False.)
+  Decision (developer): Qwen3.5 isn't run in this project, so no code or conf change; the README notes
+  `cpt.packing_strategy=wrapped` as the suggestion for Qwen3.5.
 - **R2 — EOS is a chat-turn token.** Raw-text CPT appends `<|END_OF_TURN_TOKEN|>` (Aya) / likely
   `<|im_end|>` (Qwen) after every sentence. The model learns "a sentence is followed by end-of-turn", which is
   close to what it sees in SFT replies, so this is probably harmless or even helpful. The alternative is the

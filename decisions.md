@@ -393,3 +393,38 @@ Trainer. A100s and L40Ss are unchanged. Selecting a V100 needs no new code:
 - **Found along the way.** The pinned Transformers ignores the requested dtype for Qwen3.5 and loads its
   stored bf16, so Qwen3.5 `full` fine-tunes have trained bf16 weights, not fp32 (Gemma 3 and Tiny Aya
   full runs are fp32). Not addressed here.
+
+## 2026-11-19: Continued pre-training as its own launch kind, with SFT-only train keys forced (16_cpt)
+
+**Decision:** `hfmt/cpt_monotext_bitext.py` continues pre-training on raw text (monotext and/or both
+sides of the bitext, packed by TRL, no chat template) and is launched with `launch.sh cpt`. A CPT
+experiment is its own yaml with a `- cpt: <option>` default; the optional `cpt` block marks a CPT run in
+composed and saved configs, and `sft`/`cpt` launches refuse each other's configs. The training steps it
+shares with SFT moved, unchanged, into `hfmt/train_common.py`. Examples: `egs/synlrl/`.
+
+- **Separate CPT and SFT yamls, not one yaml for both.** A shared yaml (`cpt:` with its own `train:`, the
+  launch kind picking one) needed the `cpt` block stripped from SFT run configs, guards against overrides
+  that silently do nothing, a second nested `TrainConfig`, nested run folders with new naming, and still
+  shared `peft`/`slurm`/`decode` between the stages. With separate yamls, `cpt` marks the run kind by
+  itself, each stage has its own settings, and the SFT-after-CPT yaml records the link in its
+  `checkpoint` (`.../cpt_lora/model_merged`).
+- **No new required key.** `cpt` and `data.monotext` are optional, so every saved `run_config.yaml`
+  still composes; a `dataset.yaml` can list `monotext` for both kinds (SFT ignores it, CPT ignores `test`).
+- **`conf/train/` stays SFT-only; CPT forces five keys.** `CPT_FORCED_TRAIN` (packing, no
+  completion-only loss, no dev decoding, eval_loss selection) replaces what the train option says, so any
+  schedule works for CPT. Rejected: checking the keys (would refuse 6 of the 8 schedules, which decode or
+  select on BLEU) and a `conf/train/cpt.yaml` (would put CPT knowledge in `conf/train/`). Applied by
+  `grid.py` before saving, so `run_config.yaml` says what ran, and again by the script for direct runs.
+- **CPT never decodes** (data may be large; efficiency matters): no MT callback, no test decoding. The
+  model/ check compares a fresh dev eval_loss with the logged one (tolerance 5e-3 relative; the GPU smoke
+  test measured 9e-4).
+- **`monotext_ratio` mixes, it doesn't cut.** `interleave_datasets(..., "all_exhausted")`: every example
+  of both sources is used, the smaller source repeated; `train.max_steps` sets how much is trained.
+- **Packing per model family.** TRL's `bfd` packing is padding-free (position_ids restart per example).
+  Measured (`features/16_cpt/test_packing_leak.py`, job 1252491): packed and one-at-a-time losses match for
+  Tiny Aya global and Qwen3-0.6B, but Qwen3.5's Gated DeltaNet layers carry state across packed examples
+  (up to 1.4 nats per example). Qwen3.5 isn't run with CPT here, so nothing changes; README suggests
+  `cpt.packing_strategy=wrapped` for it.
+- **Also:** `grid.py` refuses an absolute `checkpoint` path that doesn't exist (any flow);
+  `tools/run_status.py` finds experiments with `- ../dataset`-style defaults and tells apart pair folders
+  that share run_names by `output_root`.

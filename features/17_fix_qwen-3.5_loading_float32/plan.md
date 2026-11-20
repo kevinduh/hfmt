@@ -1,6 +1,7 @@
 # 17_fix_qwen-3.5_loading_float32 — plan (v3, simplified)
 
-Status: 2026-11-19. Nothing run yet; the cause is from reading the pinned Transformers (v5.8.0).
+Status: 2026-11-19. Done: cause confirmed, fix and guard in, all three verifications run (`data.md`).
+Open, outside this feature: the fp32 comparison run scored below the bf16 run at the same learning rate.
 
 **Goal:** with `peft.mode: full`, Qwen3.5 trains with float32 weights and saves float32 weights. Then
 one full-length fine-tune to compare with the existing bf16-weight run. Existing results and old runs

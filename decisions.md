@@ -428,3 +428,32 @@ shares with SFT moved, unchanged, into `hfmt/train_common.py`. Examples: `egs/sy
 - **Also:** `grid.py` refuses an absolute `checkpoint` path that doesn't exist (any flow);
   `tools/run_status.py` finds experiments with `- ../dataset`-style defaults and tells apart pair folders
   that share run_names by `output_root`.
+
+## 2026-11-19: Qwen3.5 full fine-tunes really load fp32; a guard checks the loaded precision (17_fix_qwen-3.5_loading_float32)
+
+**Decision:** `mt_model.load_base_model` loads the config itself and passes it to
+`AutoModelForCausalLM.from_pretrained(checkpoint, config=config, dtype=...)`, and
+`mt_model.check_parameter_dtype` raises when a `full` or `lora` model (and a `full` `model/` loaded for
+inference) has floating-point parameters in another dtype than requested.
+
+- **Cause.** Given only the checkpoint, the auto class builds the config and moves `dtype` onto it. For
+  Qwen3.5's composite config it then swaps in the text sub-config, which stores `"dtype": "bfloat16"`,
+  so the model class never sees the request and loads bf16 (pinned Transformers v5.8.0,
+  `auto_factory.py`). Tiny Aya (plain config) and Gemma 3 (keeps its composite config) were not affected.
+  Confirmed by a load check: Qwen3.5-0.8B plain = 320 × bfloat16, with the config = 320 × float32; Tiny
+  Aya float32 both ways.
+- **Effect before the fix.** Every Qwen3.5 `full` fine-tune trained and saved bf16 weights (AdamW on
+  bf16 parameters). Those results are kept as they are.
+- **Verified** (`features/17_fix_qwen-3.5_loading_float32/data.md`): a 50-step Qwen3.5-0.8B run and a
+  full-length Qwen3.5-2B run train float32 parameters under the same bf16 mixed precision, save float32
+  `model/` (twice the size), and pass `model_dev_check`; `lora` and `qlora` smoke runs are unchanged.
+- **Cost.** GPU memory and disk double for Qwen3.5 full runs. The 2B went from 17.4 to 34.7 GiB peak
+  allocated and no longer fits a 40 GB A100, so its yamls set `slurm.constraint: 80gb`. The 4B (about
+  65 GiB estimated) is not measured yet.
+- **Open.** At the unchanged learning rate (1e-5) the fp32 2B run scored about 1 to 1.4 BLEU below the
+  bf16 run on fr-en test, with a dev loss rising from the first evaluation. Suspected, untested: the
+  rate was tuned on bf16 weights, which drop updates smaller than their rounding step, and is too high
+  for fp32. Check the learning rate before rerunning Qwen3.5 full fine-tunes. One seed, one pair.
+- **Why a guard and not only the fix.** The wrong precision was silent for weeks and looked like a
+  normal run. The explicit config works around an upstream behaviour that can change with the pin; the
+  guard reports it at load time whatever the cause.

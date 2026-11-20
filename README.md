@@ -118,6 +118,12 @@ numerically comparable with A100 runs but several times slower (`decisions.md`, 
 * a V100 replica of an existing experiment needs its own `run_name` (e.g. `<name>_v100`), or it
   reuses the A100 run's folder.
 
+**Precision.** A full fine-tune trains and saves fp32 weights for every model family, a LoRA run a bf16
+base; both under bf16 mixed precision. `mt_model.check_parameter_dtype` stops a job whose model loads in
+another precision than requested (Qwen3.5 full fine-tunes before 2026-11-19 trained bf16 weights that
+way; `decisions.md`, 2026-11-19). fp32 costs 16 bytes per parameter on the GPU (weights, gradients,
+AdamW state): a 2B model needs more than a 40 GB card.
+
 **How the saved model is checked.** `model/` is meant to hold the best checkpoint
 (`load_best_model_at_end`). For a full fine-tune, training loads it itself with
 `mt_model.load_checkpoint_weights` (`from_pretrained`, then a strict `load_state_dict`), because the

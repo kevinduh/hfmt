@@ -7,6 +7,7 @@ trained on (e.g. 4-bit only for ``qlora``).
 Heavy imports (torch, transformers, ...) live inside functions so config-only use stays fast.
 """
 
+import collections
 import time
 import logging
 
@@ -35,13 +36,29 @@ def load_tokenizer(checkpoint):
     return tokenizer
 
 
+def check_parameter_dtype(model, expected, checkpoint):
+    """Raise if any floating-point parameter of ``model`` is not ``expected``.
+
+    A load can silently come back in another precision than the one requested (Qwen3.5 loaded as
+    bf16 whatever ``dtype`` said, so its ``full`` fine-tunes trained bf16 weights; decisions.md,
+    features/17_fix_qwen-3.5_loading_float32). This stops the job at load time instead."""
+    found = collections.Counter(str(p.dtype) for p in model.parameters() if p.is_floating_point())
+    wrong = {dtype: count for dtype, count in found.items() if dtype != str(expected)}
+    if wrong:
+        raise RuntimeError(f"{checkpoint} was requested as {expected} but loaded with parameters of "
+                           f"other dtypes: {wrong} (all floating-point parameters: {dict(found)})")
+
+
 def load_base_model(cfg, device):
     """Load ``cfg.checkpoint`` for ``cfg.peft.mode``: fp32 for ``full``, bf16 for ``lora``, 4-bit
     with bf16 compute for ``qlora``. bf16 includes PyTorch's emulation, so a V100 (no native bf16)
     runs the same precision as an A100/L40S; fp16 is used only on a card with no bf16 at all.
+    The config is loaded first and passed in: given only the checkpoint, the auto class moves
+    ``dtype`` onto the config it builds and, for a composite config (Qwen3.5), then swaps that for
+    its text sub-config, which stores its own dtype, so the request is lost.
     Returns ``(model, use_bf16)``."""
     import torch
-    from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+    from transformers import AutoConfig, AutoModelForCausalLM, BitsAndBytesConfig
 
     finetune_mode = cfg.peft.mode  # one of: full | lora | qlora
     # Emulated bf16 counts: same numerics on every card, at a speed cost on V100s (fp16 breaks
@@ -49,12 +66,15 @@ def load_base_model(cfg, device):
     use_bf16 = torch.cuda.is_bf16_supported(including_emulation=True)
     compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
     logging.info(f"finetune_mode: {finetune_mode}, use_bf16: {use_bf16}, compute_dtype: {compute_dtype}")
+    config = AutoConfig.from_pretrained(cfg.checkpoint)
     if finetune_mode in ("full", "lora"):
         model_dtype = torch.float32 if finetune_mode == "full" else compute_dtype
         model = AutoModelForCausalLM.from_pretrained(
             cfg.checkpoint,
+            config=config,
             dtype=model_dtype,
         ).to(device)
+        check_parameter_dtype(model, model_dtype, cfg.checkpoint)
     elif finetune_mode == "qlora":
         model_dtype = compute_dtype
         bnb_config = BitsAndBytesConfig(
@@ -65,6 +85,7 @@ def load_base_model(cfg, device):
         )
         model = AutoModelForCausalLM.from_pretrained(
             cfg.checkpoint,
+            config=config,
             dtype=model_dtype,
             quantization_config=bnb_config,
             device_map = {"": torch.cuda.current_device()}
@@ -104,6 +125,7 @@ def load_trained_model(cfg, model_dir, device):
 
     if cfg.peft.mode == "full":
         model = AutoModelForCausalLM.from_pretrained(model_dir, dtype=torch.float32).to(device)
+        check_parameter_dtype(model, torch.float32, model_dir)
     else:
         base, _ = load_base_model(cfg, device)
         if cfg.peft.mode == "qlora":

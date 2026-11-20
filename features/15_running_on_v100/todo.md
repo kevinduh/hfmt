@@ -136,6 +136,6 @@ not done when the feature was closed; they are optional clean-up and follow-ups,
       `report_smoke_runs.sh` from the feature folder (confirm with the developer first).
 - [ ] E3. Resolve with the developer: should a run record its card (W&B config,
       `model/training_info.yaml`)? If yes, open it as a small follow-up; not part of this feature.
-- [ ] E4. Raise outside this feature: Qwen3.5 `full` fine-tunes train bf16 weights, not fp32 (pinned
+- [x] E4. (Done 2026-11-19 in `features/17_fix_qwen-3.5_loading_float32`.) Raise outside this feature: Qwen3.5 `full` fine-tunes train bf16 weights, not fp32 (pinned
       Transformers ignores the requested dtype). Needs its own request/decision; the yamls' memory and
       disk notes for those runs are overstated.

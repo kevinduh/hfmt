@@ -39,8 +39,8 @@ type but holds no default values; defaults live in yaml only:
 * `conf/config.yaml`: the defaults list and project-wide settings (`slurm`, `wandb`, `inf_name`).
 * `conf/<group>/<option>.yaml`: swappable bundles, selected with `override <group>: <option>` in an
   experiment or `<group>=<option>` on the command line. Each file's header comment says what it is for.
-  * `train/`: the schedules. `default` is the default; `shortrun`, `midrun`, `longrun`, `full_finetune_short` and
-    `lora_anneal_short` are the others.
+  * `train/`: the schedules. `default` is the default; `shortrun`, `midrun`, `longrun`, `full_finetune_short`,
+    `lora_anneal_short` and `lora_large_data` are the others.
   * `peft/`: the fine-tuning method. `qlora_default` (4-bit base + LoRA), `lora_default` (bf16 base +
     LoRA), `full_finetune`, and per-model all-linear LoRA options (`lora_qwen3_5_all_linear`,
     `lora_gemma3_all_linear`, `lora_tiny_aya_all_linear`).

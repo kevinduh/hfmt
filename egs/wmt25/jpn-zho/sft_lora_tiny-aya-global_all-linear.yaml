@@ -1,0 +1,25 @@
+# This experiment is for running a single all-linear LoRA fine-tune of tiny-aya-global on wmt25 jpn-zho.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_tiny_aya_all_linear
+  - override train: lora_large_data   # cosine, 15k steps (~1 epoch), eval every 500, dev decode every 1000, early stopping
+  - _self_
+
+run_name: sft_lora_tiny-aya-global_jpn-zho_all-linear
+checkpoint: CohereLabs/tiny-aya-global
+instruction: "Translate Japanese to Chinese"
+
+train:
+  train_batch_size: 8               # memory only (262k-vocab logits): effective batch 8 x 8 = 64
+  gradient_accumulation_steps: 8
+  eval_batch_size: 8
+
+decode:
+  max_new_tokens: 512               # WMT24/WMT24++ references reach ~410 characters (~400 tokens)
+
+slurm:
+  time: "48:00:00"                  # past it, resume: launch.sh sft <run folder>/run_config.yaml
+
+wandb:
+  tags: [sft, jpn-zho, lora]

@@ -12,3 +12,6 @@ egs/**/local_setting.sh
 _results/
 sync.sh
 .DS_Store
+# MMTC experiments: only the files added to the repo are kept; new ones stay local unless added with
+# `git add -f <file>` (tracked files are unaffected by this rule).
+egs/mmtc/**

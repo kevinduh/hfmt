@@ -1,0 +1,21 @@
+# @package data
+# WMT25 Japanese-Chinese data paths: the filtered 1M-pair training bitext, WMT24++ as dev and the WMT24
+# ja-zh test set as test, loaded through an experiment's `- dataset` default.
+data_root: ${oc.env:HFMT_DATA_ROOT}
+src: ja
+trg: zh
+train:
+  src:
+    - ${data.data_root}/wmt25-jpn-zho/train.tmp_filt1M.${data.src}
+  trg:
+    - ${data.data_root}/wmt25-jpn-zho/train.tmp_filt1M.${data.trg}
+dev:
+  src:
+    - ${data.data_root}/wmt24pp/wmt24pp.${data.src}
+  trg:
+    - ${data.data_root}/wmt24pp/wmt24pp.${data.trg}
+test:
+  src:
+    - ${data.data_root}/wmt_devsets/txt/wmttest2024.${data.src}-${data.trg}.${data.src}
+  trg:
+    - ${data.data_root}/wmt_devsets/txt/wmttest2024.${data.src}-${data.trg}.${data.trg}

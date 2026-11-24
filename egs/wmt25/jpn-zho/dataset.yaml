@@ -6,9 +6,9 @@ src: ja
 trg: zh
 train:
   src:
-    - ${data.data_root}/wmt25-jpn-zho/train.tmp_filt1M.${data.src}
+    - ${data.data_root}/wmt25-jpn-zho/train.tmp_filt1M.jpn
   trg:
-    - ${data.data_root}/wmt25-jpn-zho/train.tmp_filt1M.${data.trg}
+    - ${data.data_root}/wmt25-jpn-zho/train.tmp_filt1M.zho
 dev:
   src:
     - ${data.data_root}/wmt24pp/wmt24pp.${data.src}

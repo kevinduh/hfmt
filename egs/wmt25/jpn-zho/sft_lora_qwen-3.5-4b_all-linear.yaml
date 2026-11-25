@@ -1,0 +1,25 @@
+# This experiment is for running a single all-linear LoRA fine-tune of Qwen3.5-4B on wmt25 jpn-zho.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_qwen3_5_all_linear
+  - override train: lora_large_data   # cosine, 15k steps (~1 epoch), eval every 500, dev decode every 1000, early stopping
+  - _self_
+
+run_name: sft_lora_qwen-3.5-4b_jpn-zho_all-linear
+checkpoint: Qwen/Qwen3.5-4B
+instruction: "Translate Japanese to Chinese"
+
+train:
+  train_batch_size: 16              # memory only: effective batch 16 x 4 = 64
+  gradient_accumulation_steps: 4
+  eval_batch_size: 8                # memory only: the eval loss materialises the logits of ~800-token dev segments
+
+decode:
+  max_new_tokens: 512               # WMT24/WMT24++ references reach ~410 characters (~400 tokens)
+
+slurm:
+  time: "4-00:00:00"                # the partition maximum; past it, resume: launch.sh sft <run folder>/run_config.yaml
+
+wandb:
+  tags: [sft, jpn-zho, lora]

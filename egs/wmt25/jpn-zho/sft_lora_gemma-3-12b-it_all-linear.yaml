@@ -1,0 +1,26 @@
+# This experiment is for running a single all-linear LoRA fine-tune of gemma-3-12b-it on wmt25 jpn-zho.
+defaults:
+  - config
+  - dataset
+  - override peft: lora_gemma3_all_linear
+  - override train: lora_large_data   # cosine, 15k steps (~1 epoch), eval every 500, dev decode every 1000, early stopping
+  - _self_
+
+run_name: sft_lora_gemma-3-12b-it_jpn-zho_all-linear
+checkpoint: google/gemma-3-12b-it
+instruction: "Translate Japanese to Chinese"
+
+train:
+  train_batch_size: 8               # memory only: effective batch 8 x 8 = 64
+  gradient_accumulation_steps: 8
+  eval_batch_size: 8                # memory only: the eval loss materialises the 262k-vocab logits of ~800-token dev segments
+
+decode:
+  max_new_tokens: 512               # WMT24/WMT24++ references reach ~410 characters (~400 tokens)
+
+slurm:
+  mem_gb: 48                        # the bf16 model (~24 GB) passes through CPU memory at load
+  time: "4-00:00:00"                # the partition maximum; past it, resume: launch.sh sft <run folder>/run_config.yaml
+
+wandb:
+  tags: [sft, jpn-zho, lora]

@@ -20,7 +20,7 @@ decode:
 
 slurm:
   mem_gb: 40                        # the bf16 model (~18 GB) passes through CPU memory at load
-  time: "48:00:00"                  # past it, resume: launch.sh sft <run folder>/run_config.yaml
+  time: "4-00:00:00"                # the partition maximum; past it, resume: launch.sh sft <run folder>/run_config.yaml
 
 wandb:
   tags: [sft, jpn-zho, lora]

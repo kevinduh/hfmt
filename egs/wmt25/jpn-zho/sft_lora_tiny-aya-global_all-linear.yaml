@@ -19,7 +19,7 @@ decode:
   max_new_tokens: 512               # WMT24/WMT24++ references reach ~410 characters (~400 tokens)
 
 slurm:
-  time: "48:00:00"                  # past it, resume: launch.sh sft <run folder>/run_config.yaml
+  time: "4-00:00:00"                # the partition maximum; past it, resume: launch.sh sft <run folder>/run_config.yaml
 
 wandb:
   tags: [sft, jpn-zho, lora]
